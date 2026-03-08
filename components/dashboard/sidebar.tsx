@@ -15,6 +15,7 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
@@ -28,6 +29,7 @@ interface SidebarProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'AI Studio', href: '/dashboard/ai-studio', icon: Sparkles, highlight: true },
   { name: 'Fans', href: '/dashboard/fans', icon: Users },
   { name: 'Content', href: '/dashboard/content', icon: Calendar },
   { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
@@ -67,6 +69,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       <nav className="flex-1 space-y-1 p-2">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          const isHighlight = 'highlight' in item && item.highlight
           return (
             <Link
               key={item.name}
@@ -75,10 +78,12 @@ export function DashboardSidebar({ profile }: SidebarProps) {
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : isHighlight
+                  ? 'text-primary hover:bg-primary/10'
                   : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
               )}
             >
-              <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-primary')} />
+              <item.icon className={cn('h-5 w-5 flex-shrink-0', (isActive || isHighlight) && 'text-primary')} />
               {!collapsed && <span>{item.name}</span>}
             </Link>
           )

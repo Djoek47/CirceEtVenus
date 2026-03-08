@@ -1,5 +1,3 @@
-'use server'
-
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 

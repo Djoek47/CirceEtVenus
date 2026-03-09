@@ -73,14 +73,13 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
         icon: 'text-amber-400'
       },
       'ai-studio': {
-        active: 'bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400',
-        inactive: 'text-foreground/70 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-pink-400 hover:via-purple-400 hover:to-cyan-400',
-        icon: 'text-purple-400'
+        active: 'bg-circe/20 text-circe-light',
+        inactive: 'text-foreground/70 hover:bg-circe/10 hover:text-circe-light',
+        icon: 'text-circe-light'
       }
     }
     
     const styles = variantStyles[variant]
-    const isAiStudio = variant === 'ai-studio'
     
     return (
       <SheetClose asChild>
@@ -88,18 +87,14 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
           href={item.href}
           className={cn(
             'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
-            isActive ? styles.active : styles.inactive,
-            isAiStudio && isActive && 'animate-gradient-x'
+            isActive ? styles.active : styles.inactive
           )}
         >
           <item.icon className={cn(
             'h-5 w-5 flex-shrink-0', 
-            isActive && styles.icon,
-            isAiStudio && 'animate-pulse'
+            isActive && styles.icon
           )} />
-          <span className={cn(
-            isAiStudio && isActive && 'bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent'
-          )}>{item.name}</span>
+          <span>{item.name}</span>
         </Link>
       </SheetClose>
     )

@@ -56,9 +56,9 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
               <Moon className="h-5 w-5 text-circe-light" />
               <span className="text-sm font-medium text-circe-light">Circe</span>
             </div>
-            <div className="flex items-center gap-2 rounded-lg bg-venus/10 px-4 py-2">
-              <Sun className="h-5 w-5 text-venus" />
-              <span className="text-sm font-medium text-venus">Venus</span>
+            <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-4 py-2">
+              <Sun className="h-5 w-5 text-amber-400" />
+              <span className="text-sm font-medium text-amber-400">Venus</span>
             </div>
           </div>
         </div>
@@ -167,7 +167,7 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
       title: 'Meet Your AI Guides',
       description: 'Divine intelligence awaits',
       icon: Sparkles,
-      iconColor: 'text-purple-400',
+      iconColor: 'text-circe-light',
       content: (
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -192,10 +192,10 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
                 </li>
               </ul>
             </div>
-            <div className="rounded-lg border border-venus/30 bg-venus/5 p-4">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
               <div className="mb-3 flex items-center gap-2">
-                <Sun className="h-6 w-6 text-venus" />
-                <h4 className="font-semibold text-venus">Venus</h4>
+                <Sun className="h-6 w-6 text-amber-400" />
+                <h4 className="font-semibold text-amber-400">Venus</h4>
               </div>
               <p className="text-sm text-muted-foreground">
                 The Goddess of Growth. Embodying love and beauty, 
@@ -203,13 +203,13 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
               </p>
               <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
                 <li className="flex items-center gap-1">
-                  <Check className="h-3 w-3 text-venus" /> Growth strategies
+                  <Check className="h-3 w-3 text-amber-400" /> Growth strategies
                 </li>
                 <li className="flex items-center gap-1">
-                  <Check className="h-3 w-3 text-venus" /> Fan acquisition
+                  <Check className="h-3 w-3 text-amber-400" /> Fan acquisition
                 </li>
                 <li className="flex items-center gap-1">
-                  <Check className="h-3 w-3 text-venus" /> Reputation monitoring
+                  <Check className="h-3 w-3 text-amber-400" /> Reputation monitoring
                 </li>
               </ul>
             </div>

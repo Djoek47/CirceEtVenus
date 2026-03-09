@@ -81,9 +81,9 @@ export function DashboardSidebar({ profile }: SidebarProps) {
         icon: 'text-amber-400'
       },
       'ai-studio': {
-        active: 'bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20',
-        inactive: 'text-sidebar-foreground/70 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-pink-400 hover:via-purple-400 hover:to-cyan-400',
-        icon: 'text-purple-400'
+        active: 'bg-circe/20 text-circe-light',
+        inactive: 'text-sidebar-foreground/70 hover:bg-circe/10 hover:text-circe-light',
+        icon: 'text-circe-light'
       }
     }
     
@@ -100,13 +100,10 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       >
         <item.icon className={cn(
           'h-5 w-5 flex-shrink-0', 
-          isActive && styles.icon,
-          isAiStudio && 'animate-pulse'
+          isActive && styles.icon
         )} />
         {!collapsed && (
-          <span className={cn(
-            isAiStudio && isActive && 'bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent'
-          )}>{item.name}</span>
+          <span>{item.name}</span>
         )}
       </Link>
     )

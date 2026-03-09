@@ -22,8 +22,8 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
   const chartData = analytics.length > 0 
     ? analytics.slice(0, 14).reverse().map((a) => ({
         date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        revenue: a.revenue,
-        subscribers: a.subscribers,
+        revenue: a.revenue || 0,
+        totalFans: a.total_fans || 0,
       }))
     : generateSampleData()
 
@@ -94,7 +94,7 @@ function generateSampleData() {
     data.push({
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       revenue: Math.floor(Math.random() * 500) + 200,
-      subscribers: Math.floor(Math.random() * 50) + 100,
+      totalFans: Math.floor(Math.random() * 50) + 100,
     })
   }
   return data

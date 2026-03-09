@@ -125,14 +125,16 @@ export interface AnalyticsSnapshot {
   id: string
   user_id: string
   date: string
-  platform: Platform
-  subscribers: number
+  platform: string
+  total_fans: number
   revenue: number
   messages_received: number
   messages_sent: number
   new_fans: number
-  churn_count: number
-  top_content_ids: string[]
+  churned_fans: number
+  avg_response_time_minutes: number
+  top_content_id: string | null
+  created_at: string
 }
 
 // Dashboard Stats

@@ -33,21 +33,30 @@ export default async function DashboardPage() {
     supabase.from('analytics_snapshots').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(30),
   ])
 
-  // Calculate stats
+  // Calculate stats from analytics data
   const totalRevenue = analytics?.reduce((sum, a) => sum + (a.revenue || 0), 0) || 0
-  const totalFans = fans?.length || 0
+  const latestSnapshot = analytics?.[0]
+  const totalFans = latestSnapshot?.total_fans || fans?.length || 0
   const activeConversations = conversations?.length || 0
   const scheduledContent = content?.length || 0
+  
+  // Calculate revenue change (compare last 15 days to previous 15 days)
+  const recentRevenue = analytics?.slice(0, 15).reduce((sum, a) => sum + (a.revenue || 0), 0) || 0
+  const previousRevenue = analytics?.slice(15, 30).reduce((sum, a) => sum + (a.revenue || 0), 0) || 1
+  const revenueChange = previousRevenue > 0 ? ((recentRevenue - previousRevenue) / previousRevenue) * 100 : 0
+  
+  // Calculate new fans in last 30 days
+  const newFansCount = analytics?.reduce((sum, a) => sum + (a.new_fans || 0), 0) || 0
 
   const stats = {
     totalRevenue,
-    revenueChange: 12.5,
+    revenueChange: Math.round(revenueChange * 10) / 10,
     totalFans,
-    fansChange: 8.2,
+    fansChange: newFansCount > 0 ? Math.round((newFansCount / Math.max(totalFans, 1)) * 100 * 10) / 10 : 0,
     activeConversations,
-    conversationsChange: -3.1,
+    conversationsChange: 0,
     scheduledContent,
-    contentChange: 15.0,
+    contentChange: 0,
     leakAlerts: leakAlerts?.length || 0,
     mentionsToReview: mentions?.length || 0,
   }

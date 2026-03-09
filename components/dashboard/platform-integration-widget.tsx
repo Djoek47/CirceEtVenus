@@ -1,56 +1,70 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Link2, Check, ArrowRight } from 'lucide-react'
+import { Link2, Check, ArrowRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+
+interface PlatformConnection {
+  id: string
+  platform: string
+  platform_username: string
+  is_connected: boolean
+}
 
 interface Platform {
   id: string
   name: string
-  logo: React.ReactNode
-  connected: boolean
   color: string
+  connected: boolean
+  username?: string
 }
 
+const PLATFORM_CONFIG = [
+  { id: 'onlyfans', name: 'OnlyFans', color: '#00AFF0' },
+  { id: 'fansly', name: 'Fansly', color: '#009FFF' },
+  { id: 'mym', name: 'MYM', color: '#FF4D67' },
+]
+
 export function PlatformIntegrationWidget() {
-  const [platforms] = useState<Platform[]>([
-    {
-      id: 'onlyfans',
-      name: 'OnlyFans',
-      logo: (
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#00AFF0]/10">
-          <span className="text-sm font-bold text-[#00AFF0]">OF</span>
-        </div>
-      ),
-      connected: false,
-      color: '#00AFF0',
-    },
-    {
-      id: 'fansly',
-      name: 'Fansly',
-      logo: (
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E91E63]/10">
-          <span className="text-sm font-bold text-[#E91E63]">F</span>
-        </div>
-      ),
-      connected: false,
-      color: '#E91E63',
-    },
-    {
-      id: 'mym',
-      name: 'MYM',
-      logo: (
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
-          <span className="text-sm font-bold text-purple-500">M</span>
-        </div>
-      ),
-      connected: false,
-      color: '#8B5CF6',
-    },
-  ])
+  const [platforms, setPlatforms] = useState<Platform[]>(
+    PLATFORM_CONFIG.map(p => ({ ...p, connected: false }))
+  )
+  const [loading, setLoading] = useState(true)
+  const supabase = createClient()
+
+  useEffect(() => {
+    const loadConnections = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      const { data: connections } = await supabase
+        .from('platform_connections')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_connected', true)
+
+      if (connections) {
+        setPlatforms(prev => prev.map(p => {
+          const conn = connections.find((c: PlatformConnection) => c.platform === p.id)
+          return {
+            ...p,
+            connected: !!conn,
+            username: conn?.platform_username
+          }
+        }))
+      }
+      setLoading(false)
+    }
+
+    loadConnections()
+  }, [supabase])
 
   const connectedCount = platforms.filter(p => p.connected).length
   const hasConnected = connectedCount > 0
@@ -63,7 +77,9 @@ export function PlatformIntegrationWidget() {
             <Link2 className="h-5 w-5 text-primary" />
             Connect Platforms
           </CardTitle>
-          {hasConnected ? (
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : hasConnected ? (
             <Badge variant="outline" className="gap-1 text-green-500 border-green-500/30">
               <Check className="h-3 w-3" />
               {connectedCount} Connected
@@ -85,8 +101,23 @@ export function PlatformIntegrationWidget() {
             className="flex items-center justify-between rounded-lg border border-border bg-card/50 p-2.5"
           >
             <div className="flex items-center gap-2.5">
-              {platform.logo}
-              <span className="text-sm font-medium">{platform.name}</span>
+              <div 
+                className="flex h-8 w-8 items-center justify-center rounded-lg"
+                style={{ backgroundColor: `${platform.color}20` }}
+              >
+                <span 
+                  className="text-sm font-bold"
+                  style={{ color: platform.color }}
+                >
+                  {platform.name.substring(0, 2).toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <span className="text-sm font-medium">{platform.name}</span>
+                {platform.username && (
+                  <p className="text-xs text-muted-foreground">@{platform.username}</p>
+                )}
+              </div>
             </div>
             {platform.connected ? (
               <Badge variant="secondary" className="gap-1 text-green-500">
@@ -94,9 +125,11 @@ export function PlatformIntegrationWidget() {
                 Connected
               </Badge>
             ) : (
-              <Button size="sm" variant="outline" className="h-7 text-xs">
-                Connect
-              </Button>
+              <Link href="/dashboard/settings?tab=integrations">
+                <Button size="sm" variant="outline" className="h-7 text-xs">
+                  Connect
+                </Button>
+              </Link>
             )}
           </div>
         ))}

@@ -23,10 +23,10 @@ export function AnalyticsCharts({ analytics }: AnalyticsChartsProps) {
   const chartData = analytics.length > 0 
     ? analytics.slice(0, 14).reverse().map((a) => ({
         date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        revenue: a.revenue,
-        subscribers: a.subscribers,
-        messages: a.messages_received,
-        newFans: a.new_fans,
+        revenue: a.revenue || 0,
+        totalFans: a.total_fans || 0,
+        messages: a.messages_received || 0,
+        newFans: a.new_fans || 0,
       }))
     : generateSampleData()
 
@@ -150,7 +150,7 @@ function generateSampleData() {
     data.push({
       date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       revenue: Math.floor(Math.random() * 500) + 200,
-      subscribers: Math.floor(Math.random() * 20) + 980,
+      totalFans: Math.floor(Math.random() * 20) + 980,
       messages: Math.floor(Math.random() * 100) + 50,
       newFans: Math.floor(Math.random() * 30) + 5,
     })

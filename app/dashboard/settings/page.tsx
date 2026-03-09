@@ -21,6 +21,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useTheme } from 'next-themes'
 import { BirthdaySettings } from '@/components/settings/birthday-settings'
 import { BillingSection } from '@/components/settings/billing-section'
+import { PlatformConnector } from '@/components/platform/platform-connector'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'integrations' | 'data' | 'preferences'
@@ -549,37 +550,7 @@ export default function SettingsPage() {
           {/* Integrations Section */}
           {activeTab === 'integrations' && (
             <>
-              <Card className="border-border bg-card">
-                <CardHeader>
-<CardTitle className="flex items-center gap-2 font-semibold">
-                <Link2 className="h-5 w-5" />
-                Platform Integrations
-              </CardTitle>
-                  <CardDescription>
-                    Connect your creator platforms for unified management
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {platformIntegrations.map((platform) => (
-                    <div key={platform.key} className="flex items-center justify-between rounded-lg border border-border p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${platform.color}`}>
-                          <span className="text-sm font-bold text-white">{platform.name[0]}</span>
-                        </div>
-                        <div>
-                          <p className="font-medium">{platform.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {platform.connected ? 'Connected' : 'Not connected'}
-                          </p>
-                        </div>
-                      </div>
-                      <Button variant={platform.connected ? 'outline' : 'default'}>
-                        {platform.connected ? 'Disconnect' : 'Connect'}
-                      </Button>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+              <PlatformConnector />
 
               <Card className="border-border bg-card">
                 <CardHeader>

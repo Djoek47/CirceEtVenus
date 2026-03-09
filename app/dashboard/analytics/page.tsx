@@ -48,7 +48,7 @@ export default async function AnalyticsPage() {
           <CardHeader className="pb-2">
             <CardDescription>Total Subscribers</CardDescription>
             <CardTitle className="text-3xl">
-              {analytics?.[0]?.subscribers?.toLocaleString() || '0'}
+              {analytics?.[0]?.total_fans?.toLocaleString() || '0'}
             </CardTitle>
           </CardHeader>
         </Card>

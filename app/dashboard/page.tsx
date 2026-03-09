@@ -78,7 +78,7 @@ export default async function DashboardPage() {
             <div className="text-xs text-muted-foreground sm:text-sm">
               <span className="font-medium text-circe">{currentMoonPhase}</span>
             </div>
-            <Button asChild variant="outline" size="sm" className="w-full border-circe/50 text-circe hover:bg-circe/10 sm:w-auto">
+            <Button asChild variant="outline" size="sm" className="w-full border-circe/50 text-circe hover:bg-circe/20 hover:text-circe hover:border-circe sm:w-auto">
               <Link href="/dashboard/ai-studio?ai=circe">
                 <Sparkles className="mr-2 h-4 w-4" />
                 Consult
@@ -99,7 +99,7 @@ export default async function DashboardPage() {
             <div className="text-xs text-muted-foreground sm:text-sm">
               <span className="font-medium text-gold">Radiant</span> - Attract admirers
             </div>
-            <Button asChild variant="outline" size="sm" className="w-full border-gold/50 text-gold hover:bg-gold/10 sm:w-auto">
+            <Button asChild variant="outline" size="sm" className="w-full border-gold/50 text-gold hover:bg-gold/20 hover:text-gold hover:border-gold sm:w-auto">
               <Link href="/dashboard/ai-studio?ai=venus">
                 <Star className="mr-2 h-4 w-4" />
                 Consult

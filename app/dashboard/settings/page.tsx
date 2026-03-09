@@ -230,6 +230,7 @@ export default function SettingsPage() {
         <div className="space-y-6 lg:col-span-3">
           {/* Profile Section */}
           {activeTab === 'profile' && (
+            <>
             <Card className="border-border bg-card">
               <CardHeader>
 <CardTitle className="flex items-center gap-2 font-semibold">
@@ -351,6 +352,7 @@ export default function SettingsPage() {
             {user && (
               <BirthdaySettings userId={user.id} hasBirthdaySet={hasBirthdaySet} />
             )}
+          </>
           )}
 
           {/* Notifications Section */}

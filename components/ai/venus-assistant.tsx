@@ -18,8 +18,10 @@ import {
   MessageCircle,
   ThumbsUp,
   ThumbsDown,
-  Minus
+  Minus,
+  Mic
 } from 'lucide-react'
+import { VoiceInputButton } from '@/components/voice-input-button'
 
 interface GrowthSuggestion {
   id: string
@@ -185,13 +187,22 @@ export function VenusAssistant() {
               )}
             </div>
             <div className="flex gap-2">
-              <Input 
-                placeholder="Ask Venus about growth, attraction, or reputation..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                className="border-venus/30 focus-visible:ring-venus"
-              />
+              <div className="relative flex-1">
+                <Input 
+                  placeholder="Ask Venus or speak..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  className="border-venus/30 pr-10 focus-visible:ring-venus"
+                />
+                <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                  <VoiceInputButton
+                    onTranscript={(text) => setMessage(prev => prev + (prev ? ' ' : '') + text)}
+                    size="sm"
+                    variant="ghost"
+                  />
+                </div>
+              </div>
               <Button 
                 onClick={handleSendMessage}
                 className="bg-venus hover:bg-venus/80 text-venus-foreground"

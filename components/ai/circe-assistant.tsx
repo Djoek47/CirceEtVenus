@@ -16,8 +16,10 @@ import {
   Send,
   Sparkles,
   Lock,
-  Eye
+  Eye,
+  Mic
 } from 'lucide-react'
+import { VoiceInputButton } from '@/components/voice-input-button'
 
 interface ChurnRiskFan {
   id: string
@@ -183,13 +185,22 @@ export function CirceAssistant() {
               )}
             </div>
             <div className="flex gap-2">
-              <Input 
-                placeholder="Ask Circe about retention, analytics, or protection..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                className="border-circe/30 focus-visible:ring-circe"
-              />
+              <div className="relative flex-1">
+                <Input 
+                  placeholder="Ask Circe or speak..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  className="border-circe/30 pr-10 focus-visible:ring-circe"
+                />
+                <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                  <VoiceInputButton
+                    onTranscript={(text) => setMessage(prev => prev + (prev ? ' ' : '') + text)}
+                    size="sm"
+                    variant="ghost"
+                  />
+                </div>
+              </div>
               <Button 
                 onClick={handleSendMessage}
                 className="bg-circe hover:bg-circe/80 text-circe-foreground"

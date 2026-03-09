@@ -1,11 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { VoiceInputButton } from '@/components/voice-input-button'
 import {
   Moon,
   Sun,
@@ -25,13 +28,17 @@ import {
   Globe,
   Navigation,
   Loader2,
-  Image as ImageIcon,
   CalendarDays,
   Landmark,
   TreePine,
   Building2,
   Waves,
   Sunset,
+  Search,
+  Mic,
+  Send,
+  Coffee,
+  Home,
 } from 'lucide-react'
 import {
   Tooltip,
@@ -46,6 +53,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 // Zodiac data with elements and optimal content types
 const zodiacSigns = [
@@ -106,14 +120,17 @@ const globalHolidays: Record<string, { name: string; type: 'holiday' | 'event' |
   '12-31': [{ name: "New Year's Eve", type: 'holiday', contentIdea: 'Glamorous, champagne, sparkles', icon: '🥂' }],
 }
 
-// Photo location types with content ideas
-const photoLocationTypes = [
-  { type: 'beach', icon: Waves, name: 'Beach/Waterfront', ideas: 'Bikini shoots, sunset silhouettes, wave shots' },
-  { type: 'park', icon: TreePine, name: 'Parks/Nature', ideas: 'Natural lighting, dreamy backgrounds, outdoor glamour' },
-  { type: 'urban', icon: Building2, name: 'Urban/City', ideas: 'Street style, rooftop, modern aesthetic' },
-  { type: 'landmark', icon: Landmark, name: 'Landmarks', ideas: 'Iconic backdrops, tourist spots, architecture' },
-  { type: 'scenic', icon: Sunset, name: 'Scenic Viewpoints', ideas: 'Golden hour, panoramic views, dramatic lighting' },
-]
+const locationTypeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  beach: Waves,
+  park: TreePine,
+  urban: Building2,
+  landmark: Landmark,
+  scenic: Sunset,
+  indoor: Home,
+  rooftop: Building2,
+  cafe: Coffee,
+  studio: Camera,
+}
 
 const elementIcons = {
   fire: Flame,
@@ -191,24 +208,6 @@ function generateCalendarDays(year: number, month: number) {
   return days
 }
 
-// Photo spots generator based on location
-function generatePhotoSpots(lat: number, lng: number, city: string) {
-  // In production, this would call a real Places API
-  // For now, we generate contextual suggestions based on common photo spots
-  const baseSpots = [
-    { name: `${city} Waterfront`, type: 'beach', distance: '2.3 km', rating: 4.8, bestTime: 'Golden hour (6-7 PM)', ideas: 'Sunset silhouettes, water reflections, bikini content' },
-    { name: `Downtown ${city}`, type: 'urban', distance: '1.5 km', rating: 4.5, bestTime: 'Blue hour (8-9 PM)', ideas: 'Neon lights, street style, urban glamour' },
-    { name: `${city} Central Park`, type: 'park', distance: '3.1 km', rating: 4.7, bestTime: 'Morning (9-11 AM)', ideas: 'Natural light, greenery backdrop, dreamy aesthetic' },
-    { name: `${city} Botanical Garden`, type: 'park', distance: '4.2 km', rating: 4.9, bestTime: 'Midday (11 AM-2 PM)', ideas: 'Flower backdrops, exotic plants, colorful content' },
-    { name: `${city} Skyline View`, type: 'scenic', distance: '5.0 km', rating: 4.6, bestTime: 'Sunset (5-7 PM)', ideas: 'Panoramic shots, dramatic poses, city backdrop' },
-    { name: `Historic ${city} District`, type: 'landmark', distance: '2.8 km', rating: 4.4, bestTime: 'Early morning (7-9 AM)', ideas: 'Architecture, European aesthetic, elegant vibes' },
-    { name: `${city} Rooftop Bar`, type: 'urban', distance: '1.2 km', rating: 4.3, bestTime: 'Evening (7-10 PM)', ideas: 'Glamour shots, city lights, cocktail aesthetic' },
-    { name: `${city} Beach Club`, type: 'beach', distance: '6.5 km', rating: 4.7, bestTime: 'Afternoon (2-5 PM)', ideas: 'Pool content, summer vibes, luxury aesthetic' },
-  ]
-  
-  return baseSpots
-}
-
 // Local events generator
 function generateLocalEvents(city: string, month: number) {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
@@ -233,14 +232,38 @@ interface GeoLocation {
   country: string
 }
 
+interface AIPhotoSpot {
+  name: string
+  type: string
+  distance: string
+  rating: number
+  bestTime: string
+  contentIdeas: string[]
+  aesthetic: string
+  tips: string
+  seasonalNote: string | null
+}
+
+interface AIPhotoResponse {
+  spots: AIPhotoSpot[]
+  generalAdvice: string
+  weatherTip: string
+}
+
 export function CosmicCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<ReturnType<typeof generateCalendarDays>[0] | null>(null)
   const [location, setLocation] = useState<GeoLocation | null>(null)
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
-  const [showLocationModal, setShowLocationModal] = useState(false)
   const [activeTab, setActiveTab] = useState('calendar')
+  
+  // AI Photo Spots state
+  const [photoSpotsQuery, setPhotoSpotsQuery] = useState('')
+  const [contentType, setContentType] = useState('general')
+  const [aiPhotoSpots, setAiPhotoSpots] = useState<AIPhotoResponse | null>(null)
+  const [loadingPhotoSpots, setLoadingPhotoSpots] = useState(false)
+  const [photoSpotsError, setPhotoSpotsError] = useState<string | null>(null)
   
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -254,7 +277,7 @@ export function CosmicCalendar() {
                       'July', 'August', 'September', 'October', 'November', 'December']
   
   // Get location
-  const requestLocation = () => {
+  const requestLocation = useCallback(() => {
     setLoadingLocation(true)
     setLocationError(null)
     
@@ -304,14 +327,59 @@ export function CosmicCalendar() {
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
     )
-  }
+  }, [])
+  
+  // Fetch AI photo spots
+  const fetchAIPhotoSpots = useCallback(async (query?: string) => {
+    if (!location) {
+      setPhotoSpotsError('Please enable location first')
+      return
+    }
+    
+    setLoadingPhotoSpots(true)
+    setPhotoSpotsError(null)
+    
+    try {
+      const response = await fetch('/api/ai/photo-spots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: location.lat,
+          lng: location.lng,
+          city: location.city,
+          country: location.country,
+          userRequest: query || photoSpotsQuery,
+          contentType,
+          zodiacSign: currentZodiac.name,
+          moonPhase: currentMoon.name,
+        }),
+      })
+      
+      if (!response.ok) throw new Error('Failed to fetch recommendations')
+      
+      const data = await response.json()
+      setAiPhotoSpots(data)
+    } catch (error) {
+      setPhotoSpotsError('Failed to get AI recommendations. Please try again.')
+    } finally {
+      setLoadingPhotoSpots(false)
+    }
+  }, [location, photoSpotsQuery, contentType, currentZodiac.name, currentMoon.name])
+  
+  // Handle voice input for photo spots
+  const handleVoiceInput = useCallback((transcript: string) => {
+    setPhotoSpotsQuery(transcript)
+    // Auto-search after voice input
+    if (location && transcript.trim()) {
+      fetchAIPhotoSpots(transcript)
+    }
+  }, [location, fetchAIPhotoSpots])
   
   const navigateMonth = (direction: number) => {
     setCurrentDate(new Date(year, month + direction, 1))
     setSelectedDay(null)
   }
   
-  const photoSpots = location ? generatePhotoSpots(location.lat, location.lng, location.city) : []
   const localEvents = location ? generateLocalEvents(location.city, month) : []
   
   // Get upcoming holidays this month
@@ -394,422 +462,443 @@ export function CosmicCalendar() {
           
           {/* Calendar */}
           <Card>
-            <CardHeader className="pb-3 sm:pb-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Calendar className="h-4 w-4 text-gold sm:h-5 sm:w-5" />
-                  Cosmic Content Calendar
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateMonth(-1)}>
+            <CardHeader className="pb-2 sm:pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base sm:text-lg">{monthNames[month]} {year}</CardTitle>
+                <div className="flex gap-1 sm:gap-2">
+                  <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)} className="h-8 w-8 sm:h-9 sm:w-9">
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="min-w-[120px] text-center text-sm font-medium sm:min-w-[140px]">
-                    {monthNames[month]} {year}
-                  </span>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateMonth(1)}>
+                  <Button variant="outline" size="icon" onClick={() => navigateMonth(1)} className="h-8 w-8 sm:h-9 sm:w-9">
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-              <CardDescription className="text-xs sm:text-sm">
-                Align your content with cosmic energies and global events
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              {/* Day headers */}
-              <div className="mb-2 grid grid-cols-7 gap-0.5 sm:gap-1">
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                  <div key={i} className="py-1 text-center text-[10px] font-medium text-muted-foreground sm:py-2 sm:text-xs">
-                    <span className="sm:hidden">{day}</span>
-                    <span className="hidden sm:inline">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i]}</span>
+                  <div key={i} className="p-1 text-center text-xs font-medium text-muted-foreground sm:p-2 sm:text-sm">
+                    {day}
                   </div>
                 ))}
-              </div>
-              
-              {/* Calendar grid */}
-              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
-                {calendarDays.map((dayData, index) => (
-                  <TooltipProvider key={index}>
+                
+                {calendarDays.map((day, i) => (
+                  <TooltipProvider key={i}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
-                          className={`relative flex min-h-[50px] flex-col items-center justify-start rounded-md border p-0.5 text-xs transition-colors sm:min-h-[80px] sm:rounded-lg sm:p-1 sm:text-sm ${
-                            dayData === null
-                              ? 'cursor-default border-transparent'
-                              : dayData.isToday
-                              ? 'border-gold bg-gold/10'
-                              : dayData.holidays.length > 0
-                              ? 'border-venus/50 bg-venus/10 hover:bg-venus/20'
-                              : dayData.cosmicScore > 70
-                              ? 'border-venus/30 bg-venus/5 hover:bg-venus/10'
-                              : 'border-border/50 hover:bg-muted/50'
-                          }`}
-                          onClick={() => dayData && setSelectedDay(dayData)}
-                          disabled={!dayData}
+                          onClick={() => day && setSelectedDay(day)}
+                          disabled={!day}
+                          className={`
+                            relative aspect-square rounded p-0.5 text-xs transition-all sm:p-1 sm:text-sm
+                            ${!day ? 'cursor-default' : 'hover:bg-muted cursor-pointer'}
+                            ${day?.isToday ? 'ring-2 ring-primary' : ''}
+                            ${day?.holidays.length ? 'bg-venus/10' : ''}
+                            ${selectedDay?.day === day?.day ? 'bg-primary/20' : ''}
+                          `}
                         >
-                          {dayData && (
+                          {day && (
                             <>
-                              <span className={`text-[10px] font-medium sm:text-sm ${dayData.isToday ? 'text-gold' : ''}`}>
-                                {dayData.day}
-                              </span>
-                              <span className="text-sm sm:text-lg">{dayData.moonPhase.icon}</span>
-                              {dayData.holidays.length > 0 && (
-                                <span className="absolute right-0.5 top-0.5 text-[10px] sm:right-1 sm:top-1 sm:text-xs">
-                                  {dayData.holidays[0].icon}
+                              <span className={day.isToday ? 'font-bold text-primary' : ''}>{day.day}</span>
+                              {day.holidays.length > 0 && (
+                                <span className="absolute bottom-0 right-0 text-[8px] sm:text-[10px]">
+                                  {day.holidays[0].icon}
                                 </span>
                               )}
-                              {dayData.cosmicScore > 70 && !dayData.holidays.length && (
-                                <Sparkles className="absolute right-0.5 top-0.5 h-2.5 w-2.5 text-venus sm:right-1 sm:top-1 sm:h-3 sm:w-3" />
-                              )}
-                              <div className="mt-auto hidden sm:block">
-                                <div 
-                                  className={`h-1 w-6 rounded-full sm:w-8 ${
-                                    dayData.holidays.length > 0 ? 'bg-venus' :
-                                    dayData.cosmicScore > 70 ? 'bg-venus' :
-                                    dayData.cosmicScore > 50 ? 'bg-gold' : 'bg-muted'
-                                  }`}
-                                  style={{ opacity: dayData.cosmicScore / 100 }}
-                                />
-                              </div>
                             </>
                           )}
                         </button>
                       </TooltipTrigger>
-                      {dayData && (
-                        <TooltipContent side="top" className="max-w-[200px]">
-                          <p className="font-medium">{dayData.zodiac.name} {dayData.zodiac.symbol}</p>
-                          <p className="text-xs">{dayData.moonPhase.name}</p>
-                          {dayData.holidays.map((h, i) => (
-                            <p key={i} className="mt-1 text-xs text-venus">{h.icon} {h.name}</p>
-                          ))}
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Cosmic Score: {dayData.cosmicScore}%
-                          </p>
+                      {day && (
+                        <TooltipContent className="max-w-xs">
+                          <div className="space-y-1">
+                            <p className="font-medium">{monthNames[month]} {day.day}</p>
+                            <p className="text-xs">{day.moonPhase.icon} {day.moonPhase.name}</p>
+                            <p className="text-xs">Cosmic Score: {day.cosmicScore}/100</p>
+                            {day.holidays.map((h, i) => (
+                              <p key={i} className="text-xs text-venus">{h.icon} {h.name}</p>
+                            ))}
+                          </div>
                         </TooltipContent>
                       )}
                     </Tooltip>
                   </TooltipProvider>
                 ))}
               </div>
-              
-              {/* Legend */}
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground sm:mt-4 sm:gap-4 sm:text-xs">
-                <div className="flex items-center gap-1">
-                  <PartyPopper className="h-3 w-3 text-venus" />
-                  <span>Holiday/Event</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Sparkles className="h-3 w-3 text-venus" />
-                  <span>High energy</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="h-1.5 w-3 rounded-full bg-gold sm:h-2 sm:w-4" />
-                  <span>Good day</span>
-                </div>
-              </div>
             </CardContent>
           </Card>
           
           {/* Selected Day Details */}
           {selectedDay && (
-            <Card className="border-gold/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Star className="h-4 w-4 text-gold sm:h-5 sm:w-5" />
+            <Card className="border-primary/30">
+              <CardHeader className="pb-2 sm:pb-3">
+                <CardTitle className="text-base sm:text-lg">
                   {monthNames[month]} {selectedDay.day} - Cosmic Insights
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Holidays for this day */}
+              <CardContent className="space-y-3 sm:space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs font-medium text-muted-foreground sm:text-sm">Zodiac</p>
+                    <p className="text-sm font-semibold sm:text-base">{selectedDay.zodiac.symbol} {selectedDay.zodiac.name}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs font-medium text-muted-foreground sm:text-sm">Moon Phase</p>
+                    <p className="text-sm font-semibold sm:text-base">{selectedDay.moonPhase.icon} {selectedDay.moonPhase.name}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs font-medium text-muted-foreground sm:text-sm">Cosmic Score</p>
+                    <p className="text-sm font-semibold sm:text-base">{selectedDay.cosmicScore}/100</p>
+                  </div>
+                </div>
+                
+                <div className="rounded-lg border border-circe/30 bg-circe/5 p-3 sm:p-4">
+                  <h4 className="text-sm font-semibold text-circe sm:text-base">Content Strategy</h4>
+                  <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{selectedDay.moonPhase.contentTip}</p>
+                  <p className="mt-2 text-xs text-muted-foreground sm:text-sm">
+                    <span className="font-medium text-foreground">Energy to channel:</span> {selectedDay.zodiac.energy}
+                  </p>
+                </div>
+                
                 {selectedDay.holidays.length > 0 && (
                   <div className="space-y-2">
+                    <h4 className="text-sm font-semibold sm:text-base">Events & Holidays</h4>
                     {selectedDay.holidays.map((holiday, i) => (
                       <div key={i} className="rounded-lg border border-venus/30 bg-venus/5 p-3 sm:p-4">
-                        <h4 className="flex items-center gap-2 text-sm font-medium text-venus sm:text-base">
-                          <span className="text-lg">{holiday.icon}</span>
-                          {holiday.name}
-                          <Badge variant="outline" className="ml-auto text-[10px] capitalize sm:text-xs">
-                            {holiday.type}
-                          </Badge>
-                        </h4>
-                        <p className="mt-2 text-xs text-muted-foreground sm:text-sm">
-                          <span className="font-medium text-foreground">Content Idea:</span> {holiday.contentIdea}
-                        </p>
+                        <p className="text-sm font-medium sm:text-base">{holiday.icon} {holiday.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{holiday.contentIdea}</p>
                       </div>
                     ))}
                   </div>
                 )}
-                
-                <div className="grid gap-3 sm:gap-4 sm:grid-cols-3">
-                  <div className="rounded-lg bg-muted/50 p-2.5 sm:p-3">
-                    <h4 className="text-xs font-medium text-venus sm:text-sm">Zodiac Energy</h4>
-                    <p className="mt-1 text-sm sm:text-lg">{selectedDay.zodiac.symbol} {selectedDay.zodiac.name}</p>
-                    <p className="text-[10px] text-muted-foreground sm:text-sm">{selectedDay.zodiac.energy}</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/50 p-2.5 sm:p-3">
-                    <h4 className="text-xs font-medium text-circe sm:text-sm">Moon Phase</h4>
-                    <p className="mt-1 text-sm sm:text-lg">{selectedDay.moonPhase.icon} {selectedDay.moonPhase.name}</p>
-                    <p className="text-[10px] text-muted-foreground sm:text-sm">{selectedDay.moonPhase.contentTip}</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/50 p-2.5 sm:p-3">
-                    <h4 className="text-xs font-medium text-gold sm:text-sm">Cosmic Score</h4>
-                    <p className="mt-1 text-sm sm:text-lg">{selectedDay.cosmicScore}%</p>
-                    <p className="text-[10px] text-muted-foreground sm:text-sm">
-                      {selectedDay.cosmicScore > 70 ? 'Excellent!' : selectedDay.cosmicScore > 50 ? 'Good energy' : 'Lighter content'}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="rounded-lg border border-venus/30 bg-venus/5 p-3 sm:p-4">
-                  <h4 className="flex items-center gap-2 text-sm font-medium text-venus sm:text-base">
-                    <Heart className="h-4 w-4" />
-                    Content Recommendations
-                  </h4>
-                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground sm:text-sm">
-                    <li>• Post {selectedDay.zodiac.element === 'fire' ? 'bold, passionate' : 
-                              selectedDay.zodiac.element === 'water' ? 'intimate, emotional' :
-                              selectedDay.zodiac.element === 'earth' ? 'sensual, luxurious' :
-                              'playful, creative'} content</li>
-                    <li>• {selectedDay.moonPhase.contentTip}</li>
-                    <li>• Best posting time: {selectedDay.cosmicScore > 70 ? '8-10 PM' : '6-8 PM'} in your timezone</li>
-                  </ul>
-                </div>
               </CardContent>
             </Card>
           )}
         </TabsContent>
         
         <TabsContent value="events" className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
-          {/* Upcoming Holidays This Month */}
+          {/* Upcoming Holidays */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-2 sm:pb-3">
               <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <CalendarDays className="h-4 w-4 text-venus sm:h-5 sm:w-5" />
-                Upcoming Events in {monthNames[month]}
+                Upcoming Events This Month
               </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                Plan your content around these dates for maximum engagement
-              </CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Plan your content around these dates</CardDescription>
             </CardHeader>
             <CardContent>
-              {upcomingHolidays.length > 0 ? (
-                <div className="space-y-3">
-                  {upcomingHolidays.map((day, i) => day && (
-                    <div 
-                      key={i} 
-                      className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:gap-4 sm:p-4"
-                    >
-                      <div className="flex h-10 w-10 flex-shrink-0 flex-col items-center justify-center rounded-lg bg-venus/10 sm:h-12 sm:w-12">
-                        <span className="text-[10px] font-medium text-venus sm:text-xs">{monthNames[month].slice(0, 3)}</span>
-                        <span className="text-base font-bold sm:text-lg">{day.day}</span>
-                      </div>
-                      <div className="flex-1">
-                        {day.holidays.map((h, j) => (
-                          <div key={j}>
-                            <h4 className="flex items-center gap-2 text-sm font-medium sm:text-base">
-                              <span>{h.icon}</span>
-                              {h.name}
-                              <Badge variant="outline" className="ml-auto text-[10px] capitalize sm:text-xs">
-                                {h.type}
+              <ScrollArea className="h-[300px] sm:h-[400px]">
+                <div className="space-y-3 sm:space-y-4">
+                  {upcomingHolidays.length === 0 ? (
+                    <p className="text-center text-sm text-muted-foreground">No major events this month</p>
+                  ) : (
+                    upcomingHolidays.map((day, i) => (
+                      <div key={i}>
+                        {day?.holidays.map((holiday, j) => (
+                          <div key={j} className="rounded-lg border p-3 sm:p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold sm:text-base">{holiday.icon} {holiday.name}</p>
+                                <p className="text-xs text-muted-foreground sm:text-sm">
+                                  {monthNames[month]} {day?.day}
+                                </p>
+                              </div>
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">
+                                {holiday.type}
                               </Badge>
-                            </h4>
-                            <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{h.contentIdea}</p>
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground sm:text-sm">{holiday.contentIdea}</p>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
-              ) : (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No major events remaining this month. Check next month!
-                </p>
-              )}
+              </ScrollArea>
             </CardContent>
           </Card>
           
-          {/* Local Events */}
+          {/* Local Events (requires location) */}
           <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <Globe className="h-4 w-4 text-gold sm:h-5 sm:w-5" />
-                    Local Events Near You
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    {location ? `Events in ${location.city}, ${location.country}` : 'Enable location to see local events'}
-                  </CardDescription>
-                </div>
-                {!location && (
-                  <Button 
-                    onClick={requestLocation} 
-                    disabled={loadingLocation}
-                    size="sm"
-                    className="gap-2"
-                  >
-                    {loadingLocation ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Navigation className="h-4 w-4" />
-                    )}
-                    Enable Location
-                  </Button>
-                )}
-              </div>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Globe className="h-4 w-4 text-circe sm:h-5 sm:w-5" />
+                Local Events Near You
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Promotion opportunities in your area</CardDescription>
             </CardHeader>
             <CardContent>
-              {locationError && (
-                <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {locationError}
-                </div>
-              )}
-              
-              {location ? (
-                <div className="space-y-3">
-                  {localEvents.map((event, i) => (
-                    <div 
-                      key={i}
-                      className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:gap-4 sm:p-4"
-                    >
-                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gold/10 sm:h-12 sm:w-12">
-                        <PartyPopper className="h-5 w-5 text-gold sm:h-6 sm:w-6" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="flex flex-wrap items-center gap-2 text-sm font-medium sm:text-base">
-                          {event.name}
-                          {event.promo && (
-                            <Badge className="bg-venus/20 text-venus">Promo Opportunity</Badge>
-                          )}
-                        </h4>
-                        <p className="text-xs text-muted-foreground sm:text-sm">{event.date}</p>
-                        <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{event.description}</p>
-                      </div>
-                    </div>
-                  ))}
+              {!location ? (
+                <div className="flex flex-col items-center gap-3 py-6 sm:gap-4 sm:py-8">
+                  <MapPin className="h-10 w-10 text-muted-foreground sm:h-12 sm:w-12" />
+                  <p className="text-center text-sm text-muted-foreground sm:text-base">Enable location to see local events</p>
+                  <Button onClick={requestLocation} disabled={loadingLocation} size="sm">
+                    {loadingLocation ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Getting location...
+                      </>
+                    ) : (
+                      <>
+                        <Navigation className="mr-2 h-4 w-4" />
+                        Enable Location
+                      </>
+                    )}
+                  </Button>
+                  {locationError && (
+                    <p className="text-xs text-destructive sm:text-sm">{locationError}</p>
+                  )}
                 </div>
               ) : (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Enable location to discover events near you
-                </p>
+                <ScrollArea className="h-[300px] sm:h-[350px]">
+                  <div className="space-y-3 sm:space-y-4">
+                    {localEvents.map((event, i) => (
+                      <div key={i} className="rounded-lg border p-3 sm:p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold sm:text-base">{event.name}</p>
+                            <p className="text-xs text-muted-foreground sm:text-sm">{event.date}</p>
+                          </div>
+                          {event.promo && (
+                            <Badge className="bg-venus text-venus-foreground text-[10px] sm:text-xs">
+                              Promo Opportunity
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground sm:text-sm">{event.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>
         </TabsContent>
         
         <TabsContent value="locations" className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
-          {/* Photo Spots */}
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <Camera className="h-4 w-4 text-venus sm:h-5 sm:w-5" />
-                    Photo & Content Spots
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    {location ? `Beautiful locations near ${location.city}` : 'Enable location to find photo spots'}
-                  </CardDescription>
-                </div>
-                {!location && (
-                  <Button 
-                    onClick={requestLocation} 
-                    disabled={loadingLocation}
-                    size="sm"
-                    className="gap-2"
-                  >
-                    {loadingLocation ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <MapPin className="h-4 w-4" />
-                    )}
-                    Find Nearby Spots
-                  </Button>
-                )}
-              </div>
+          {/* AI Photo Spots with Voice Input */}
+          <Card className="border-venus/30">
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Sparkles className="h-4 w-4 text-venus sm:h-5 sm:w-5" />
+                AI Photo Spot Finder
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Tell Venus what kind of content you want to create - speak or type
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {locationError && (
-                <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                  {locationError}
-                </div>
-              )}
-              
-              {location ? (
-                <div className="space-y-3">
-                  {photoSpots.map((spot, i) => {
-                    const typeInfo = photoLocationTypes.find(t => t.type === spot.type)
-                    const TypeIcon = typeInfo?.icon || Camera
-                    
-                    return (
-                      <div 
-                        key={i}
-                        className="rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:p-4"
-                      >
-                        <div className="flex items-start gap-3 sm:gap-4">
-                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-venus/10 sm:h-12 sm:w-12">
-                            <TypeIcon className="h-5 w-5 text-venus sm:h-6 sm:w-6" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <h4 className="text-sm font-medium sm:text-base">{spot.name}</h4>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <MapPin className="h-3 w-3" />
-                                {spot.distance}
-                              </div>
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                              <Badge variant="outline" className="text-[10px] capitalize sm:text-xs">
-                                {spot.type}
-                              </Badge>
-                              <span className="text-[10px] text-muted-foreground sm:text-xs">
-                                Best time: {spot.bestTime}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-xs text-muted-foreground sm:text-sm">
-                              <span className="font-medium text-foreground">Content Ideas:</span> {spot.ideas}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+            <CardContent className="space-y-4">
+              {!location ? (
+                <div className="flex flex-col items-center gap-3 py-6 sm:gap-4 sm:py-8">
+                  <MapPin className="h-10 w-10 text-muted-foreground sm:h-12 sm:w-12" />
+                  <p className="text-center text-sm text-muted-foreground sm:text-base">Enable location to find photo spots near you</p>
+                  <Button onClick={requestLocation} disabled={loadingLocation} size="sm">
+                    {loadingLocation ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Getting location...
+                      </>
+                    ) : (
+                      <>
+                        <Navigation className="mr-2 h-4 w-4" />
+                        Enable Location
+                      </>
+                    )}
+                  </Button>
+                  {locationError && (
+                    <p className="text-xs text-destructive sm:text-sm">{locationError}</p>
+                  )}
                 </div>
               ) : (
-                <div className="py-8 text-center">
-                  <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-sm text-muted-foreground">
-                    Enable location to discover photo spots nearby
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Find beaches, parks, urban spots, and scenic viewpoints
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          {/* Location Types Guide */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <Sparkles className="h-4 w-4 text-gold sm:h-5 sm:w-5" />
-                Content Location Guide
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {photoLocationTypes.map((type, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-lg bg-muted/50 p-3">
-                    <type.icon className="h-5 w-5 text-venus" />
-                    <div>
-                      <h4 className="text-sm font-medium">{type.name}</h4>
-                      <p className="mt-1 text-xs text-muted-foreground">{type.ideas}</p>
+                <>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4 text-venus" />
+                    <span>{location.city}, {location.country}</span>
+                  </div>
+                  
+                  {/* Voice/Text Input */}
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          placeholder="Describe what you want... (e.g., 'sexy beach shots for sunset')"
+                          value={photoSpotsQuery}
+                          onChange={(e) => setPhotoSpotsQuery(e.target.value)}
+                          className="pr-10"
+                          onKeyDown={(e) => e.key === 'Enter' && fetchAIPhotoSpots()}
+                        />
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                          <VoiceInputButton
+                            onTranscript={handleVoiceInput}
+                            size="sm"
+                            variant="ghost"
+                          />
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={() => fetchAIPhotoSpots()} 
+                        disabled={loadingPhotoSpots}
+                        className="bg-venus text-venus-foreground hover:bg-venus/90"
+                      >
+                        {loadingPhotoSpots ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      <Select value={contentType} onValueChange={setContentType}>
+                        <SelectTrigger className="w-[140px] sm:w-[180px]">
+                          <SelectValue placeholder="Content type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="general">General/Lifestyle</SelectItem>
+                          <SelectItem value="glamour">Glamour/Sexy</SelectItem>
+                          <SelectItem value="fitness">Fitness/Active</SelectItem>
+                          <SelectItem value="elegant">Elegant/Classy</SelectItem>
+                          <SelectItem value="casual">Casual/Everyday</SelectItem>
+                          <SelectItem value="artistic">Artistic/Editorial</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      <Badge variant="outline" className="text-xs">
+                        {currentZodiac.symbol} {currentZodiac.name} Season
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {currentMoon.icon} {currentMoon.name}
+                      </Badge>
+                    </div>
+                    
+                    {/* Quick voice prompts */}
+                    <div className="flex flex-wrap gap-2">
+                      <p className="w-full text-xs text-muted-foreground">Quick prompts (tap to search):</p>
+                      {[
+                        'Beach vibes for bikini content',
+                        'Urban rooftop for city shots',
+                        'Nature spots for artistic photos',
+                        'Cafe aesthetic for casual content',
+                      ].map((prompt) => (
+                        <Button
+                          key={prompt}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => {
+                            setPhotoSpotsQuery(prompt)
+                            fetchAIPhotoSpots(prompt)
+                          }}
+                        >
+                          {prompt}
+                        </Button>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
+                  
+                  {photoSpotsError && (
+                    <p className="text-sm text-destructive">{photoSpotsError}</p>
+                  )}
+                  
+                  {/* AI Results */}
+                  {aiPhotoSpots && (
+                    <div className="space-y-4">
+                      {/* General Advice */}
+                      <div className="rounded-lg border border-venus/30 bg-venus/5 p-3 sm:p-4">
+                        <p className="text-sm font-medium text-venus">Venus says:</p>
+                        <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{aiPhotoSpots.generalAdvice}</p>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          <span className="font-medium">Weather tip:</span> {aiPhotoSpots.weatherTip}
+                        </p>
+                      </div>
+                      
+                      {/* Spots Grid */}
+                      <ScrollArea className="h-[400px] sm:h-[500px]">
+                        <div className="space-y-3 sm:space-y-4 pr-4">
+                          {aiPhotoSpots.spots.map((spot, i) => {
+                            const IconComponent = locationTypeIcons[spot.type] || Camera
+                            return (
+                              <Card key={i} className="overflow-hidden">
+                                <CardHeader className="pb-2 sm:pb-3">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 sm:h-10 sm:w-10">
+                                        <IconComponent className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
+                                      </div>
+                                      <div>
+                                        <CardTitle className="text-sm sm:text-base">{spot.name}</CardTitle>
+                                        <CardDescription className="text-xs">
+                                          {spot.distance} away
+                                        </CardDescription>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Star className="h-3 w-3 fill-primary text-primary sm:h-4 sm:w-4" />
+                                      <span className="text-xs font-medium sm:text-sm">{spot.rating}</span>
+                                    </div>
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="space-y-3 pt-0">
+                                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                                    <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                                      {spot.type}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-[10px] sm:text-xs">
+                                      Best: {spot.bestTime}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div>
+                                    <p className="text-xs font-medium sm:text-sm">Aesthetic: <span className="font-normal text-muted-foreground">{spot.aesthetic}</span></p>
+                                  </div>
+                                  
+                                  <div>
+                                    <p className="text-xs font-medium sm:text-sm">Content Ideas:</p>
+                                    <ul className="mt-1 space-y-0.5">
+                                      {spot.contentIdeas.map((idea, j) => (
+                                        <li key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                                          <span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-venus" />
+                                          {idea}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  
+                                  <div className="rounded-lg bg-muted/50 p-2 sm:p-3">
+                                    <p className="text-xs">
+                                      <span className="font-medium">Pro Tip:</span> {spot.tips}
+                                    </p>
+                                  </div>
+                                  
+                                  {spot.seasonalNote && (
+                                    <p className="text-xs text-venus">
+                                      <span className="font-medium">Seasonal:</span> {spot.seasonalNote}
+                                    </p>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            )
+                          })}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+                  
+                  {/* No results yet */}
+                  {!aiPhotoSpots && !loadingPhotoSpots && (
+                    <div className="flex flex-col items-center gap-3 py-8 text-center">
+                      <Camera className="h-12 w-12 text-muted-foreground/50" />
+                      <div>
+                        <p className="text-sm font-medium">Ask Venus for photo spot recommendations</p>
+                        <p className="text-xs text-muted-foreground">
+                          Use voice or type to describe what kind of content you want to create
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

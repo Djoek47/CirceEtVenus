@@ -17,8 +17,10 @@ import {
   Sparkles,
   TrendingUp,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Mic
 } from 'lucide-react'
+import { VoiceInputButton } from '@/components/voice-input-button'
 import { ChatAssistant } from './chat-assistant'
 import { FanInsightsPanel } from './fan-insights-panel'
 
@@ -254,18 +256,27 @@ export function AIChatterWorkspace() {
           {/* Reply Input */}
           <div className="p-4 border-t">
             <div className="flex gap-2">
-              <Textarea
-                placeholder="Type your reply..."
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                className="min-h-[60px] resize-none"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSend()
-                  }
-                }}
-              />
+              <div className="relative flex-1">
+                <Textarea
+                  placeholder="Type or speak your reply..."
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  className="min-h-[60px] resize-none pr-10"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSend()
+                    }
+                  }}
+                />
+                <div className="absolute right-2 top-2">
+                  <VoiceInputButton
+                    onTranscript={(text) => setReplyText(prev => prev + (prev ? ' ' : '') + text)}
+                    size="sm"
+                    variant="ghost"
+                  />
+                </div>
+              </div>
               <Button onClick={handleSend} size="icon" className="h-[60px] w-[60px]">
                 <Send className="h-5 w-5" />
               </Button>

@@ -23,8 +23,10 @@ import {
   Copy,
   Check,
   Loader2,
-  Sparkles
+  Sparkles,
+  Mic
 } from 'lucide-react'
+import { VoiceInputButton } from '@/components/voice-input-button'
 
 interface Caption {
   text: string
@@ -152,10 +154,18 @@ export function CaptionGenerator() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="description">Describe Your Content</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="description">Describe Your Content</Label>
+            <VoiceInputButton
+              onTranscript={(text) => setContentDescription(prev => prev + (prev ? ' ' : '') + text)}
+              size="sm"
+              variant="ghost"
+              showTooltip={true}
+            />
+          </div>
           <Textarea 
             id="description"
-            placeholder="e.g., Bedroom mirror selfie in red lingerie, soft lighting, playful pose..."
+            placeholder="Describe or speak about your content... e.g., Bedroom mirror selfie in red lingerie, soft lighting, playful pose..."
             value={contentDescription}
             onChange={(e) => setContentDescription(e.target.value)}
             className="min-h-[80px]"

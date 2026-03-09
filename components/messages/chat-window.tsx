@@ -12,7 +12,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Send, Paperclip, DollarSign, MoreVertical, Star, Ban, User } from 'lucide-react'
+import { Send, Paperclip, DollarSign, MoreVertical, Star, Ban, User, Mic } from 'lucide-react'
+import { VoiceInputButton } from '@/components/voice-input-button'
 import { cn } from '@/lib/utils'
 import type { Conversation, Fan, Message } from '@/lib/types'
 
@@ -158,17 +159,26 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
           <Button variant="ghost" size="icon" className="flex-shrink-0">
             <DollarSign className="h-5 w-5" />
           </Button>
-          <Input
-            placeholder="Type a message..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="flex-1 bg-input"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && message.trim()) {
-                setMessage('')
-              }
-            }}
-          />
+          <div className="relative flex-1">
+            <Input
+              placeholder="Type or speak a message..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="bg-input pr-10"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && message.trim()) {
+                  setMessage('')
+                }
+              }}
+            />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2">
+              <VoiceInputButton
+                onTranscript={(text) => setMessage(prev => prev + (prev ? ' ' : '') + text)}
+                size="sm"
+                variant="ghost"
+              />
+            </div>
+          </div>
           <Button size="icon" disabled={!message.trim()}>
             <Send className="h-5 w-5" />
           </Button>

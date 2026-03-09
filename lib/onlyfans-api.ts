@@ -4,7 +4,7 @@
  * Documentation: https://docs.onlyfansapi.com
  */
 
-const ONLYFANS_API_BASE = 'https://api.onlyfansapi.com/v1'
+const ONLYFANS_API_BASE = 'https://app.onlyfansapi.com/api'
 
 interface OnlyFansAPIOptions {
   accountId?: string
@@ -121,22 +121,61 @@ class OnlyFansAPI {
   // ============ AUTHENTICATION ============
 
   /**
-   * Get the authorization URL for a creator to connect their account
+   * Start authentication process for an OnlyFans account
+   * Returns a polling URL to check authentication status
    */
-  async getAuthUrl(redirectUri: string, state?: string): Promise<{ url: string }> {
-    return this.request('/auth/url', {
+  async startAuthentication(email: string, password: string, proxyCountry?: string): Promise<{ 
+    message: string
+    polling_url: string
+    auth_id: string 
+  }> {
+    return this.request('/authenticate', {
       method: 'POST',
-      body: JSON.stringify({ redirectUri, state }),
+      body: JSON.stringify({ 
+        email, 
+        password,
+        proxyCountry: proxyCountry || 'us'
+      }),
     })
   }
 
   /**
-   * Exchange authorization code for account access
+   * Poll authentication status
    */
-  async exchangeCode(code: string): Promise<{ accountId: string; username: string }> {
-    return this.request('/auth/exchange', {
-      method: 'POST',
+  async pollAuthStatus(authId: string): Promise<{
+    status: 'pending' | 'requires_2fa' | 'requires_face_otp' | 'completed' | 'failed'
+    account_id?: string
+    message?: string
+  }> {
+    return this.request(`/authenticate/${authId}`)
+  }
+
+  /**
+   * Submit 2FA code
+   */
+  async submit2FA(authId: string, code: string): Promise<{
+    status: string
+    account_id?: string
+  }> {
+    return this.request(`/authenticate/${authId}`, {
+      method: 'PUT',
       body: JSON.stringify({ code }),
+    })
+  }
+
+  /**
+   * Create a client session for embedded auth (recommended approach)
+   */
+  async createClientSession(displayName: string, proxyCountry?: string): Promise<{
+    token: string
+    display_name: string
+  }> {
+    return this.request('/client-sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        display_name: displayName,
+        proxyCountry: proxyCountry || 'us'
+      }),
     })
   }
 

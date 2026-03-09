@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Zap, ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -40,8 +41,10 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+      {/* Background gradient with gold accent */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gold/10 via-circe/5 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
       </div>
 
       <Link 
@@ -52,18 +55,26 @@ export default function LoginPage() {
         Back to home
       </Link>
 
-      <div className="mb-8 flex items-center gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-          <Zap className="h-6 w-6 text-primary-foreground" />
+      {/* Logo */}
+      <div className="mb-8 flex flex-col items-center gap-4">
+        <Image
+          src="/logo.png"
+          alt="Circe et Venus"
+          width={120}
+          height={120}
+          className="rounded-full"
+        />
+        <div className="text-center">
+          <h1 className="font-serif text-2xl font-bold tracking-wider text-gold">CIRCE ET VENUS</h1>
+          <p className="text-xs text-muted-foreground">Divine Creator Management</p>
         </div>
-        <span className="text-2xl font-bold tracking-tight">CREATRIX</span>
       </div>
 
-      <Card className="w-full max-w-md border-border bg-card">
+      <Card className="w-full max-w-md border-gold/20 bg-card">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
+          <CardTitle className="text-2xl">Welcome Back, Creator</CardTitle>
           <CardDescription>
-            Sign in to your account to continue
+            The goddesses await your return
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -83,7 +94,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-input"
+                className="bg-input border-border"
               />
             </div>
 
@@ -92,7 +103,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Link 
                   href="/auth/forgot-password" 
-                  className="text-xs text-muted-foreground hover:text-primary"
+                  className="text-xs text-muted-foreground hover:text-gold"
                 >
                   Forgot password?
                 </Link>
@@ -104,26 +115,26 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-input"
+                className="bg-input border-border"
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full bg-gold hover:bg-gold/90 text-background" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  Entering the realm...
                 </>
               ) : (
-                'Sign In'
+                'Enter the Realm'
               )}
             </Button>
           </form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            {"Don't have an account?"}{' '}
-            <Link href="/auth/sign-up" className="font-medium text-primary hover:underline">
-              Sign up
+            {"New to the divine realm?"}{' '}
+            <Link href="/auth/sign-up" className="font-medium text-gold hover:underline">
+              Begin your journey
             </Link>
           </div>
         </CardContent>

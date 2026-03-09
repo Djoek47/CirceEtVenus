@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Zap, ArrowLeft, Loader2, Check } from 'lucide-react'
+import { ArrowLeft, Loader2, Sparkles, Moon, Sun, Star, Shield } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function SignUpPage() {
@@ -46,11 +47,11 @@ export default function SignUpPage() {
   }
 
   const features = [
-    'Fan CRM with spending tiers',
-    'Multi-platform content scheduler',
-    'Real-time analytics dashboard',
-    'Leak detection & protection',
-    'Reputation monitoring',
+    { icon: Moon, text: 'Circe - Retention Enchantress AI', color: 'text-circe' },
+    { icon: Sun, text: 'Venus - Growth Goddess AI', color: 'text-venus' },
+    { icon: Star, text: 'Cosmic Content Calendar', color: 'text-gold' },
+    { icon: Shield, text: 'Divine Leak Protection', color: 'text-circe' },
+    { icon: Sparkles, text: 'Astrology-Powered Scheduling', color: 'text-venus' },
   ]
 
   return (
@@ -58,7 +59,7 @@ export default function SignUpPage() {
       {/* Left Side - Form */}
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
         <div className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-gold/10 via-venus/5 to-transparent" />
         </div>
 
         <Link 
@@ -69,18 +70,23 @@ export default function SignUpPage() {
           Back to home
         </Link>
 
-        <div className="mb-8 flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-            <Zap className="h-6 w-6 text-primary-foreground" />
-          </div>
-          <span className="text-2xl font-bold tracking-tight">CREATRIX</span>
+        {/* Logo */}
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <Image
+            src="/logo.png"
+            alt="Circe et Venus"
+            width={100}
+            height={100}
+            className="rounded-full"
+          />
+          <h1 className="font-serif text-xl font-bold tracking-wider text-gold">CIRCE ET VENUS</h1>
         </div>
 
-        <Card className="w-full max-w-md border-border bg-card">
+        <Card className="w-full max-w-md border-gold/20 bg-card">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Create your account</CardTitle>
+            <CardTitle className="text-2xl">Join the Divine Realm</CardTitle>
             <CardDescription>
-              Start your 14-day free trial today
+              Begin your 14-day celestial trial
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -92,7 +98,7 @@ export default function SignUpPage() {
               )}
               
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
+                <Label htmlFor="fullName">Your Name</Label>
                 <Input
                   id="fullName"
                   type="text"
@@ -100,7 +106,7 @@ export default function SignUpPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
-                  className="bg-input"
+                  className="bg-input border-border"
                 />
               </div>
 
@@ -113,7 +119,7 @@ export default function SignUpPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="bg-input"
+                  className="bg-input border-border"
                 />
               </div>
 
@@ -122,34 +128,34 @@ export default function SignUpPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Create a strong password"
+                  placeholder="Create a sacred password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="bg-input"
+                  className="bg-input border-border"
                 />
                 <p className="text-xs text-muted-foreground">
                   Must be at least 8 characters
                 </p>
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full bg-gold hover:bg-gold/90 text-background" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating account...
+                    Awakening the goddesses...
                   </>
                 ) : (
-                  'Create Account'
+                  'Begin Your Journey'
                 )}
               </Button>
             </form>
 
             <div className="mt-6 text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <Link href="/auth/login" className="font-medium text-primary hover:underline">
-                Sign in
+              Already blessed by the goddesses?{' '}
+              <Link href="/auth/login" className="font-medium text-gold hover:underline">
+                Enter the realm
               </Link>
             </div>
           </CardContent>
@@ -157,24 +163,32 @@ export default function SignUpPage() {
       </div>
 
       {/* Right Side - Features */}
-      <div className="hidden flex-1 items-center justify-center border-l border-border bg-card/50 lg:flex">
+      <div className="hidden flex-1 items-center justify-center border-l border-gold/10 bg-gradient-to-br from-background via-circe/5 to-venus/5 lg:flex">
         <div className="max-w-md px-8">
-          <h2 className="text-2xl font-bold tracking-tight">
-            Everything you need to manage your creator business
+          <h2 className="font-serif text-3xl font-bold tracking-tight">
+            Two Goddesses, <br />
+            <span className="text-gold">One Divine Platform</span>
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Join thousands of creators who trust CREATRIX to grow and protect their brand.
+            Circe enchants your fans to stay. Venus attracts new admirers. Together, they transform your creator business.
           </p>
           <ul className="mt-8 space-y-4">
             {features.map((feature) => (
-              <li key={feature} className="flex items-center gap-3">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
-                  <Check className="h-4 w-4 text-primary" />
+              <li key={feature.text} className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/10">
+                  <feature.icon className={`h-4 w-4 ${feature.color}`} />
                 </div>
-                <span className="text-sm">{feature}</span>
+                <span className="text-sm">{feature.text}</span>
               </li>
             ))}
           </ul>
+          
+          <div className="mt-8 rounded-lg border border-gold/20 bg-gold/5 p-4">
+            <p className="text-sm italic text-muted-foreground">
+              "Circe et Venus helped me double my retention and grow my following by 300% in just 3 months."
+            </p>
+            <p className="mt-2 text-xs font-medium text-gold">- Top 0.1% Creator</p>
+          </div>
         </div>
       </div>
     </div>

@@ -40,14 +40,16 @@ export default async function ProtectionPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Leak Protection</h2>
+          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <span className="text-circe">Circe's</span> Protection Shield
+          </h2>
           <p className="text-muted-foreground">
-            Monitor and respond to leaked content
+            The enchantress guards your content from unauthorized sharing
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2 bg-circe hover:bg-circe/90">
           <RefreshCw className="h-4 w-4" />
-          Scan Now
+          Invoke Scan
         </Button>
       </div>
 

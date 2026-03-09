@@ -42,14 +42,16 @@ export default async function MentionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Reputation Monitor</h2>
+          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <span className="text-venus">Venus'</span> Watchful Gaze
+          </h2>
           <p className="text-muted-foreground">
-            Track mentions and sentiment across the web
+            The goddess tracks your reputation and sentiment across the realm
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2 bg-venus hover:bg-venus/90 text-background">
           <RefreshCw className="h-4 w-4" />
-          Refresh
+          Refresh Vision
         </Button>
       </div>
 

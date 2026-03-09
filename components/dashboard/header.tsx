@@ -24,13 +24,14 @@ interface HeaderProps {
 }
 
 const pageNames: Record<string, string> = {
-  '/dashboard': 'Dashboard',
+  '/dashboard': 'Divine Dashboard',
+  '/dashboard/ai-studio': 'AI Oracle Chamber',
   '/dashboard/fans': 'Fan Management',
-  '/dashboard/content': 'Content Calendar',
+  '/dashboard/content': 'Cosmic Content Calendar',
   '/dashboard/messages': 'Messages',
   '/dashboard/analytics': 'Analytics',
-  '/dashboard/protection': 'Leak Protection',
-  '/dashboard/mentions': 'Reputation Monitor',
+  '/dashboard/protection': 'Circe\'s Protection',
+  '/dashboard/mentions': 'Venus\' Watch',
   '/dashboard/settings': 'Settings',
 }
 

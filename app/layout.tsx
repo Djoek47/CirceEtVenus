@@ -28,8 +28,8 @@ export const metadata: Metadata = {
   generator: 'v0.app',
   keywords: ['creator management', 'OnlyFans', 'MYM', 'Fansly', 'content creator', 'fan management', 'AI assistant', 'astrology', 'Circe', 'Venus'],
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
+    icon: '/favicon.png',
+    apple: '/apple-touch-icon.png',
   },
 }
 

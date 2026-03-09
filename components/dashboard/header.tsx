@@ -81,7 +81,7 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
           </SheetContent>
         </Sheet>
         
-        <h1 className="text-lg font-semibold sm:text-xl">{getPageName()}</h1>
+        <h1 className="text-lg font-semibold text-foreground dark:text-circe sm:text-xl">{getPageName()}</h1>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">

@@ -232,10 +232,10 @@ export default function SettingsPage() {
           {activeTab === 'profile' && (
             <Card className="border-border bg-card">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Profile Information
-                </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <User className="h-5 w-5" />
+                Profile Information
+              </CardTitle>
                 <CardDescription>
                   Update your personal details and public profile
                 </CardDescription>
@@ -357,10 +357,10 @@ export default function SettingsPage() {
           {activeTab === 'notifications' && (
             <Card className="border-border bg-card">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5" />
-                  Notification Preferences
-                </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <Bell className="h-5 w-5" />
+                Notification Preferences
+              </CardTitle>
                 <CardDescription>
                   Choose what notifications you want to receive
                 </CardDescription>
@@ -456,10 +456,10 @@ export default function SettingsPage() {
             <>
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Security Settings
-                  </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <Shield className="h-5 w-5" />
+                Security Settings
+              </CardTitle>
                   <CardDescription>
                     Manage your account security and authentication
                   </CardDescription>
@@ -511,10 +511,10 @@ export default function SettingsPage() {
 
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Globe className="h-5 w-5" />
-                    Active Sessions
-                  </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <Globe className="h-5 w-5" />
+                Active Sessions
+              </CardTitle>
                   <CardDescription>
                     Devices where you are currently logged in
                   </CardDescription>
@@ -543,10 +543,10 @@ export default function SettingsPage() {
             <>
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Current Plan
-                  </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <CreditCard className="h-5 w-5" />
+                Current Plan
+              </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-6">
@@ -592,7 +592,7 @@ export default function SettingsPage() {
 
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle>Payment Method</CardTitle>
+                  <CardTitle className="font-semibold">Payment Method</CardTitle>
                   <CardDescription>Manage your payment methods</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -607,7 +607,7 @@ export default function SettingsPage() {
 
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle>Billing History</CardTitle>
+                  <CardTitle className="font-semibold">Billing History</CardTitle>
                   <CardDescription>View your past invoices</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -622,10 +622,10 @@ export default function SettingsPage() {
             <>
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Link2 className="h-5 w-5" />
-                    Platform Integrations
-                  </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <Link2 className="h-5 w-5" />
+                Platform Integrations
+              </CardTitle>
                   <CardDescription>
                     Connect your creator platforms for unified management
                   </CardDescription>
@@ -654,7 +654,7 @@ export default function SettingsPage() {
 
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle>Social Media</CardTitle>
+                  <CardTitle className="font-semibold">Social Media</CardTitle>
                   <CardDescription>
                     Connect social accounts for reputation monitoring
                   </CardDescription>
@@ -688,10 +688,10 @@ export default function SettingsPage() {
             <>
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Database className="h-5 w-5" />
-                    Your Data
-                  </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <Database className="h-5 w-5" />
+                Your Data
+              </CardTitle>
                   <CardDescription>
                     Manage and export your data
                   </CardDescription>
@@ -723,7 +723,7 @@ export default function SettingsPage() {
 
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <CardTitle>Privacy Settings</CardTitle>
+                  <CardTitle className="font-semibold">Privacy Settings</CardTitle>
                   <CardDescription>Control how your data is used</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -746,10 +746,10 @@ export default function SettingsPage() {
 
               <Card className="border-destructive/50 bg-card">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-destructive">
-                    <AlertTriangle className="h-5 w-5" />
-                    Danger Zone
-                  </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Danger Zone
+              </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -781,10 +781,10 @@ export default function SettingsPage() {
           {activeTab === 'preferences' && (
             <Card className="border-border bg-card">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings2 className="h-5 w-5" />
-                  Preferences
-                </CardTitle>
+<CardTitle className="flex items-center gap-2 font-semibold">
+                <Settings2 className="h-5 w-5" />
+                Preferences
+              </CardTitle>
                 <CardDescription>
                   Customize your experience
                 </CardDescription>

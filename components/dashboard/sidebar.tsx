@@ -61,14 +61,16 @@ export function DashboardSidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
 
-  const NavLink = ({ item, variant = 'silver' }: { item: typeof silverNavigation[0], variant?: 'silver' | 'circe' | 'venus' | 'ai-studio' }) => {
+  const NavLink = ({ item, variant = 'default' }: { item: typeof silverNavigation[0], variant?: 'default' | 'circe' | 'venus' | 'ai-studio' }) => {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+    const isAiStudio = variant === 'ai-studio'
     
     const variantStyles = {
-      silver: {
-        active: 'bg-slate-400/20 text-slate-300',
-        inactive: 'text-slate-400/70 hover:bg-slate-400/10 hover:text-slate-300',
-        icon: 'text-slate-300'
+      default: {
+        // Black in light mode, white/silver in dark mode
+        active: 'bg-sidebar-accent text-sidebar-foreground',
+        inactive: 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+        icon: 'text-sidebar-foreground'
       },
       circe: {
         active: 'bg-circe/20 text-circe-light',
@@ -76,19 +78,20 @@ export function DashboardSidebar({ profile }: SidebarProps) {
         icon: 'text-circe-light'
       },
       venus: {
-        active: 'bg-amber-500/20 text-amber-400',
-        inactive: 'text-amber-500/70 hover:bg-amber-500/10 hover:text-amber-400',
-        icon: 'text-amber-400'
+        // Gold for Venus
+        active: 'bg-amber-500/20 text-amber-500 dark:text-amber-400',
+        inactive: 'text-amber-600/70 dark:text-amber-500/70 hover:bg-amber-500/10 hover:text-amber-500 dark:hover:text-amber-400',
+        icon: 'text-amber-500 dark:text-amber-400'
       },
       'ai-studio': {
-        active: 'bg-circe/20 text-circe-light',
-        inactive: 'text-sidebar-foreground/70 hover:bg-circe/10 hover:text-circe-light',
-        icon: 'text-circe-light'
+        // Rainbow/multicolor animated
+        active: 'bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-gradient-x',
+        inactive: 'text-sidebar-foreground/70 hover:bg-gradient-to-r hover:from-pink-500/10 hover:via-purple-500/10 hover:to-cyan-500/10',
+        icon: 'text-purple-500'
       }
     }
     
     const styles = variantStyles[variant]
-    const isAiStudio = variant === 'ai-studio'
     
     return (
       <Link
@@ -100,10 +103,13 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       >
         <item.icon className={cn(
           'h-5 w-5 flex-shrink-0', 
-          isActive && styles.icon
+          isActive && styles.icon,
+          isAiStudio && 'animate-hue-rotate'
         )} />
         {!collapsed && (
-          <span>{item.name}</span>
+          <span className={cn(
+            isAiStudio && isActive && 'bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 bg-clip-text text-transparent'
+          )}>{item.name}</span>
         )}
       </Link>
     )
@@ -133,14 +139,14 @@ export function DashboardSidebar({ profile }: SidebarProps) {
 
       {/* Main Navigation */}
       <nav className="flex-1 space-y-6 overflow-y-auto p-2">
-        {/* Silver - Dashboard, Content, Messages */}
+        {/* Dashboard, Content, Messages - Black light/White dark */}
         <div className="space-y-1">
           {silverNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="silver" />
+            <NavLink key={item.name} item={item} variant="default" />
           ))}
         </div>
 
-        {/* AI Studio - Rainbow Hue */}
+        {/* AI Studio - Rainbow/Multicolor */}
         <div className="space-y-1">
           {aiStudioNavigation.map((item) => (
             <NavLink key={item.name} item={item} variant="ai-studio" />
@@ -162,18 +168,18 @@ export function DashboardSidebar({ profile }: SidebarProps) {
           ))}
         </div>
 
-        {/* Venus's Domain - Silver (like Analytics/Protection) */}
+        {/* Venus's Domain - Gold */}
         <div className="space-y-1">
           {!collapsed && (
             <div className="flex items-center gap-2 px-3 py-2">
-              <Sun className="h-4 w-4 text-slate-400" />
-              <span className="text-xs font-medium uppercase tracking-wider text-slate-400/70">
+              <Sun className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+              <span className="text-xs font-medium uppercase tracking-wider text-amber-600/70 dark:text-amber-500/70">
                 Venus
               </span>
             </div>
           )}
           {venusNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="silver" />
+            <NavLink key={item.name} item={item} variant="venus" />
           ))}
         </div>
       </nav>
@@ -181,16 +187,16 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       {/* Bottom Navigation */}
       <div className="border-t border-sidebar-border p-2">
         {bottomNavigation.map((item) => (
-          <NavLink key={item.name} item={item} variant="silver" />
+          <NavLink key={item.name} item={item} variant="default" />
         ))}
 
-        {/* User info */}
+        {/* User info - Gold in light mode, Purple in dark mode */}
         {!collapsed && profile && (
           <div className="mt-2 rounded-lg bg-sidebar-accent/30 p-3">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">
+            <p className="truncate text-sm font-medium text-amber-600 dark:text-circe-light">
               {profile.full_name || 'Divine Creator'}
             </p>
-            <p className="truncate text-xs text-sidebar-foreground/60">
+            <p className="truncate text-xs text-amber-600/70 dark:text-circe-light/70">
               {profile.email}
             </p>
           </div>

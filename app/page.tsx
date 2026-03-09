@@ -343,18 +343,29 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border/30 bg-card/30 px-4 py-8 sm:px-6 sm:py-12">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
-          <div className="flex items-center gap-3">
-            <ThemedLogo 
-              width={32} 
-              height={32} 
-              className="rounded-full"
-            />
-            <span className="font-semibold tracking-wider text-primary">CIRCE ET VENUS</span>
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+            <div className="flex items-center gap-3">
+              <ThemedLogo 
+                width={32} 
+                height={32} 
+                className="rounded-full"
+              />
+              <span className="font-serif font-semibold tracking-wider text-primary">CIRCE ET VENUS</span>
+            </div>
+            <nav className="flex flex-wrap justify-center gap-4 text-sm sm:gap-6">
+              <Link href="/about" className="text-muted-foreground hover:text-foreground">About</Link>
+              <Link href="/contact" className="text-muted-foreground hover:text-foreground">Contact</Link>
+              <Link href="/terms" className="text-muted-foreground hover:text-foreground">Terms</Link>
+              <Link href="/privacy" className="text-muted-foreground hover:text-foreground">Privacy</Link>
+              <Link href="/cookies" className="text-muted-foreground hover:text-foreground">Cookies</Link>
+            </nav>
           </div>
-          <p className="text-sm text-muted-foreground">
-            MMXXVI Circe et Venus. Guided by the stars.
-          </p>
+          <div className="mt-6 border-t border-border/30 pt-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              MMXXVI Circe et Venus Inc. All rights reserved. Guided by the stars.
+            </p>
+          </div>
         </div>
       </footer>
     </div>

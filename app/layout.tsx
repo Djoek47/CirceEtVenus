@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Cinzel, DM_Sans, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
+import { CookieConsent } from '@/components/cookie-consent'
 import './globals.css'
 
 const cinzel = Cinzel({ 
@@ -53,6 +54,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <CookieConsent />
         </ThemeProvider>
         <Analytics />
       </body>

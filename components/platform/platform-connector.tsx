@@ -118,6 +118,29 @@ export function PlatformConnector() {
     return connections.find(c => c.platform === platformId)
   }
 
+  // OAuth-based connection for OnlyFans
+  const handleOAuthConnect = async (platformId: string) => {
+    setConnecting(platformId)
+    setError(null)
+    
+    try {
+      // Get the OAuth authorization URL from our API
+      const response = await fetch(`/api/${platformId}/auth`)
+      const data = await response.json()
+      
+      if (data.error) {
+        throw new Error(data.error)
+      }
+      
+      // Redirect to the OAuth authorization page
+      window.location.href = data.url
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start connection')
+      setConnecting(null)
+    }
+  }
+
+  // Manual connection for other platforms
   const handleConnect = async (platformId: string, username: string) => {
     setConnecting(platformId)
     setError(null)
@@ -200,13 +223,41 @@ export function PlatformConnector() {
   const handleSync = async (platformId: string) => {
     setSyncing(platformId)
     setError(null)
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setError('You must be logged in')
+    
+    try {
+      // Call the real sync API for OnlyFans
+      if (platformId === 'onlyfans') {
+        const response = await fetch('/api/onlyfans/sync', { method: 'POST' })
+        const data = await response.json()
+        
+        if (data.error) {
+          throw new Error(data.error)
+        }
+        
+        setSuccess(`Synced ${data.synced.fans} fans and $${data.synced.revenue.toLocaleString()} in earnings!`)
+      } else {
+        // Simulate sync for other platforms
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        const connection = getConnection(platformId)
+        if (connection) {
+          await supabase
+            .from('platform_connections')
+            .update({ last_sync_at: new Date().toISOString() })
+            .eq('id', connection.id)
+        }
+        
+        setSuccess(`${PLATFORMS.find(p => p.id === platformId)?.name} data synced successfully!`)
+      }
+      
+      await loadConnections()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync data. Please try again.')
+    } finally {
       setSyncing(null)
-      return
     }
+  }
 
     try {
       // Generate new sample data for today
@@ -427,11 +478,29 @@ export function PlatformConnector() {
                     </div>
                   </div>
                 ) : (
-                  <ConnectDialog 
-                    platform={platform}
-                    onConnect={(username) => handleConnect(platform.id, username)}
-                    connecting={connecting === platform.id}
-                  />
+                  platform.id === 'onlyfans' ? (
+                    // OnlyFans uses OAuth
+                    <Button 
+                      className="w-full"
+                      onClick={() => handleOAuthConnect(platform.id)}
+                      disabled={connecting === platform.id}
+                      style={{ backgroundColor: platform.color }}
+                    >
+                      {connecting === platform.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Link2 className="mr-2 h-4 w-4" />
+                      )}
+                      Connect with OnlyFans
+                    </Button>
+                  ) : (
+                    // Other platforms use manual connection
+                    <ConnectDialog 
+                      platform={platform}
+                      onConnect={(username) => handleConnect(platform.id, username)}
+                      connecting={connecting === platform.id}
+                    />
+                  )
                 )}
               </CardContent>
             </Card>

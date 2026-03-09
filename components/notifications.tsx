@@ -123,7 +123,7 @@ export function Notifications() {
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0 sm:w-96" align="end">
         <div className="flex items-center justify-between border-b border-border p-4">
-          <h3 className="font-serif text-lg font-semibold">Notifications</h3>
+          <h3 className="text-lg font-semibold">Notifications</h3>
           {unreadCount > 0 && (
             <Button 
               variant="ghost" 

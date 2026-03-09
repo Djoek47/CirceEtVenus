@@ -137,7 +137,7 @@ export function CirceAssistant() {
             </div>
             <div>
               <CardTitle className="text-xl text-circe-light">Circe - The Enchantress</CardTitle>
-              <CardDescription className="font-serif">
+              <CardDescription>
                 Retention, Analytics & Protection
               </CardDescription>
             </div>
@@ -166,7 +166,7 @@ export function CirceAssistant() {
                     {msg.role === 'circe' && (
                       <div className="text-xs font-medium text-circe-light/70 mb-1">Circe</div>
                     )}
-                    <p className="text-sm font-serif">{msg.content}</p>
+                    <p className="text-sm">{msg.content}</p>
                   </div>
                 </div>
               ))}
@@ -258,7 +258,7 @@ export function CirceAssistant() {
           <Card className="border-circe/20">
             <CardHeader>
               <CardTitle className="text-sm">Fans at Risk of Churning</CardTitle>
-              <CardDescription className="font-serif">
+              <CardDescription>
                 Circe&apos;s enchantment analysis reveals these fans need attention
               </CardDescription>
             </CardHeader>
@@ -284,7 +284,7 @@ export function CirceAssistant() {
                       <p className="text-sm text-muted-foreground">
                         Last active: {fan.lastActive} | Total spent: ${fan.totalSpent}
                       </p>
-                      <p className="text-sm font-serif text-circe-light/80">
+                      <p className="text-sm text-circe-light/80">
                         <Sparkles className="h-3 w-3 inline mr-1" />
                         {fan.recommendation}
                       </p>
@@ -306,7 +306,7 @@ export function CirceAssistant() {
                 <AlertTriangle className="h-4 w-4 text-destructive" />
                 Active Leak Alerts
               </CardTitle>
-              <CardDescription className="font-serif">
+              <CardDescription>
                 Circe guards your content across the digital realm
               </CardDescription>
             </CardHeader>

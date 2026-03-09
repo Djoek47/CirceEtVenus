@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
+import { ThemedLogo } from '@/components/themed-logo'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -103,9 +103,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
     >
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-4">
-        <Image 
-          src="/logo.png" 
-          alt="Circe et Venus" 
+        <ThemedLogo 
           width={32} 
           height={32} 
           className="flex-shrink-0 rounded-full"

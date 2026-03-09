@@ -139,7 +139,7 @@ export function VenusAssistant() {
             </div>
             <div>
               <CardTitle className="text-xl text-venus">Venus - The Goddess</CardTitle>
-              <CardDescription className="font-serif">
+              <CardDescription>
                 Growth, Attraction & Reputation
               </CardDescription>
             </div>
@@ -168,7 +168,7 @@ export function VenusAssistant() {
                     {msg.role === 'venus' && (
                       <div className="text-xs font-medium text-venus/70 mb-1">Venus</div>
                     )}
-                    <p className="text-sm font-serif">{msg.content}</p>
+                    <p className="text-sm">{msg.content}</p>
                   </div>
                 </div>
               ))}
@@ -260,7 +260,7 @@ export function VenusAssistant() {
           <Card className="border-venus/20">
             <CardHeader>
               <CardTitle className="text-sm">Venus&apos;s Growth Recommendations</CardTitle>
-              <CardDescription className="font-serif">
+              <CardDescription>
                 Divine strategies to expand your realm of admirers
               </CardDescription>
             </CardHeader>
@@ -274,7 +274,7 @@ export function VenusAssistant() {
                           <span className="font-medium">{suggestion.title}</span>
                           <Badge variant="outline" className="text-xs">{suggestion.category}</Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1 font-serif">
+                        <p className="text-sm text-muted-foreground mt-1">
                           {suggestion.description}
                         </p>
                       </div>
@@ -308,7 +308,7 @@ export function VenusAssistant() {
                 <MessageCircle className="h-4 w-4 text-venus" />
                 Recent Mentions
               </CardTitle>
-              <CardDescription className="font-serif">
+              <CardDescription>
                 Venus tracks your reputation across the digital realm
               </CardDescription>
             </CardHeader>
@@ -336,7 +336,7 @@ export function VenusAssistant() {
                           </span>
                         </div>
                       </div>
-                      <p className="text-sm font-serif text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         {mention.content}
                       </p>
                       <div className="flex gap-4 text-xs text-muted-foreground">

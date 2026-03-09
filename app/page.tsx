@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
+import { ThemedLogo } from '@/components/themed-logo'
 import { 
   ArrowRight, 
   Shield, 
@@ -21,9 +22,7 @@ export default function LandingPage() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-xl">
         <nav className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">
           <Link href="/" className="flex items-center gap-2 sm:gap-3">
-            <Image 
-              src="/logo.png" 
-              alt="Circe et Venus" 
+            <ThemedLogo 
               width={36} 
               height={36} 
               className="rounded-full sm:h-10 sm:w-10"
@@ -61,9 +60,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-4xl text-center">
             {/* Logo */}
             <div className="mb-6 flex justify-center sm:mb-8">
-              <Image 
-                src="/logo.png" 
-                alt="Circe et Venus" 
+              <ThemedLogo 
                 width={180} 
                 height={180} 
                 className="gold-glow h-32 w-32 rounded-full sm:h-44 sm:w-44"
@@ -108,7 +105,7 @@ export default function LandingPage() {
               <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Two Divine Intelligences, One <span className="text-primary">Purpose</span>
               </h2>
-              <p className="mx-auto mt-4 max-w-2xl font-serif text-muted-foreground">
+              <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
                 Each goddess brings her unique powers to elevate your creator journey.
               </p>
             </div>
@@ -124,8 +121,8 @@ export default function LandingPage() {
                     <Shield className="h-8 w-8" />
                   </div>
                   <h3 className="mb-2 text-2xl font-semibold text-circe-light">Circe</h3>
-                  <p className="mb-4 font-serif text-sm uppercase tracking-wider text-circe/70">The Enchantress of Retention</p>
-                  <p className="mb-6 font-serif text-muted-foreground">
+                  <p className="mb-4 text-sm uppercase tracking-wider text-circe/70">The Enchantress of Retention</p>
+                  <p className="mb-6 text-muted-foreground">
                     Like the sorceress who enchanted Odysseus&apos;s men to stay on her island, 
                     Circe AI ensures your fans remain captivated and loyal.
                   </p>
@@ -162,8 +159,8 @@ export default function LandingPage() {
                     <TrendingUp className="h-8 w-8" />
                   </div>
                   <h3 className="mb-2 text-2xl font-semibold text-venus">Venus</h3>
-                  <p className="mb-4 font-serif text-sm uppercase tracking-wider text-venus/70">The Goddess of Growth</p>
-                  <p className="mb-6 font-serif text-muted-foreground">
+                  <p className="mb-4 text-sm uppercase tracking-wider text-venus/70">The Goddess of Growth</p>
+                  <p className="mb-6 text-muted-foreground">
                     Embodying love, beauty, and desire, Venus AI guides you in attracting 
                     new followers and maximizing your irresistible appeal.
                   </p>
@@ -205,7 +202,7 @@ export default function LandingPage() {
                 <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                   Align Your Content with the <span className="text-primary">Stars</span>
                 </h2>
-                <p className="mt-4 font-serif text-lg text-muted-foreground">
+                <p className="mt-4 text-lg text-muted-foreground">
                   Our astrology-powered content calendar analyzes zodiac cycles, planetary alignments, 
                   and your audience&apos;s astrological profiles to optimize posting times.
                 </p>
@@ -220,7 +217,7 @@ export default function LandingPage() {
                       <div className="rounded-full bg-primary/20 p-1">
                         <Star className="h-3 w-3 text-primary" />
                       </div>
-                      <span className="font-serif">{item}</span>
+                      <span>{item}</span>
                     </li>
                   ))}
                 </ul>
@@ -246,7 +243,7 @@ export default function LandingPage() {
               <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Divine Tools for <span className="text-primary">Mortal Creators</span>
               </h2>
-              <p className="mx-auto mt-4 max-w-2xl font-serif text-muted-foreground">
+              <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
                 Every feature crafted with mythological precision to elevate your creator empire.
               </p>
             </div>
@@ -310,7 +307,7 @@ export default function LandingPage() {
                     <feature.icon className="h-6 w-6" />
                   </div>
                   <h3 className="mb-2 text-lg font-semibold">{feature.title}</h3>
-                  <p className="font-serif text-sm text-muted-foreground">{feature.description}</p>
+                  <p className="text-sm text-muted-foreground">{feature.description}</p>
                 </div>
               ))}
             </div>
@@ -321,9 +318,7 @@ export default function LandingPage() {
         <section className="px-4 py-16 sm:px-6 sm:py-24">
           <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-circe/5 via-card to-venus/5 p-8 text-center sm:p-12">
             <div className="mb-6 flex justify-center">
-              <Image 
-                src="/logo.png" 
-                alt="Circe et Venus" 
+              <ThemedLogo 
                 width={100} 
                 height={100} 
                 className="rounded-full opacity-80"
@@ -332,7 +327,7 @@ export default function LandingPage() {
             <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               Ready to Ascend?
             </h2>
-            <p className="mx-auto mt-4 max-w-xl font-serif text-muted-foreground">
+            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
               Join the pantheon of creators who have embraced divine guidance.
             </p>
             <div className="mt-8">
@@ -350,16 +345,14 @@ export default function LandingPage() {
       <footer className="border-t border-border/30 bg-card/30 px-4 py-8 sm:px-6 sm:py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-3">
-            <Image 
-              src="/logo.png" 
-              alt="Circe et Venus" 
+            <ThemedLogo 
               width={32} 
               height={32} 
               className="rounded-full"
             />
             <span className="font-semibold tracking-wider text-primary">CIRCE ET VENUS</span>
           </div>
-          <p className="font-serif text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             MMXXVI Circe et Venus. Guided by the stars.
           </p>
         </div>

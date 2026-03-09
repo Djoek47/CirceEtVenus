@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { ThemedLogo } from '@/components/themed-logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -57,21 +57,19 @@ export default function LoginPage() {
 
       {/* Logo */}
       <div className="mb-8 flex flex-col items-center gap-4">
-        <Image
-          src="/logo.png"
-          alt="Circe et Venus"
+        <ThemedLogo
           width={120}
           height={120}
           className="rounded-full"
           priority
         />
         <div className="text-center">
-          <h1 className="font-serif text-2xl font-bold tracking-wider text-gold">CIRCE ET VENUS</h1>
+          <h1 className="font-serif text-2xl font-bold tracking-wider text-primary">CIRCE ET VENUS</h1>
           <p className="text-xs text-muted-foreground">Divine Creator Management</p>
         </div>
       </div>
 
-      <Card className="w-full max-w-md border-gold/20 bg-card">
+      <Card className="w-full max-w-md border-primary/20 bg-card">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Welcome Back, Creator</CardTitle>
           <CardDescription>
@@ -104,7 +102,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Link 
                   href="/auth/forgot-password" 
-                  className="text-xs text-muted-foreground hover:text-gold"
+                  className="text-xs text-muted-foreground hover:text-primary"
                 >
                   Forgot password?
                 </Link>
@@ -120,7 +118,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full bg-gold hover:bg-gold/90 text-background" disabled={loading}>
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -134,7 +132,7 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {"New to the divine realm?"}{' '}
-            <Link href="/auth/sign-up" className="font-medium text-gold hover:underline">
+            <Link href="/auth/sign-up" className="font-medium text-primary hover:underline">
               Begin your journey
             </Link>
           </div>

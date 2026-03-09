@@ -16,7 +16,7 @@ export default function AIStudioPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">AI Studio</h1>
-        <p className="font-serif text-muted-foreground">
+        <p className="text-muted-foreground">
           Divine intelligence at your command. Choose your guide.
         </p>
       </div>
@@ -53,12 +53,12 @@ export default function AIStudioPage() {
                   </div>
                   <div>
                     <CardTitle className="text-circe-light">Circe</CardTitle>
-                    <CardDescription className="font-serif">The Enchantress of Retention</CardDescription>
+                    <CardDescription>The Enchantress of Retention</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="font-serif text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Like the mythological sorceress who kept Odysseus&apos;s men enchanted on her island,
                   Circe AI specializes in keeping your audience captivated and loyal.
                 </p>
@@ -97,12 +97,12 @@ export default function AIStudioPage() {
                   </div>
                   <div>
                     <CardTitle className="text-venus">Venus</CardTitle>
-                    <CardDescription className="font-serif">The Goddess of Growth</CardDescription>
+                    <CardDescription>The Goddess of Growth</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="font-serif text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Embodying love, beauty, and irresistible attraction, Venus AI guides you
                   in drawing new followers and maximizing your magnetic appeal.
                 </p>
@@ -142,14 +142,14 @@ export default function AIStudioPage() {
                 </div>
                 <div>
                   <CardTitle>Cosmic Content Calendar</CardTitle>
-                  <CardDescription className="font-serif">
+                  <CardDescription>
                     Align your content with celestial energies
                   </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="font-serif text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Our astrology-powered calendar analyzes zodiac cycles, planetary transits,
                 and lunar phases to optimize your posting schedule for maximum engagement.
               </p>

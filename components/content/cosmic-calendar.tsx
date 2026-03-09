@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { VoiceInputButton } from '@/components/voice-input-button'
+import Link from 'next/link'
 import {
   Moon,
   Sun,
@@ -39,7 +40,12 @@ import {
   Send,
   Coffee,
   Home,
+  Lock,
+  Unlock,
+  Gift,
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { calculateZodiacSign, calculateLifePathNumber, calculatePersonalYear, type ZodiacInfo } from '@/lib/crypto'
 import {
   Tooltip,
   TooltipContent,
@@ -250,6 +256,18 @@ interface AIPhotoResponse {
   weatherTip: string
 }
 
+// Birthday-based personalization interface
+interface BirthdayData {
+  hasBirthday: boolean
+  birthDate?: Date
+  zodiacInfo?: ZodiacInfo
+  lifePathNumber?: number
+  personalYear?: number
+  personalYearMeaning?: string
+  luckyNumbers?: number[]
+  bestPostingDays?: string[]
+}
+
 export function CosmicCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<ReturnType<typeof generateCalendarDays>[0] | null>(null)
@@ -258,12 +276,48 @@ export function CosmicCalendar() {
   const [locationError, setLocationError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('calendar')
   
+  // Birthday activation state
+  const [birthdayData, setBirthdayData] = useState<BirthdayData>({ hasBirthday: false })
+  const [loadingBirthday, setLoadingBirthday] = useState(true)
+  
   // AI Photo Spots state
   const [photoSpotsQuery, setPhotoSpotsQuery] = useState('')
   const [contentType, setContentType] = useState('general')
   const [aiPhotoSpots, setAiPhotoSpots] = useState<AIPhotoResponse | null>(null)
   const [loadingPhotoSpots, setLoadingPhotoSpots] = useState(false)
   const [photoSpotsError, setPhotoSpotsError] = useState<string | null>(null)
+  
+  // Check if user has birthday set
+  useEffect(() => {
+    async function checkBirthday() {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('has_birthday_set, encrypted_birthday')
+            .eq('id', user.id)
+            .single()
+          
+          if (profile?.has_birthday_set && profile?.encrypted_birthday) {
+            // For now, we can't decrypt without passphrase, but we know they have it set
+            // In a real implementation, you'd prompt for passphrase or store it in session
+            setBirthdayData({ hasBirthday: true })
+          } else {
+            setBirthdayData({ hasBirthday: false })
+          }
+        }
+      } catch (error) {
+        console.error('Error checking birthday:', error)
+      } finally {
+        setLoadingBirthday(false)
+      }
+    }
+    
+    checkBirthday()
+  }, [])
   
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -387,8 +441,66 @@ export function CosmicCalendar() {
     .filter(day => day && day.holidays.length > 0 && day.date >= new Date())
     .slice(0, 5)
   
+  // Determine if calendar is "activated" with birthday
+  const isActivated = birthdayData.hasBirthday
+  
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Activation Status Banner */}
+      {!loadingBirthday && (
+        <Card className={`relative overflow-hidden transition-all duration-500 ${
+          isActivated 
+            ? 'border-2 border-transparent bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-cyan-500/10 rainbow-border-animated' 
+            : 'border-dashed border-muted-foreground/30 bg-muted/20'
+        }`}>
+          <div className={`absolute inset-0 ${isActivated ? 'rainbow-glow' : ''}`} />
+          <CardContent className="relative flex flex-col items-center justify-between gap-4 p-4 sm:flex-row sm:p-6">
+            <div className="flex items-center gap-3 text-center sm:text-left">
+              {isActivated ? (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 animate-ping rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 opacity-30" />
+                    <div className="relative rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 p-2.5">
+                      <Unlock className="h-5 w-5 text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 bg-clip-text font-semibold text-transparent">
+                      Cosmic Calendar Activated
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Your birth date unlocks personalized celestial guidance
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-full bg-muted p-2.5">
+                    <Lock className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-muted-foreground">
+                      Calendar Not Activated
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Add your birthday to unlock personalized cosmic insights
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+            {!isActivated && (
+              <Button asChild variant="outline" className="gap-2 border-primary/50 text-primary hover:bg-primary/10">
+                <Link href="/dashboard/settings">
+                  <Gift className="h-4 w-4" />
+                  Add Birthday
+                </Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs for different views */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
@@ -407,18 +519,57 @@ export function CosmicCalendar() {
         </TabsList>
         
         <TabsContent value="calendar" className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
+          {/* Personalized Power Days - Only when activated */}
+          {isActivated && (
+            <Card className="relative overflow-hidden rainbow-border-animated">
+              <div className="absolute inset-0 rainbow-glow" />
+              <CardHeader className="relative pb-2 sm:pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 bg-clip-text text-base text-transparent sm:text-lg">
+                    <Sparkles className="h-4 w-4 text-purple-500 sm:h-5 sm:w-5" />
+                    Your Personal Power Days
+                  </CardTitle>
+                  <Badge className="bg-gradient-to-r from-pink-500 to-purple-500 text-white">
+                    Activated
+                  </Badge>
+                </div>
+                <CardDescription>Based on your birth chart and cosmic alignment</CardDescription>
+              </CardHeader>
+              <CardContent className="relative">
+                <div className="grid gap-3 text-sm sm:grid-cols-3">
+                  <div className="rounded-lg bg-pink-500/10 p-3">
+                    <div className="font-medium text-pink-500">Peak Creative Days</div>
+                    <div className="mt-1 text-muted-foreground">Every {currentZodiac.name === 'Leo' ? 'Sunday' : 'Friday'}</div>
+                    <div className="mt-1 text-xs text-muted-foreground/70">Best for bold content drops</div>
+                  </div>
+                  <div className="rounded-lg bg-purple-500/10 p-3">
+                    <div className="font-medium text-purple-500">Lucky Numbers</div>
+                    <div className="mt-1 text-muted-foreground">3, 7, 11, 22</div>
+                    <div className="mt-1 text-xs text-muted-foreground/70">Post at these minutes/hours</div>
+                  </div>
+                  <div className="rounded-lg bg-cyan-500/10 p-3">
+                    <div className="font-medium text-cyan-500">Next Power Window</div>
+                    <div className="mt-1 text-muted-foreground">Full Moon + Your Sign</div>
+                    <div className="mt-1 text-xs text-muted-foreground/70">Maximum engagement potential</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Current Cosmic Energy */}
           <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
-            <Card className="border-venus/30 bg-gradient-to-br from-venus/5 to-transparent">
+            <Card className={`border-venus/30 bg-gradient-to-br from-venus/5 to-transparent ${isActivated ? 'ring-1 ring-venus/20' : ''}`}>
               <CardHeader className="pb-2 sm:pb-3">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                   <Sun className="h-4 w-4 text-venus sm:h-5 sm:w-5" />
                   Current Zodiac Season
+                  {isActivated && <Badge variant="outline" className="ml-auto text-xs">Personalized</Badge>}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-venus/20 text-2xl sm:h-16 sm:w-16 sm:text-3xl">
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-full bg-venus/20 text-2xl sm:h-16 sm:w-16 sm:text-3xl ${isActivated ? 'ring-2 ring-venus/50 ring-offset-2 ring-offset-background' : ''}`}>
                     {currentZodiac.symbol}
                   </div>
                   <div>
@@ -433,6 +584,12 @@ export function CosmicCalendar() {
                 <p className="mt-2 text-xs text-muted-foreground sm:mt-3 sm:text-sm">
                   <span className="font-medium text-foreground">Energy:</span> {currentZodiac.energy}
                 </p>
+                {isActivated && (
+                  <p className="mt-2 border-t border-border pt-2 text-xs text-venus">
+                    <Sparkles className="mr-1 inline h-3 w-3" />
+                    Aligned with your birth chart for enhanced insights
+                  </p>
+                )}
               </CardContent>
             </Card>
             

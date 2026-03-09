@@ -1,11 +1,22 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { ThemedLogo } from '@/components/themed-logo'
 import { Button } from '@/components/ui/button'
 
 export default function TermsOfServicePage() {
+  const router = useRouter()
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      router.push('/')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -15,11 +26,9 @@ export default function TermsOfServicePage() {
             <ThemedLogo width={32} height={32} className="rounded-full" priority />
             <span className="font-serif text-lg font-semibold text-primary">CIRCE ET VENUS</span>
           </Link>
-          <Button variant="ghost" asChild>
-            <Link href="/" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Link>
+          <Button variant="ghost" onClick={handleBack} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back
           </Button>
         </div>
       </header>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, Send, Mail, MapPin, Clock, MessageSquare, Shield, CreditCard, Loader2, Check } from 'lucide-react'
 import { ThemedLogo } from '@/components/themed-logo'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function ContactPage() {
+  const router = useRouter()
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [formData, setFormData] = useState({
@@ -20,6 +22,14 @@ export default function ContactPage() {
     subject: '',
     message: '',
   })
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      router.push('/')
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -61,11 +71,9 @@ export default function ContactPage() {
             <ThemedLogo width={32} height={32} className="rounded-full" priority />
             <span className="font-serif text-lg font-semibold text-primary">CIRCE ET VENUS</span>
           </Link>
-          <Button variant="ghost" asChild>
-            <Link href="/" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Link>
+          <Button variant="ghost" onClick={handleBack} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back
           </Button>
         </div>
       </header>

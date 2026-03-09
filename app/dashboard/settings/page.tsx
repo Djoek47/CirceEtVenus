@@ -20,6 +20,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from 'next-themes'
 import { BirthdaySettings } from '@/components/settings/birthday-settings'
+import { BillingSection } from '@/components/settings/billing-section'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'integrations' | 'data' | 'preferences'
@@ -210,18 +211,18 @@ export default function SettingsPage() {
             </nav>
             <Separator className="my-4" />
             <div className="space-y-1 text-sm">
-              <Link href="/terms" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
                 <ExternalLink className="h-3 w-3" />
                 Terms of Service
-              </Link>
-              <Link href="/privacy" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
+              </a>
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
                 <ExternalLink className="h-3 w-3" />
                 Privacy Policy
-              </Link>
-              <Link href="/contact" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
+              </a>
+              <a href="/contact" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
                 <ExternalLink className="h-3 w-3" />
                 Contact Support
-              </Link>
+              </a>
             </div>
           </CardContent>
         </Card>
@@ -542,81 +543,7 @@ export default function SettingsPage() {
 
           {/* Billing Section */}
           {activeTab === 'billing' && (
-            <>
-              <Card className="border-border bg-card">
-                <CardHeader>
-<CardTitle className="flex items-center gap-2 font-semibold">
-                <CreditCard className="h-5 w-5" />
-                Current Plan
-              </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Badge className="mb-2 bg-primary/20 text-primary">FREE TRIAL</Badge>
-                        <h3 className="text-xl font-semibold">Divine Trial</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">14-day free trial - 10 days remaining</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-bold">$0</p>
-                        <p className="text-sm text-muted-foreground">/month</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex gap-3">
-                      <Button className="flex-1">Upgrade to Pro - $49/mo</Button>
-                      <Button variant="outline">View All Plans</Button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-lg border border-border p-4 text-center">
-                      <Zap className="mx-auto h-6 w-6 text-primary" />
-                      <p className="mt-2 font-medium">AI Credits</p>
-                      <p className="text-2xl font-bold">47/100</p>
-                      <p className="text-sm text-muted-foreground">this month</p>
-                    </div>
-                    <div className="rounded-lg border border-border p-4 text-center">
-                      <Database className="mx-auto h-6 w-6 text-primary" />
-                      <p className="mt-2 font-medium">Storage</p>
-                      <p className="text-2xl font-bold">1.2/5</p>
-                      <p className="text-sm text-muted-foreground">GB used</p>
-                    </div>
-                    <div className="rounded-lg border border-border p-4 text-center">
-                      <Mail className="mx-auto h-6 w-6 text-primary" />
-                      <p className="mt-2 font-medium">Messages</p>
-                      <p className="text-2xl font-bold">234</p>
-                      <p className="text-sm text-muted-foreground">this month</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="font-semibold">Payment Method</CardTitle>
-                  <CardDescription>Manage your payment methods</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-lg border border-dashed border-border p-6 text-center">
-                    <CreditCard className="mx-auto h-8 w-8 text-muted-foreground" />
-                    <p className="mt-2 font-medium">No payment method</p>
-                    <p className="text-sm text-muted-foreground">Add a card to continue after your trial</p>
-                    <Button className="mt-4">Add Payment Method</Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="font-semibold">Billing History</CardTitle>
-                  <CardDescription>View your past invoices</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-center text-muted-foreground py-8">No invoices yet</p>
-                </CardContent>
-              </Card>
-            </>
+            <BillingSection userId={user?.id} userEmail={user?.email} />
           )}
 
           {/* Integrations Section */}

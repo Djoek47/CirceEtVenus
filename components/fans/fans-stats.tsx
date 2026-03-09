@@ -3,6 +3,16 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Users, Crown, DollarSign, Activity } from 'lucide-react'
 
+// Manual number formatting to avoid hydration mismatch (no Intl/locale dependency)
+function formatNumber(amount: number): string {
+  const str = Math.round(amount).toString()
+  const parts: string[] = []
+  for (let i = str.length; i > 0; i -= 3) {
+    parts.unshift(str.slice(Math.max(0, i - 3), i))
+  }
+  return parts.join(',')
+}
+
 interface FansStatsProps {
   stats: {
     totalFans: number
@@ -16,28 +26,28 @@ export function FansStats({ stats }: FansStatsProps) {
   const cards = [
     {
       title: 'Total Fans',
-      value: stats.totalFans.toLocaleString(),
+      value: formatNumber(stats.totalFans),
       icon: Users,
       color: 'text-chart-1',
       bgColor: 'bg-chart-1/10',
     },
     {
       title: 'Whale Tier',
-      value: stats.whales.toLocaleString(),
+      value: formatNumber(stats.whales),
       icon: Crown,
       color: 'text-chart-4',
       bgColor: 'bg-chart-4/10',
     },
     {
       title: 'Total Revenue',
-      value: `$${stats.totalRevenue.toLocaleString()}`,
+      value: `$${formatNumber(stats.totalRevenue)}`,
       icon: DollarSign,
       color: 'text-chart-2',
       bgColor: 'bg-chart-2/10',
     },
     {
       title: 'Active Fans',
-      value: stats.activeFans.toLocaleString(),
+      value: formatNumber(stats.activeFans),
       icon: Activity,
       color: 'text-chart-5',
       bgColor: 'bg-chart-5/10',

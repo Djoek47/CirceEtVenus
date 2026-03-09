@@ -5,6 +5,16 @@ import { DollarSign, Users, MessageSquare, Calendar, TrendingUp, TrendingDown } 
 import { cn } from '@/lib/utils'
 import type { DashboardStats } from '@/lib/types'
 
+// Manual number formatting to avoid hydration mismatch (no Intl/locale dependency)
+function formatNumber(amount: number): string {
+  const str = Math.round(amount).toString()
+  const parts: string[] = []
+  for (let i = str.length; i > 0; i -= 3) {
+    parts.unshift(str.slice(Math.max(0, i - 3), i))
+  }
+  return parts.join(',')
+}
+
 interface StatsCardsProps {
   stats: DashboardStats
 }
@@ -13,25 +23,25 @@ export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
     {
       title: 'Total Revenue',
-      value: `$${stats.totalRevenue.toLocaleString()}`,
+      value: `$${formatNumber(stats.totalRevenue)}`,
       change: stats.revenueChange,
       icon: DollarSign,
     },
     {
       title: 'Total Fans',
-      value: stats.totalFans.toLocaleString(),
+      value: formatNumber(stats.totalFans),
       change: stats.fansChange,
       icon: Users,
     },
     {
       title: 'Active Conversations',
-      value: stats.activeConversations.toLocaleString(),
+      value: formatNumber(stats.activeConversations),
       change: stats.conversationsChange,
       icon: MessageSquare,
     },
     {
       title: 'Scheduled Content',
-      value: stats.scheduledContent.toLocaleString(),
+      value: formatNumber(stats.scheduledContent),
       change: stats.contentChange,
       icon: Calendar,
     },

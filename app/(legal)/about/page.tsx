@@ -36,7 +36,7 @@ export default function AboutPage() {
       <header className="border-b border-border">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
-            <ThemedLogo width={32} height={32} className="rounded-full" />
+            <ThemedLogo width={32} height={32} className="rounded-full" priority />
             <span className="font-serif text-lg font-semibold text-primary">CIRCE ET VENUS</span>
           </Link>
           <Button variant="ghost" asChild>
@@ -52,7 +52,7 @@ export default function AboutPage() {
       <section className="border-b border-border bg-gradient-to-b from-primary/5 to-transparent py-16">
         <div className="mx-auto max-w-4xl px-4 text-center">
           <div className="mb-6 flex justify-center">
-            <ThemedLogo width={120} height={120} className="rounded-full" />
+            <ThemedLogo width={120} height={120} className="rounded-full" priority />
           </div>
           <h1 className="font-serif text-4xl font-bold">About Circe et Venus</h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">

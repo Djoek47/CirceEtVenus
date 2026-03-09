@@ -58,7 +58,7 @@ export default function ContactPage() {
       <header className="border-b border-border">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
-            <ThemedLogo width={32} height={32} className="rounded-full" />
+            <ThemedLogo width={32} height={32} className="rounded-full" priority />
             <span className="font-serif text-lg font-semibold text-primary">CIRCE ET VENUS</span>
           </Link>
           <Button variant="ghost" asChild>

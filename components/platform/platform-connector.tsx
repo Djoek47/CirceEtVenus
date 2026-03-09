@@ -439,6 +439,130 @@ export function PlatformConnector() {
         })}
       </div>
 
+      {/* API Access Management */}
+      <Card className="border-border">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Key className="h-5 w-5" />
+            API Access Management
+          </CardTitle>
+          <CardDescription>
+            Manage API keys for advanced platform integrations
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {PLATFORMS.filter(p => isConnected(p.id)).length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-4">
+              Connect a platform above to enable API access
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {PLATFORMS.filter(p => isConnected(p.id)).map((platform) => {
+                const connection = getConnection(platform.id)
+                return (
+                  <div 
+                    key={platform.id}
+                    className="flex items-center justify-between rounded-lg border border-border p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="flex h-8 w-8 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: `${platform.color}20` }}
+                      >
+                        <span 
+                          className="text-xs font-bold"
+                          style={{ color: platform.color }}
+                        >
+                          {platform.name.substring(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{platform.name} API</p>
+                        <p className="text-xs text-muted-foreground">
+                          {connection?.platform_username ? `@${connection.platform_username}` : 'Connected'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <Check className="h-3 w-3 text-green-500" />
+                        Active
+                      </Badge>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Key className="mr-2 h-3 w-3" />
+                            View Key
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{platform.name} API Key</DialogTitle>
+                            <DialogDescription>
+                              Use this key to access the {platform.name} API programmatically
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>API Key</Label>
+                              <div className="flex gap-2">
+                                <Input 
+                                  value={`cev_${platform.id}_${connection?.id?.substring(0, 8) || 'xxxx'}...`}
+                                  readOnly
+                                  className="font-mono text-xs"
+                                />
+                                <Button 
+                                  variant="outline" 
+                                  size="icon"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(`cev_${platform.id}_${connection?.id || 'demo'}_${Date.now()}`)
+                                    setSuccess('API key copied to clipboard!')
+                                    setTimeout(() => setSuccess(null), 2000)
+                                  }}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <Alert>
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertDescription>
+                                Keep your API key secure. Never share it publicly.
+                              </AlertDescription>
+                            </Alert>
+                            <div className="space-y-2">
+                              <Label>API Endpoint</Label>
+                              <Input 
+                                value={`https://api.circeetvenus.com/v1/${platform.id}`}
+                                readOnly
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Rate Limits</Label>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div className="rounded-lg border border-border p-3">
+                                  <p className="text-muted-foreground">Requests/min</p>
+                                  <p className="font-semibold">60</p>
+                                </div>
+                                <div className="rounded-lg border border-border p-3">
+                                  <p className="text-muted-foreground">Requests/day</p>
+                                  <p className="font-semibold">10,000</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Data Import Section */}
       <Card className="border-border">
         <CardHeader>

@@ -1,19 +1,33 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { Checkout } from '@/components/stripe/checkout'
 import { PRODUCTS } from '@/lib/products'
 import { getSubscriptionStatus, createCustomerPortalSession } from '@/app/actions/stripe'
+import { createClient } from '@/lib/supabase/client'
 import { 
-  CreditCard, Zap, Database, Mail, Check, Loader2, Crown, Shield, Star, Sparkles
+  CreditCard, Zap, Database, Mail, Check, Loader2, Crown, Shield, Star, Sparkles, Calendar, AlertTriangle
 } from 'lucide-react'
 
 interface BillingSectionProps {
   userId?: string
   userEmail?: string
+}
+
+interface SubscriptionData {
+  id: string
+  plan: string
+  status: string
+  ai_credits_used: number
+  ai_credits_limit: number
+  storage_used_mb: number
+  storage_limit_mb: number
+  current_period_end: string
+  cancel_at_period_end: boolean
 }
 
 export function BillingSection({ userId, userEmail }: BillingSectionProps) {
@@ -23,14 +37,51 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
     currentPeriodEnd?: string
     cancelAtPeriodEnd?: boolean
   } | null>(null)
+  const [subData, setSubData] = useState<SubscriptionData | null>(null)
   const [loadingPortal, setLoadingPortal] = useState(false)
   const [loading, setLoading] = useState(true)
+  const supabase = createClient()
+
+  const loadSubscriptionData = useCallback(async () => {
+    if (!userId) return
+    
+    // Load from our database for usage stats
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+    
+    if (data) {
+      setSubData(data)
+    } else {
+      // Create default subscription for new users
+      const periodEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+      const { data: newSub } = await supabase
+        .from('subscriptions')
+        .insert({
+          user_id: userId,
+          plan: 'free',
+          status: 'trialing',
+          ai_credits_used: 0,
+          ai_credits_limit: 100,
+          storage_used_mb: 0,
+          storage_limit_mb: 5000,
+          current_period_end: periodEnd
+        })
+        .select()
+        .single()
+      
+      if (newSub) setSubData(newSub)
+    }
+  }, [userId, supabase])
 
   useEffect(() => {
     async function loadSubscription() {
       try {
         const status = await getSubscriptionStatus()
         setSubscription(status)
+        await loadSubscriptionData()
       } catch (error) {
         console.error('Failed to load subscription:', error)
       } finally {
@@ -38,7 +89,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
       }
     }
     loadSubscription()
-  }, [])
+  }, [loadSubscriptionData])
 
   const handleManageBilling = async () => {
     setLoadingPortal(true)
@@ -55,6 +106,14 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
   const currentPlan = subscription?.plan 
     ? PRODUCTS.find(p => p.name === subscription.plan) 
     : PRODUCTS[0] // Default to Divine Trial
+
+  // Computed values from subscription data
+  const aiCreditsUsed = subData?.ai_credits_used || 0
+  const aiCreditsLimit = subData?.ai_credits_limit || 100
+  const storageUsedGB = (subData?.storage_used_mb || 0) / 1000
+  const storageLimitGB = (subData?.storage_limit_mb || 5000) / 1000
+  const periodEnd = subData?.current_period_end ? new Date(subData.current_period_end) : null
+  const daysRemaining = periodEnd ? Math.max(0, Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 14
 
   const getPlanIcon = (planId: string) => {
     switch (planId) {
@@ -131,18 +190,26 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
           </div>
 
           {/* Usage Stats */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
+            <div className="rounded-lg border border-border p-4 text-center">
+              <Calendar className="mx-auto h-6 w-6 text-primary" />
+              <p className="mt-2 font-medium">Days Remaining</p>
+              <p className="text-2xl font-bold">{daysRemaining}</p>
+              <p className="text-sm text-muted-foreground">
+                {subData?.cancel_at_period_end ? 'until cancelled' : 'in period'}
+              </p>
+            </div>
             <div className="rounded-lg border border-border p-4 text-center">
               <Zap className="mx-auto h-6 w-6 text-primary" />
               <p className="mt-2 font-medium">AI Credits</p>
-              <p className="text-2xl font-bold">47/100</p>
-              <p className="text-sm text-muted-foreground">this month</p>
+              <p className="text-2xl font-bold">{aiCreditsUsed}/{aiCreditsLimit === 999999 ? '∞' : aiCreditsLimit}</p>
+              <Progress value={(aiCreditsUsed / Math.min(aiCreditsLimit, 1000)) * 100} className="mt-2 h-1" />
             </div>
             <div className="rounded-lg border border-border p-4 text-center">
               <Database className="mx-auto h-6 w-6 text-primary" />
               <p className="mt-2 font-medium">Storage</p>
-              <p className="text-2xl font-bold">1.2/5</p>
-              <p className="text-sm text-muted-foreground">GB used</p>
+              <p className="text-2xl font-bold">{storageUsedGB.toFixed(1)}/{storageLimitGB}</p>
+              <Progress value={(storageUsedGB / storageLimitGB) * 100} className="mt-2 h-1" />
             </div>
             <div className="rounded-lg border border-border p-4 text-center">
               <Mail className="mx-auto h-6 w-6 text-primary" />
@@ -151,6 +218,23 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
               <p className="text-sm text-muted-foreground">this month</p>
             </div>
           </div>
+
+          {/* Cancellation Warning */}
+          {subData?.cancel_at_period_end && (
+            <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <div className="flex-1">
+                <p className="font-medium text-amber-500">Subscription Canceling</p>
+                <p className="text-sm text-muted-foreground">
+                  Your subscription will end on {subData.current_period_end ? new Date(subData.current_period_end).toLocaleDateString() : 'soon'}. 
+                  You&apos;ll lose access to Pro features after this date.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleManageBilling} disabled={loadingPortal}>
+                Resume
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

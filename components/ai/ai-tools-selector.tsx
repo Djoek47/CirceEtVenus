@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,9 +39,15 @@ import {
   BarChart3,
   Calendar,
   Gift,
-  Camera
+  Camera,
+  Mic,
+  Users,
+  TrendingDown,
+  Send
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
+import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 
 // Define the non-Pro AI tools that work
 const workingTools = [
@@ -135,6 +141,58 @@ const workingTools = [
   },
 ]
 
+// Pro tools that require subscription
+const proTools = [
+  {
+    id: 'voice-clone',
+    name: 'Voice Clone',
+    description: 'Clone your writing voice for consistent messaging',
+    longDescription: 'AI analyzes your writing style and generates authentic messages that sound exactly like you.',
+    icon: Mic,
+    color: 'text-gold',
+    bgColor: 'bg-gold/10',
+    borderColor: 'border-gold/30',
+    credits: 3,
+    isPro: true,
+  },
+  {
+    id: 'pricing-optimizer',
+    name: 'Pricing Optimizer',
+    description: 'AI-powered pricing recommendations',
+    longDescription: 'Get data-driven pricing suggestions for subscriptions, PPV, and custom content based on market analysis.',
+    icon: DollarSign,
+    color: 'text-green-500',
+    bgColor: 'bg-green-500/10',
+    borderColor: 'border-green-500/30',
+    credits: 2,
+    isPro: true,
+  },
+  {
+    id: 'churn-predictor',
+    name: 'Churn Predictor',
+    description: 'Identify at-risk fans before they leave',
+    longDescription: 'AI analyzes fan behavior to predict churn risk and provides personalized retention strategies.',
+    icon: TrendingDown,
+    color: 'text-red-500',
+    bgColor: 'bg-red-500/10',
+    borderColor: 'border-red-500/30',
+    credits: 2,
+    isPro: true,
+  },
+  {
+    id: 'mass-dm-composer',
+    name: 'Mass DM Composer',
+    description: 'Create personalized mass messages at scale',
+    longDescription: 'Generate personalized mass DM campaigns that feel authentic with dynamic placeholders.',
+    icon: Send,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10',
+    borderColor: 'border-blue-500/30',
+    credits: 2,
+    isPro: true,
+  },
+]
+
 // Caption Generator Result Interface
 interface CaptionResult {
   captions: Array<{ text: string; tone: string; length: string }>
@@ -167,11 +225,39 @@ interface AIResult {
   analysis?: Record<string, unknown>
 }
 
+type ToolType = typeof workingTools[0] | typeof proTools[0]
+
 export function AIToolsSelector() {
-  const [selectedTool, setSelectedTool] = useState<typeof workingTools[0] | null>(null)
+  const [selectedTool, setSelectedTool] = useState<ToolType | null>(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<CaptionResult | ContentIdeasResult | AIResult | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [isPro, setIsPro] = useState(false)
+  const [aiCreditsUsed, setAiCreditsUsed] = useState(0)
+  const [aiCreditsLimit, setAiCreditsLimit] = useState(100)
+  const supabase = createClient()
+  
+  // Check subscription status
+  const loadSubscription = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('plan, ai_credits_used, ai_credits_limit')
+      .eq('user_id', user.id)
+      .single()
+    
+    if (data) {
+      setIsPro(['venus-pro', 'circe-elite', 'divine-duo'].includes(data.plan))
+      setAiCreditsUsed(data.ai_credits_used || 0)
+      setAiCreditsLimit(data.ai_credits_limit || 100)
+    }
+  }, [supabase])
+  
+  useEffect(() => {
+    loadSubscription()
+  }, [loadSubscription])
   
   // Form states for different tools
   const [contentType, setContentType] = useState('photo')
@@ -180,6 +266,11 @@ export function AIToolsSelector() {
   const [niche, setNiche] = useState('')
   const [fanMessage, setFanMessage] = useState('')
   const [currentPrice, setCurrentPrice] = useState('')
+  
+  // Pro tool specific states
+  const [sampleText, setSampleText] = useState('')
+  const [audienceSegment, setAudienceSegment] = useState('all')
+  const [campaignGoal, setCampaignGoal] = useState('')
   
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
@@ -297,6 +388,56 @@ export function AIToolsSelector() {
             body: JSON.stringify({
               fanInfo: fanMessage,
               budget: currentPrice,
+            }),
+          })
+          break
+        
+        // Pro Tools
+        case 'voice-clone':
+          response = await fetch('/api/ai/voice-clone', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sampleText,
+              targetTone: contentType,
+              context: contentDescription,
+            }),
+          })
+          break
+          
+        case 'pricing-optimizer':
+          response = await fetch('/api/ai/pricing-optimizer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contentType,
+              currentPrice,
+              niche,
+              subscriberCount: fanMessage,
+            }),
+          })
+          break
+          
+        case 'churn-predictor':
+          response = await fetch('/api/ai/churn-predictor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fanData: fanMessage,
+              recentActivity: contentDescription,
+            }),
+          })
+          break
+          
+        case 'mass-dm-composer':
+          response = await fetch('/api/ai/mass-dm-composer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              campaign: campaignGoal,
+              audienceSegment,
+              tone: contentType,
+              callToAction: contentDescription,
             }),
           })
           break
@@ -592,6 +733,116 @@ export function AIToolsSelector() {
           </div>
         )
         
+      // Pro Tool Inputs
+      case 'voice-clone':
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Sample of Your Writing</Label>
+                <VoiceInputButton
+                  onTranscript={(text) => setSampleText(prev => prev + (prev ? ' ' : '') + text)}
+                  size="sm"
+                  variant="ghost"
+                />
+              </div>
+              <Textarea 
+                placeholder="Paste some of your previous messages or captions so AI can learn your voice..."
+                value={sampleText}
+                onChange={(e) => setSampleText(e.target.value)}
+                className="min-h-[120px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>What to Generate</Label>
+              <Textarea 
+                placeholder="Describe what kind of message you need in your voice..."
+                value={contentDescription}
+                onChange={(e) => setContentDescription(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+        )
+        
+      case 'churn-predictor':
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Fan Information</Label>
+              <Textarea 
+                placeholder="Describe the fan: subscription length, spending history, recent activity..."
+                value={fanMessage}
+                onChange={(e) => setFanMessage(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Recent Behavior Changes (optional)</Label>
+              <Textarea 
+                placeholder="Any recent changes in their engagement patterns..."
+                value={contentDescription}
+                onChange={(e) => setContentDescription(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+        )
+        
+      case 'mass-dm-composer':
+        return (
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Audience Segment</Label>
+                <Select value={audienceSegment} onValueChange={setAudienceSegment}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subscribers</SelectItem>
+                    <SelectItem value="new">New Fans (Last 7 days)</SelectItem>
+                    <SelectItem value="inactive">Inactive (30+ days)</SelectItem>
+                    <SelectItem value="whales">Top Spenders</SelectItem>
+                    <SelectItem value="expiring">Expiring Soon</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Tone</Label>
+                <Select value={contentType} onValueChange={setContentType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="friendly">Friendly</SelectItem>
+                    <SelectItem value="flirty">Flirty</SelectItem>
+                    <SelectItem value="urgent">Urgent/FOMO</SelectItem>
+                    <SelectItem value="exclusive">Exclusive/VIP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Campaign Goal</Label>
+              <Input 
+                placeholder="e.g., Promote new PPV, Re-engage inactive fans..."
+                value={campaignGoal}
+                onChange={(e) => setCampaignGoal(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Call to Action</Label>
+              <Textarea 
+                placeholder="What do you want fans to do after reading?"
+                value={contentDescription}
+                onChange={(e) => setContentDescription(e.target.value)}
+                className="min-h-[60px]"
+              />
+            </div>
+          </div>
+        )
+        
       default:
         return (
           <div className="space-y-4">
@@ -814,23 +1065,78 @@ export function AIToolsSelector() {
               ))}
             </div>
             
-            {/* Pro Tools Teaser */}
-            <div className="mt-6 p-4 rounded-lg border border-gold/30 bg-gradient-to-r from-gold/5 to-transparent">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-gold/20 p-2">
-                  <Crown className="h-5 w-5 text-gold" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm text-gold">Unlock Pro Tools</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Voice Cloning, Video Script AI, Competitor Analysis, and more
-                  </p>
-                </div>
-                <Button size="sm" variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
-                  <Lock className="h-3 w-3 mr-1" />
-                  Upgrade
-                </Button>
+            {/* Pro Tools Section */}
+            <div className="mt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Crown className="h-4 w-4 text-gold" />
+                <h3 className="font-semibold text-sm text-gold">Pro Tools</h3>
+                {isPro && <Badge className="bg-gold/20 text-gold text-[10px]">Unlocked</Badge>}
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {proTools.map((tool) => (
+                  <Card 
+                    key={tool.id}
+                    className={`cursor-pointer transition-all ${tool.borderColor} ${
+                      isPro 
+                        ? 'hover:shadow-lg hover:scale-[1.02] hover:border-gold/50' 
+                        : 'opacity-75 hover:opacity-100'
+                    }`}
+                    onClick={() => isPro ? setSelectedTool(tool) : null}
+                  >
+                    <CardContent className="pt-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`rounded-lg p-2.5 ${tool.bgColor}`}>
+                          <tool.icon className={`h-5 w-5 ${tool.color}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-sm">{tool.name}</h3>
+                            {!isPro && <Lock className="h-3 w-3 text-muted-foreground" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {tool.description}
+                          </p>
+                          <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                            <Zap className="h-3 w-3" />
+                            {tool.credits} credit{tool.credits > 1 ? 's' : ''}/use
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              
+              {!isPro && (
+                <div className="mt-4 p-4 rounded-lg border border-gold/30 bg-gradient-to-r from-gold/5 to-transparent">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-gold/20 p-2">
+                      <Crown className="h-5 w-5 text-gold" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-sm text-gold">Unlock Pro Tools</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Get Voice Cloning, Churn Prediction, Mass DM Composer and more
+                      </p>
+                    </div>
+                    <Link href="/dashboard/settings?tab=billing">
+                      <Button size="sm" variant="outline" className="border-gold/30 text-gold hover:bg-gold/10 hover:text-gold">
+                        <Crown className="h-3 w-3 mr-1" />
+                        Upgrade
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Credits Display */}
+            <div className="mt-4 p-3 rounded-lg bg-muted/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-primary" />
+                <span className="text-sm">AI Credits</span>
+              </div>
+              <span className="font-medium">{aiCreditsUsed}/{aiCreditsLimit === 999999 ? '∞' : aiCreditsLimit}</span>
             </div>
           </ScrollArea>
         </CardContent>

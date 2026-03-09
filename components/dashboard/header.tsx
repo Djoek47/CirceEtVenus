@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,11 @@ const pageNames: Record<string, string> = {
 export function DashboardHeader({ user, profile }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const getPageName = () => {
     for (const [path, name] of Object.entries(pageNames)) {
@@ -69,17 +75,24 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
     <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4 sm:h-16 sm:px-6">
       <div className="flex items-center gap-3">
         {/* Mobile menu button */}
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden">
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">Open menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0">
-            <MobileSidebar user={user} profile={profile} />
-          </SheetContent>
-        </Sheet>
+        {mounted ? (
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0">
+              <MobileSidebar user={user} profile={profile} />
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <Button variant="ghost" size="icon" className="md:hidden">
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Open menu</span>
+          </Button>
+        )}
         
         <h1 className="text-lg font-semibold text-foreground dark:text-circe sm:text-xl">{getPageName()}</h1>
       </div>
@@ -101,48 +114,58 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
         <Notifications />
 
         {/* User Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
-              <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
-                <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.full_name || 'User'} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" forceMount>
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">
-                  {profile?.full_name || 'Creator'}
-                </p>
-                <p className="text-xs leading-none text-muted-foreground">
-                  {user.email}
-                </p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a href="/dashboard/settings" className="flex cursor-pointer items-center">
-                <User className="mr-2 h-4 w-4" />
-                Profile
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href="/dashboard/settings" className="flex cursor-pointer items-center">
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {mounted ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
+                <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
+                  <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.full_name || 'User'} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    {profile?.full_name || 'Creator'}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <a href="/dashboard/settings" className="flex cursor-pointer items-center">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a href="/dashboard/settings" className="flex cursor-pointer items-center">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
+            <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </Button>
+        )}
       </div>
     </header>
   )

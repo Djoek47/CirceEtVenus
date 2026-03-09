@@ -27,6 +27,7 @@ export default function LandingPage() {
               width={40} 
               height={40} 
               className="rounded-full"
+              priority
             />
             <span className="text-xl font-semibold tracking-wider text-primary">CIRCE ET VENUS</span>
           </Link>

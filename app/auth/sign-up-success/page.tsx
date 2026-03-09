@@ -19,6 +19,7 @@ export default function SignUpSuccessPage() {
           width={100}
           height={100}
           className="rounded-full"
+          priority
         />
         <h1 className="font-serif text-xl font-bold tracking-wider text-gold">CIRCE ET VENUS</h1>
       </div>

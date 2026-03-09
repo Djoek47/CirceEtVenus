@@ -63,6 +63,7 @@ export default function LoginPage() {
           width={120}
           height={120}
           className="rounded-full"
+          priority
         />
         <div className="text-center">
           <h1 className="font-serif text-2xl font-bold tracking-wider text-gold">CIRCE ET VENUS</h1>

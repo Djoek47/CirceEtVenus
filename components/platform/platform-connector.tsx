@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -85,11 +85,7 @@ export function PlatformConnector() {
   const [success, setSuccess] = useState<string | null>(null)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadConnections()
-  }, [])
-
-  const loadConnections = async () => {
+  const loadConnections = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -97,18 +93,22 @@ export function PlatformConnector() {
       return
     }
 
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('platform_connections')
       .select('*')
       .eq('user_id', user.id)
 
-    if (error) {
-      console.error('Error loading connections:', error)
+    if (fetchError) {
+      console.error('Error loading connections:', fetchError)
     } else {
       setConnections(data || [])
     }
     setLoading(false)
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadConnections()
+  }, [loadConnections])
 
   const isConnected = (platformId: string) => {
     return connections.some(c => c.platform === platformId && c.is_connected)
@@ -118,13 +118,11 @@ export function PlatformConnector() {
     return connections.find(c => c.platform === platformId)
   }
 
-  // OAuth-based connection for OnlyFans
   const handleOAuthConnect = async (platformId: string) => {
     setConnecting(platformId)
     setError(null)
     
     try {
-      // Get the OAuth authorization URL from our API
       const response = await fetch(`/api/${platformId}/auth`)
       const data = await response.json()
       
@@ -132,7 +130,6 @@ export function PlatformConnector() {
         throw new Error(data.error)
       }
       
-      // Redirect to the OAuth authorization page
       window.location.href = data.url
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start connection')
@@ -140,7 +137,6 @@ export function PlatformConnector() {
     }
   }
 
-  // Manual connection for other platforms
   const handleConnect = async (platformId: string, username: string) => {
     setConnecting(platformId)
     setError(null)
@@ -153,12 +149,10 @@ export function PlatformConnector() {
     }
 
     try {
-      // Check if connection already exists
       const existing = connections.find(c => c.platform === platformId)
       
       if (existing) {
-        // Update existing connection
-        const { error } = await supabase
+        const { error: updateError } = await supabase
           .from('platform_connections')
           .update({
             platform_username: username,
@@ -167,10 +161,9 @@ export function PlatformConnector() {
           })
           .eq('id', existing.id)
         
-        if (error) throw error
+        if (updateError) throw updateError
       } else {
-        // Create new connection
-        const { error } = await supabase
+        const { error: insertError } = await supabase
           .from('platform_connections')
           .insert({
             user_id: user.id,
@@ -180,16 +173,13 @@ export function PlatformConnector() {
             last_sync_at: new Date().toISOString(),
           })
         
-        if (error) throw error
+        if (insertError) throw insertError
       }
 
-      // Generate sample analytics data for this platform
       await generateSampleData(user.id, platformId)
       
       setSuccess(`Successfully connected to ${PLATFORMS.find(p => p.id === platformId)?.name}!`)
       await loadConnections()
-      
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       console.error('Error connecting platform:', err)
@@ -204,12 +194,12 @@ export function PlatformConnector() {
     if (!connection) return
 
     try {
-      const { error } = await supabase
+      const { error: disconnectError } = await supabase
         .from('platform_connections')
         .update({ is_connected: false })
         .eq('id', connection.id)
 
-      if (error) throw error
+      if (disconnectError) throw disconnectError
       
       await loadConnections()
       setSuccess('Platform disconnected')
@@ -225,7 +215,6 @@ export function PlatformConnector() {
     setError(null)
     
     try {
-      // Call the real sync API for OnlyFans
       if (platformId === 'onlyfans') {
         const response = await fetch('/api/onlyfans/sync', { method: 'POST' })
         const data = await response.json()
@@ -234,9 +223,8 @@ export function PlatformConnector() {
           throw new Error(data.error)
         }
         
-        setSuccess(`Synced ${data.synced.fans} fans and $${data.synced.revenue.toLocaleString()} in earnings!`)
+        setSuccess(`Synced ${data.synced?.fans || 0} fans and $${(data.synced?.revenue || 0).toLocaleString()} in earnings!`)
       } else {
-        // Simulate sync for other platforms
         await new Promise(resolve => setTimeout(resolve, 2000))
         
         const connection = getConnection(platformId)
@@ -260,7 +248,6 @@ export function PlatformConnector() {
   }
 
   const generateSampleData = async (userId: string, platform: string) => {
-    // Generate 30 days of sample analytics data
     const today = new Date()
     const snapshots = []
 
@@ -268,7 +255,6 @@ export function PlatformConnector() {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
       
-      // Generate realistic-looking random data
       const baseRevenue = platform === 'onlyfans' ? 300 : platform === 'fansly' ? 150 : 80
       const baseFans = platform === 'onlyfans' ? 50 : platform === 'fansly' ? 30 : 15
       
@@ -286,24 +272,21 @@ export function PlatformConnector() {
       })
     }
 
-    // Delete existing data for this platform
     await supabase
       .from('analytics_snapshots')
       .delete()
       .eq('user_id', userId)
       .eq('platform', platform)
 
-    // Insert new data
-    const { error } = await supabase
+    const { error: insertError } = await supabase
       .from('analytics_snapshots')
       .insert(snapshots)
 
-    if (error) {
-      console.error('Error inserting analytics data:', error)
-      throw error
+    if (insertError) {
+      console.error('Error inserting analytics data:', insertError)
+      throw insertError
     }
 
-    // Also generate some sample fans
     await generateSampleFans(userId, platform)
   }
 
@@ -326,7 +309,6 @@ export function PlatformConnector() {
       last_interaction_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
     }))
 
-    // Only insert if no fans exist for this platform
     const { data: existingFans } = await supabase
       .from('fans')
       .select('id')
@@ -455,7 +437,6 @@ export function PlatformConnector() {
                   </div>
                 ) : (
                   platform.id === 'onlyfans' ? (
-                    // OnlyFans uses OAuth
                     <Button 
                       className="w-full"
                       onClick={() => handleOAuthConnect(platform.id)}
@@ -470,7 +451,6 @@ export function PlatformConnector() {
                       Connect with OnlyFans
                     </Button>
                   ) : (
-                    // Other platforms use manual connection
                     <ConnectDialog 
                       platform={platform}
                       onConnect={(username) => handleConnect(platform.id, username)}
@@ -533,72 +513,10 @@ export function PlatformConnector() {
                         <Check className="h-3 w-3 text-green-500" />
                         Active
                       </Badge>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Key className="mr-2 h-3 w-3" />
-                            View Key
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{platform.name} API Key</DialogTitle>
-                            <DialogDescription>
-                              Use this key to access the {platform.name} API programmatically
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <Label>API Key</Label>
-                              <div className="flex gap-2">
-                                <Input 
-                                  value={`cev_${platform.id}_${connection?.id?.substring(0, 8) || 'xxxx'}...`}
-                                  readOnly
-                                  className="font-mono text-xs"
-                                />
-                                <Button 
-                                  variant="outline" 
-                                  size="icon"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(`cev_${platform.id}_${connection?.id || 'demo'}_${Date.now()}`)
-                                    setSuccess('API key copied to clipboard!')
-                                    setTimeout(() => setSuccess(null), 2000)
-                                  }}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            <Alert>
-                              <AlertCircle className="h-4 w-4" />
-                              <AlertDescription>
-                                Keep your API key secure. Never share it publicly.
-                              </AlertDescription>
-                            </Alert>
-                            <div className="space-y-2">
-                              <Label>API Endpoint</Label>
-                              <Input 
-                                value={`https://api.circeetvenus.com/v1/${platform.id}`}
-                                readOnly
-                                className="font-mono text-xs"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Rate Limits</Label>
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div className="rounded-lg border border-border p-3">
-                                  <p className="text-muted-foreground">Requests/min</p>
-                                  <p className="font-semibold">60</p>
-                                </div>
-                                <div className="rounded-lg border border-border p-3">
-                                  <p className="text-muted-foreground">Requests/day</p>
-                                  <p className="font-semibold">10,000</p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                      <Button variant="outline" size="sm">
+                        <Key className="mr-2 h-3 w-3" />
+                        View Key
+                      </Button>
                     </div>
                   </div>
                 )
@@ -621,7 +539,7 @@ export function PlatformConnector() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="json">
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="json">JSON Import</TabsTrigger>
               <TabsTrigger value="csv">CSV Import</TabsTrigger>
             </TabsList>
@@ -637,7 +555,6 @@ export function PlatformConnector() {
                   accept=".json"
                   className="mt-4 cursor-pointer"
                   onChange={(e) => {
-                    // Handle JSON import
                     const file = e.target.files?.[0]
                     if (file) {
                       setSuccess('File uploaded! Processing...')

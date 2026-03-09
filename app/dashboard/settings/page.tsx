@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from 'next-themes'
+import { BirthdaySettings } from '@/components/settings/birthday-settings'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'integrations' | 'data' | 'preferences'
@@ -26,7 +27,8 @@ type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'integ
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [user, setUser] = useState<SupabaseUser | null>(null)
-  const [profile, setProfile] = useState<{ full_name: string; avatar_url: string; timezone: string } | null>(null)
+  const [profile, setProfile] = useState<{ full_name: string; avatar_url: string; timezone: string; has_birthday_set?: boolean } | null>(null)
+  const [hasBirthdaySet, setHasBirthdaySet] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -83,6 +85,7 @@ export default function SettingsPage() {
         setProfile(profile)
         setFullName(profile.full_name || '')
         setTimezone(profile.timezone || 'America/Los_Angeles')
+        setHasBirthdaySet(profile.has_birthday_set || false)
       }
       
       setLoading(false)
@@ -343,6 +346,11 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Cosmic Birthday Section */}
+            {user && (
+              <BirthdaySettings userId={user.id} hasBirthdaySet={hasBirthdaySet} />
+            )}
           )}
 
           {/* Notifications Section */}

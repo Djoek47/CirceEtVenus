@@ -14,6 +14,9 @@ export interface Profile {
   avatar_url: string | null
   timezone: string
   notification_preferences: NotificationPreferences
+  encrypted_birthday: string | null
+  birthday_passphrase_hash: string | null
+  has_birthday_set: boolean
   created_at: string
   updated_at: string
 }

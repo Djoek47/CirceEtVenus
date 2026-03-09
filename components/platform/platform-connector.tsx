@@ -259,30 +259,6 @@ export function PlatformConnector() {
     }
   }
 
-    try {
-      // Generate new sample data for today
-      await generateSampleData(user.id, platformId)
-      
-      // Update last sync time
-      const connection = getConnection(platformId)
-      if (connection) {
-        await supabase
-          .from('platform_connections')
-          .update({ last_sync_at: new Date().toISOString() })
-          .eq('id', connection.id)
-      }
-
-      await loadConnections()
-      setSuccess('Data synced successfully!')
-      setTimeout(() => setSuccess(null), 3000)
-    } catch (err) {
-      console.error('Error syncing:', err)
-      setError('Failed to sync data')
-    }
-
-    setSyncing(null)
-  }
-
   const generateSampleData = async (userId: string, platform: string) => {
     // Generate 30 days of sample analytics data
     const today = new Date()

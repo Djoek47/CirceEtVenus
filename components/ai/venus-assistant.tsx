@@ -133,14 +133,14 @@ export function VenusAssistant() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Card className="border-venus/30 bg-gradient-to-r from-venus/10 to-transparent">
+      <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-transparent">
         <CardHeader>
           <div className="flex items-center gap-4">
-            <div className="rounded-full bg-venus/20 p-4 venus-glow">
-              <Sun className="h-8 w-8 text-venus" />
+            <div className="rounded-full bg-amber-500/20 p-4 venus-glow">
+              <Sun className="h-8 w-8 text-amber-500 dark:text-amber-400" />
             </div>
             <div>
-              <CardTitle className="text-xl text-venus">Venus - The Goddess</CardTitle>
+              <CardTitle className="text-xl text-amber-500 dark:text-amber-400">Venus - The Goddess</CardTitle>
               <CardDescription>
                 Growth, Attraction & Reputation
               </CardDescription>
@@ -151,10 +151,10 @@ export function VenusAssistant() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Chat Interface */}
-        <Card className="lg:col-span-2 border-venus/20">
+        <Card className="lg:col-span-2 border-amber-500/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-venus" />
+              <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-400" />
               Consult Venus
             </CardTitle>
           </CardHeader>
@@ -165,10 +165,10 @@ export function VenusAssistant() {
                   <div className={`max-w-[80%] rounded-lg px-4 py-2 ${
                     msg.role === 'user' 
                       ? 'bg-primary/20 text-foreground' 
-                      : 'bg-venus/20 text-venus-foreground'
+                      : 'bg-amber-500/20 text-foreground'
                   }`}>
                     {msg.role === 'venus' && (
-                      <div className="text-xs font-medium text-venus/70 mb-1">Venus</div>
+                      <div className="text-xs font-medium text-amber-500/70 dark:text-amber-400/70 mb-1">Venus</div>
                     )}
                     <p className="text-sm">{msg.content}</p>
                   </div>
@@ -176,11 +176,11 @@ export function VenusAssistant() {
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-venus/20 rounded-lg px-4 py-2">
+                  <div className="bg-amber-500/20 rounded-lg px-4 py-2">
                     <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-venus rounded-full animate-bounce" />
-                      <span className="w-2 h-2 bg-venus rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <span className="w-2 h-2 bg-venus rounded-full animate-bounce [animation-delay:0.4s]" />
+                      <span className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" />
+                      <span className="w-2 h-2 bg-amber-500 rounded-full animate-bounce [animation-delay:0.2s]" />
+                      <span className="w-2 h-2 bg-amber-500 rounded-full animate-bounce [animation-delay:0.4s]" />
                     </div>
                   </div>
                 </div>
@@ -193,7 +193,7 @@ export function VenusAssistant() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="border-venus/30 pr-10 focus-visible:ring-venus"
+                  className="border-amber-500/30 pr-10 focus-visible:ring-amber-500"
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2">
                   <VoiceInputButton
@@ -205,7 +205,7 @@ export function VenusAssistant() {
               </div>
               <Button 
                 onClick={handleSendMessage}
-                className="bg-venus hover:bg-venus/80 text-venus-foreground"
+                className="bg-amber-500 hover:bg-amber-500/80 text-white"
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -215,39 +215,39 @@ export function VenusAssistant() {
 
         {/* Quick Stats */}
         <div className="space-y-4">
-          <Card className="border-venus/20">
+          <Card className="border-amber-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-venus" />
+                <TrendingUp className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                 Growth Rate
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-venus">+12%</div>
+              <div className="text-3xl font-bold text-amber-500 dark:text-amber-400">+12%</div>
               <p className="text-xs text-muted-foreground">New subs this week</p>
             </CardContent>
           </Card>
-          <Card className="border-venus/20">
+          <Card className="border-amber-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Heart className="h-4 w-4 text-venus" />
+                <Heart className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                 Attraction Score
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-venus">94</div>
+              <div className="text-3xl font-bold text-amber-500 dark:text-amber-400">94</div>
               <Progress value={94} className="mt-2 h-2" />
             </CardContent>
           </Card>
-          <Card className="border-venus/20">
+          <Card className="border-amber-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Star className="h-4 w-4 text-venus" />
+                <Star className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                 Sentiment
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-venus">Positive</div>
+              <div className="text-3xl font-bold text-amber-500 dark:text-amber-400">Positive</div>
               <p className="text-xs text-muted-foreground">89% positive mentions</p>
             </CardContent>
           </Card>
@@ -257,18 +257,18 @@ export function VenusAssistant() {
       {/* Tabs for Detailed Views */}
       <Tabs defaultValue="growth" className="space-y-4">
         <TabsList className="bg-muted/50">
-          <TabsTrigger value="growth" className="gap-2 data-[state=active]:bg-venus/20 data-[state=active]:text-venus-foreground">
+          <TabsTrigger value="growth" className="gap-2 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-400">
             <TrendingUp className="h-4 w-4" />
             Growth Tips
           </TabsTrigger>
-          <TabsTrigger value="reputation" className="gap-2 data-[state=active]:bg-venus/20 data-[state=active]:text-venus-foreground">
+          <TabsTrigger value="reputation" className="gap-2 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-600 dark:data-[state=active]:text-amber-400">
             <MessageCircle className="h-4 w-4" />
             Reputation
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="growth" className="space-y-4">
-          <Card className="border-venus/20">
+          <Card className="border-amber-500/20">
             <CardHeader>
               <CardTitle className="text-sm">Venus&apos;s Growth Recommendations</CardTitle>
               <CardDescription>
@@ -278,7 +278,7 @@ export function VenusAssistant() {
             <CardContent>
               <div className="space-y-4">
                 {growthSuggestions.map((suggestion) => (
-                  <div key={suggestion.id} className="rounded-lg border border-venus/20 p-4 space-y-3">
+                  <div key={suggestion.id} className="rounded-lg border border-amber-500/20 p-4 space-y-3">
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
@@ -293,7 +293,7 @@ export function VenusAssistant() {
                     <div className="flex items-center justify-between">
                       <div className="flex gap-4 text-xs text-muted-foreground">
                         <span className={`${
-                          suggestion.impact === 'high' ? 'text-venus' :
+                          suggestion.impact === 'high' ? 'text-amber-500 dark:text-amber-400' :
                           suggestion.impact === 'medium' ? 'text-primary' :
                           'text-muted-foreground'
                         }`}>
@@ -301,7 +301,7 @@ export function VenusAssistant() {
                         </span>
                         <span>Effort: {suggestion.effort}</span>
                       </div>
-                      <Button size="sm" variant="outline" className="border-venus/30 text-venus hover:bg-venus/10">
+                      <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 dark:text-amber-400 hover:bg-amber-500/10">
                         Apply
                       </Button>
                     </div>
@@ -313,10 +313,10 @@ export function VenusAssistant() {
         </TabsContent>
 
         <TabsContent value="reputation" className="space-y-4">
-          <Card className="border-venus/20">
+          <Card className="border-amber-500/20">
             <CardHeader>
               <CardTitle className="text-sm flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-venus" />
+                <MessageCircle className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                 Recent Mentions
               </CardTitle>
               <CardDescription>
@@ -326,20 +326,20 @@ export function VenusAssistant() {
             <CardContent>
               <div className="space-y-4">
                 {recentMentions.map((mention) => (
-                  <div key={mention.id} className="flex items-start justify-between rounded-lg border border-venus/20 p-4">
+                  <div key={mention.id} className="flex items-start justify-between rounded-lg border border-amber-500/20 p-4">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">{mention.platform}</Badge>
                         <div className="flex items-center gap-1">
                           {mention.sentiment === 'positive' ? (
-                            <ThumbsUp className="h-3 w-3 text-venus" />
+                            <ThumbsUp className="h-3 w-3 text-amber-500 dark:text-amber-400" />
                           ) : mention.sentiment === 'negative' ? (
                             <ThumbsDown className="h-3 w-3 text-destructive" />
                           ) : (
                             <Minus className="h-3 w-3 text-muted-foreground" />
                           )}
                           <span className={`text-xs ${
-                            mention.sentiment === 'positive' ? 'text-venus' :
+                            mention.sentiment === 'positive' ? 'text-amber-500 dark:text-amber-400' :
                             mention.sentiment === 'negative' ? 'text-destructive' :
                             'text-muted-foreground'
                           }`}>
@@ -355,7 +355,7 @@ export function VenusAssistant() {
                         <span>{mention.timestamp}</span>
                       </div>
                     </div>
-                    <Button size="sm" variant="ghost" className="text-venus hover:bg-venus/10">
+                    <Button size="sm" variant="ghost" className="text-amber-500 dark:text-amber-400 hover:bg-amber-500/10">
                       Respond
                     </Button>
                   </div>

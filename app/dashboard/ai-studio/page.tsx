@@ -123,7 +123,7 @@ export default function AIStudioPage() {
             <Moon className="h-4 w-4" />
             <span className="hidden sm:inline">Circe</span>
           </TabsTrigger>
-          <TabsTrigger value="venus" className="gap-2 border border-border bg-card data-[state=active]:border-venus/50 data-[state=active]:bg-venus/20 data-[state=active]:text-venus sm:border-0 sm:bg-transparent">
+          <TabsTrigger value="venus" className="gap-2 border border-border bg-card data-[state=active]:border-amber-500/50 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-500 dark:data-[state=active]:text-amber-400 sm:border-0 sm:bg-transparent">
             <Sun className="h-4 w-4" />
             <span className="hidden sm:inline">Venus</span>
           </TabsTrigger>
@@ -190,15 +190,15 @@ export default function AIStudioPage() {
               </CardContent>
             </Card>
 
-            {/* Venus Card */}
-            <Card className="overflow-hidden border-venus/30 bg-gradient-to-br from-venus/5 to-transparent">
+            {/* Venus Card - Gold Theme */}
+            <Card className="overflow-hidden border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-transparent">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="rounded-full bg-venus/20 p-3 venus-glow">
-                    <Sun className="h-6 w-6 text-venus" />
+                  <div className="rounded-full bg-amber-500/20 p-3 venus-glow">
+                    <Sun className="h-6 w-6 text-amber-500 dark:text-amber-400" />
                   </div>
                   <div>
-                    <CardTitle className="text-venus">Venus</CardTitle>
+                    <CardTitle className="text-amber-500 dark:text-amber-400">Venus</CardTitle>
                     <CardDescription>The Goddess of Growth</CardDescription>
                   </div>
                 </div>
@@ -209,25 +209,25 @@ export default function AIStudioPage() {
                   in drawing new followers and maximizing your magnetic appeal.
                 </p>
                 <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-venus">Domains of Power:</h4>
+                  <h4 className="text-sm font-medium text-amber-500 dark:text-amber-400">Domains of Power:</h4>
                   <ul className="space-y-2 text-sm text-muted-foreground">
                     <li className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-venus" />
+                      <TrendingUp className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                       <span>Growth Strategies & Optimization</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-venus" />
+                      <Users className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                       <span>Fan Acquisition Insights</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-venus" />
+                      <Star className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                       <span>Reputation & Sentiment Monitoring</span>
                     </li>
                   </ul>
                 </div>
                 <Button 
                   onClick={() => setActiveTab('venus')}
-                  className="w-full bg-venus/20 text-venus hover:bg-venus/30"
+                  className="w-full bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 dark:text-amber-400"
                   variant="ghost"
                 >
                   Consult Venus

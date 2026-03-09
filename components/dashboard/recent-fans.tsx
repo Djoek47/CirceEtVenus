@@ -9,6 +9,15 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import type { Fan } from '@/lib/types'
 
+// Consistent number formatting to avoid hydration mismatch
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'decimal',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 interface RecentFansProps {
   fans: Fan[]
 }
@@ -60,7 +69,7 @@ export function RecentFans({ fans }: RecentFansProps) {
                       {fan.platform.toUpperCase()}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      ${fan.total_spent.toLocaleString()} spent
+                      ${formatCurrency(fan.total_spent)} spent
                     </span>
                   </div>
                 </div>

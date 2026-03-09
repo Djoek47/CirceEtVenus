@@ -178,13 +178,13 @@ export function VenusAssistant() {
               <div className="relative flex-1">
                 <Input 
                   placeholder="Ask Venus or speak..."
-                  value={input}
+                  value={input ?? ''}
                   onChange={handleInputChange}
                   className="border-gold/30 pr-10 focus-visible:ring-gold"
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2">
                   <VoiceInputButton
-                    onTranscript={(text) => setInput(input + (input ? ' ' : '') + text)}
+                    onTranscript={(text) => setInput((input ?? '') + ((input ?? '') ? ' ' : '') + text)}
                     size="sm"
                     variant="ghost"
                   />
@@ -192,7 +192,7 @@ export function VenusAssistant() {
               </div>
               <Button 
                 type="submit"
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !(input ?? '').trim()}
                 className="bg-gradient-to-r from-gold to-amber-600 hover:from-gold/90 hover:to-amber-600/90 text-white"
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

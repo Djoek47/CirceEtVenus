@@ -175,13 +175,13 @@ export function CirceAssistant() {
               <div className="relative flex-1">
                 <Input 
                   placeholder="Ask Circe or speak..."
-                  value={input}
+                  value={input ?? ''}
                   onChange={handleInputChange}
                   className="border-circe/30 pr-10 focus-visible:ring-circe"
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2">
                   <VoiceInputButton
-                    onTranscript={(text) => setInput(input + (input ? ' ' : '') + text)}
+                    onTranscript={(text) => setInput((input ?? '') + ((input ?? '') ? ' ' : '') + text)}
                     size="sm"
                     variant="ghost"
                   />
@@ -189,7 +189,7 @@ export function CirceAssistant() {
               </div>
               <Button 
                 type="submit"
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !(input ?? '').trim()}
                 className="bg-gradient-to-r from-circe to-purple-600 hover:from-circe/90 hover:to-purple-600/90 text-circe-foreground"
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

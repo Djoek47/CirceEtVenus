@@ -221,3 +221,32 @@
     width: 100%;
   }
 }
+
+/* Rainbow gradient animation for AI Studio */
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 3s ease infinite;
+}
+
+/* Hue rotation for AI Studio icon */
+@keyframes hue-rotate {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
+}
+
+.animate-hue-rotate {
+  animation: hue-rotate 5s linear infinite;
+}

@@ -36,10 +36,13 @@ const venusNavigation = [
   { name: 'Mentions', href: '/dashboard/mentions', icon: TrendingUp },
 ]
 
-const sharedNavigation = [
+const silverNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Content', href: '/dashboard/content', icon: Calendar },
   { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
+]
+
+const aiStudioNavigation = [
   { name: 'AI Studio', href: '/dashboard/ai-studio', icon: Star },
 ]
 
@@ -50,14 +53,14 @@ const bottomNavigation = [
 export function MobileSidebar({ profile }: MobileSidebarProps) {
   const pathname = usePathname()
 
-  const NavLink = ({ item, variant = 'default' }: { item: typeof sharedNavigation[0], variant?: 'default' | 'circe' | 'venus' }) => {
+  const NavLink = ({ item, variant = 'silver' }: { item: typeof silverNavigation[0], variant?: 'silver' | 'circe' | 'venus' | 'ai-studio' }) => {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
     
     const variantStyles = {
-      default: {
-        active: 'bg-primary/20 text-primary',
-        inactive: 'text-foreground/70 hover:bg-accent/50 hover:text-foreground',
-        icon: 'text-primary'
+      silver: {
+        active: 'bg-slate-400/20 text-slate-300',
+        inactive: 'text-slate-400/70 hover:bg-slate-400/10 hover:text-slate-300',
+        icon: 'text-slate-300'
       },
       circe: {
         active: 'bg-circe/20 text-circe-light',
@@ -65,13 +68,19 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
         icon: 'text-circe-light'
       },
       venus: {
-        active: 'bg-venus/20 text-venus dark:text-venus',
-        inactive: 'text-foreground/70 hover:bg-venus/10 hover:text-venus dark:hover:text-venus',
-        icon: 'text-venus dark:text-venus'
+        active: 'bg-amber-500/20 text-amber-400',
+        inactive: 'text-amber-500/70 hover:bg-amber-500/10 hover:text-amber-400',
+        icon: 'text-amber-400'
+      },
+      'ai-studio': {
+        active: 'bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400',
+        inactive: 'text-foreground/70 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-pink-400 hover:via-purple-400 hover:to-cyan-400',
+        icon: 'text-purple-400'
       }
     }
     
     const styles = variantStyles[variant]
+    const isAiStudio = variant === 'ai-studio'
     
     return (
       <SheetClose asChild>
@@ -79,11 +88,18 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
           href={item.href}
           className={cn(
             'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
-            isActive ? styles.active : styles.inactive
+            isActive ? styles.active : styles.inactive,
+            isAiStudio && isActive && 'animate-gradient-x'
           )}
         >
-          <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive && styles.icon)} />
-          <span>{item.name}</span>
+          <item.icon className={cn(
+            'h-5 w-5 flex-shrink-0', 
+            isActive && styles.icon,
+            isAiStudio && 'animate-pulse'
+          )} />
+          <span className={cn(
+            isAiStudio && isActive && 'bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent'
+          )}>{item.name}</span>
         </Link>
       </SheetClose>
     )
@@ -106,10 +122,17 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-6 overflow-y-auto p-4">
-        {/* Shared */}
+        {/* Silver - Dashboard, Content, Messages */}
         <div className="space-y-1">
-          {sharedNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="default" />
+          {silverNavigation.map((item) => (
+            <NavLink key={item.name} item={item} variant="silver" />
+          ))}
+        </div>
+
+        {/* AI Studio - Rainbow Hue */}
+        <div className="space-y-1">
+          {aiStudioNavigation.map((item) => (
+            <NavLink key={item.name} item={item} variant="ai-studio" />
           ))}
         </div>
 
@@ -126,11 +149,11 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
           ))}
         </div>
 
-        {/* Venus's Domain */}
+        {/* Venus's Domain - Gold */}
         <div className="space-y-1">
           <div className="flex items-center gap-2 px-3 py-2">
-            <Sun className="h-4 w-4 text-venus dark:text-venus" />
-            <span className="text-xs font-medium uppercase tracking-wider text-venus/70 dark:text-venus/70">
+            <Sun className="h-4 w-4 text-amber-400" />
+            <span className="text-xs font-medium uppercase tracking-wider text-amber-500/70">
               Venus
             </span>
           </div>
@@ -143,7 +166,7 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
       {/* Bottom */}
       <div className="border-t border-border p-4">
         {bottomNavigation.map((item) => (
-          <NavLink key={item.name} item={item} variant="default" />
+          <NavLink key={item.name} item={item} variant="silver" />
         ))}
 
         {profile && (

@@ -41,11 +41,15 @@ const venusNavigation = [
   { name: 'Mentions', href: '/dashboard/mentions', icon: TrendingUp },
 ]
 
-// Shared divine tools
-const sharedNavigation = [
+// Silver themed navigation
+const silverNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Content', href: '/dashboard/content', icon: Calendar },
   { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
+]
+
+// AI Studio - Rainbow animated
+const aiStudioNavigation = [
   { name: 'AI Studio', href: '/dashboard/ai-studio', icon: Star },
 ]
 
@@ -57,14 +61,14 @@ export function DashboardSidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
 
-  const NavLink = ({ item, variant = 'default' }: { item: typeof sharedNavigation[0], variant?: 'default' | 'circe' | 'venus' }) => {
+  const NavLink = ({ item, variant = 'silver' }: { item: typeof silverNavigation[0], variant?: 'silver' | 'circe' | 'venus' | 'ai-studio' }) => {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
     
     const variantStyles = {
-      default: {
-        active: 'bg-primary/20 text-primary',
-        inactive: 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-        icon: 'text-primary'
+      silver: {
+        active: 'bg-slate-400/20 text-slate-300',
+        inactive: 'text-slate-400/70 hover:bg-slate-400/10 hover:text-slate-300',
+        icon: 'text-slate-300'
       },
       circe: {
         active: 'bg-circe/20 text-circe-light',
@@ -72,13 +76,19 @@ export function DashboardSidebar({ profile }: SidebarProps) {
         icon: 'text-circe-light'
       },
       venus: {
-        active: 'bg-venus/20 text-venus',
-        inactive: 'text-sidebar-foreground/70 hover:bg-venus/10 hover:text-venus',
-        icon: 'text-venus'
+        active: 'bg-amber-500/20 text-amber-400',
+        inactive: 'text-amber-500/70 hover:bg-amber-500/10 hover:text-amber-400',
+        icon: 'text-amber-400'
+      },
+      'ai-studio': {
+        active: 'bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20',
+        inactive: 'text-sidebar-foreground/70 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-pink-400 hover:via-purple-400 hover:to-cyan-400',
+        icon: 'text-purple-400'
       }
     }
     
     const styles = variantStyles[variant]
+    const isAiStudio = variant === 'ai-studio'
     
     return (
       <Link
@@ -88,8 +98,16 @@ export function DashboardSidebar({ profile }: SidebarProps) {
           isActive ? styles.active : styles.inactive
         )}
       >
-        <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive && styles.icon)} />
-        {!collapsed && <span>{item.name}</span>}
+        <item.icon className={cn(
+          'h-5 w-5 flex-shrink-0', 
+          isActive && styles.icon,
+          isAiStudio && 'animate-pulse'
+        )} />
+        {!collapsed && (
+          <span className={cn(
+            isAiStudio && isActive && 'bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent'
+          )}>{item.name}</span>
+        )}
       </Link>
     )
   }
@@ -118,10 +136,17 @@ export function DashboardSidebar({ profile }: SidebarProps) {
 
       {/* Main Navigation */}
       <nav className="flex-1 space-y-6 overflow-y-auto p-2">
-        {/* Dashboard & Shared */}
+        {/* Silver - Dashboard, Content, Messages */}
         <div className="space-y-1">
-          {sharedNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="default" />
+          {silverNavigation.map((item) => (
+            <NavLink key={item.name} item={item} variant="silver" />
+          ))}
+        </div>
+
+        {/* AI Studio - Rainbow Hue */}
+        <div className="space-y-1">
+          {aiStudioNavigation.map((item) => (
+            <NavLink key={item.name} item={item} variant="ai-studio" />
           ))}
         </div>
 
@@ -140,12 +165,12 @@ export function DashboardSidebar({ profile }: SidebarProps) {
           ))}
         </div>
 
-        {/* Venus's Domain */}
+        {/* Venus's Domain - Gold */}
         <div className="space-y-1">
           {!collapsed && (
             <div className="flex items-center gap-2 px-3 py-2">
-              <Sun className="h-4 w-4 text-venus" />
-              <span className="text-xs font-medium uppercase tracking-wider text-venus/70">
+              <Sun className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-medium uppercase tracking-wider text-amber-500/70">
                 Venus
               </span>
             </div>
@@ -159,7 +184,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       {/* Bottom Navigation */}
       <div className="border-t border-sidebar-border p-2">
         {bottomNavigation.map((item) => (
-          <NavLink key={item.name} item={item} variant="default" />
+          <NavLink key={item.name} item={item} variant="silver" />
         ))}
 
         {/* User info */}

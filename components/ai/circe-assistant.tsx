@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,9 +17,10 @@ import {
   Sparkles,
   Lock,
   Eye,
-  Mic
+  Loader2
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
+import { useChat } from '@ai-sdk/react'
 
 interface ChurnRiskFan {
   id: string
@@ -95,38 +96,25 @@ const leakAlerts: LeakAlert[] = [
 ]
 
 export function CirceAssistant() {
-  const [message, setMessage] = useState('')
-  const [chatMessages, setChatMessages] = useState<Array<{role: 'user' | 'circe', content: string}>>([
-    {
-      role: 'circe',
-      content: "Greetings, creator. I am Circe, guardian of your realm. Like the enchantress of old, I shall help you keep your admirers captivated and protect what is yours. What wisdom do you seek?"
+  const scrollRef = useRef<HTMLDivElement>(null)
+  
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+    api: '/api/ai/circe',
+    initialMessages: [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: "Greetings, creator. I am Circe, guardian of your realm. Like the enchantress of old, I shall help you keep your admirers captivated and protect what is yours. What wisdom do you seek?"
+      }
+    ]
+  })
+  
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  ])
-  const [isLoading, setIsLoading] = useState(false)
-
-  const handleSendMessage = async () => {
-    if (!message.trim()) return
-    
-    const userMessage = message
-    setMessage('')
-    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }])
-    setIsLoading(true)
-
-    // Simulate AI response
-    setTimeout(() => {
-      const responses = [
-        "I sense disturbance in your fan realm. Three of your most devoted followers show signs of wandering. Let me craft personalized enchantments to draw them back...",
-        "Your content vault remains secure, though I detected unauthorized eyes upon your work from the eastern digital shores. I have initiated protective measures.",
-        "The stars align favorably for retention today. Mercury direct brings clarity to communication - now is the time to reach out to dormant admirers.",
-        "I have analyzed the patterns of your most loyal subjects. Those who engage on Tuesdays between 8-10 PM show 47% higher lifetime value. Shall I prepare a targeted campaign?",
-      ]
-      setChatMessages(prev => [...prev, { 
-        role: 'circe', 
-        content: responses[Math.floor(Math.random() * responses.length)]
-      }])
-      setIsLoading(false)
-    }, 1500)
-  }
+  }, [messages])
 
   return (
     <div className="space-y-6">
@@ -157,57 +145,56 @@ export function CirceAssistant() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="h-[300px] overflow-y-auto space-y-4 rounded-lg bg-muted/30 p-4">
-              {chatMessages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div ref={scrollRef} className="h-[300px] overflow-y-auto space-y-4 rounded-lg bg-gradient-to-b from-circe/5 to-transparent p-4">
+              {messages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] rounded-lg px-4 py-2 ${
                     msg.role === 'user' 
                       ? 'bg-primary/20 text-foreground' 
-                      : 'bg-circe/20 text-circe-light'
+                      : 'bg-gradient-to-r from-circe/20 to-purple-500/10 text-foreground border border-circe/20'
                   }`}>
-                    {msg.role === 'circe' && (
-                      <div className="text-xs font-medium text-circe-light/70 mb-1">Circe</div>
+                    {msg.role === 'assistant' && (
+                      <div className="text-xs font-medium text-circe-light mb-1">Circe</div>
                     )}
-                    <p className="text-sm">{msg.content}</p>
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                   </div>
                 </div>
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-circe/20 rounded-lg px-4 py-2">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-circe-light rounded-full animate-bounce" />
-                      <span className="w-2 h-2 bg-circe-light rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <span className="w-2 h-2 bg-circe-light rounded-full animate-bounce [animation-delay:0.4s]" />
+                  <div className="bg-gradient-to-r from-circe/20 to-purple-500/10 rounded-lg px-4 py-2 border border-circe/20">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 text-circe-light animate-spin" />
+                      <span className="text-xs text-circe-light">Circe is weaving her magic...</span>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-            <div className="flex gap-2">
+            <form onSubmit={handleSubmit} className="flex gap-2">
               <div className="relative flex-1">
                 <Input 
                   placeholder="Ask Circe or speak..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  value={input}
+                  onChange={handleInputChange}
                   className="border-circe/30 pr-10 focus-visible:ring-circe"
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2">
                   <VoiceInputButton
-                    onTranscript={(text) => setMessage(prev => prev + (prev ? ' ' : '') + text)}
+                    onTranscript={(text) => setInput(input + (input ? ' ' : '') + text)}
                     size="sm"
                     variant="ghost"
                   />
                 </div>
               </div>
               <Button 
-                onClick={handleSendMessage}
-                className="bg-circe hover:bg-circe/80 text-circe-foreground"
+                type="submit"
+                disabled={isLoading || !input.trim()}
+                className="bg-gradient-to-r from-circe to-purple-600 hover:from-circe/90 hover:to-purple-600/90 text-circe-foreground"
               >
-                <Send className="h-4 w-4" />
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
-            </div>
+            </form>
           </CardContent>
         </Card>
 

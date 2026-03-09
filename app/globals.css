@@ -323,3 +323,115 @@
   background-size: 200% 100%;
   animation: shimmer 3s ease-in-out infinite;
 }
+
+/* Sparkling pen icon animation */
+@keyframes sparkle {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px rgba(236, 72, 153, 0.6)) drop-shadow(0 0 4px rgba(139, 92, 246, 0.4));
+    transform: scale(1);
+  }
+  25% {
+    filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.8)) drop-shadow(0 0 8px rgba(6, 182, 212, 0.5));
+    transform: scale(1.05);
+  }
+  50% {
+    filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.8)) drop-shadow(0 0 12px rgba(234, 179, 8, 0.5));
+    transform: scale(1.1);
+  }
+  75% {
+    filter: drop-shadow(0 0 4px rgba(234, 179, 8, 0.8)) drop-shadow(0 0 8px rgba(236, 72, 153, 0.5));
+    transform: scale(1.05);
+  }
+}
+
+.sparkle-icon {
+  animation: sparkle 2s ease-in-out infinite, hue-rotate 5s linear infinite;
+}
+
+/* Rainbow text animation */
+@keyframes rainbow-text-animation {
+  0% { color: #ec4899; }
+  14% { color: #f97316; }
+  28% { color: #eab308; }
+  42% { color: #22c55e; }
+  57% { color: #06b6d4; }
+  71% { color: #8b5cf6; }
+  85% { color: #ec4899; }
+  100% { color: #ec4899; }
+}
+
+.rainbow-text {
+  animation: rainbow-text-animation 4s ease-in-out infinite;
+  font-weight: 600;
+}
+
+/* Rainbow gradient text (static but colorful) */
+.rainbow-gradient-text {
+  background: linear-gradient(90deg, #ec4899, #8b5cf6, #06b6d4, #22c55e, #eab308, #f97316, #ec4899);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-x 3s ease infinite;
+}
+
+/* Sparkle particles effect */
+@keyframes sparkle-particles {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+.sparkle-particles::before,
+.sparkle-particles::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #ec4899, #8b5cf6);
+  animation: sparkle-particles 1.5s ease-in-out infinite;
+}
+
+.sparkle-particles::before {
+  top: -4px;
+  right: -4px;
+  animation-delay: 0.2s;
+}
+
+.sparkle-particles::after {
+  bottom: -4px;
+  left: -4px;
+  animation-delay: 0.4s;
+}
+
+/* Tools header sparkle effect */
+@keyframes tools-sparkle {
+  0%, 100% {
+    text-shadow: 
+      0 0 5px rgba(236, 72, 153, 0.5),
+      0 0 10px rgba(139, 92, 246, 0.3),
+      0 0 15px rgba(6, 182, 212, 0.2);
+  }
+  33% {
+    text-shadow: 
+      0 0 5px rgba(139, 92, 246, 0.5),
+      0 0 10px rgba(6, 182, 212, 0.3),
+      0 0 15px rgba(236, 72, 153, 0.2);
+  }
+  66% {
+    text-shadow: 
+      0 0 5px rgba(6, 182, 212, 0.5),
+      0 0 10px rgba(236, 72, 153, 0.3),
+      0 0 15px rgba(139, 92, 246, 0.2);
+  }
+}
+
+.tools-sparkle-text {
+  animation: tools-sparkle 3s ease-in-out infinite, rainbow-text-animation 4s ease-in-out infinite;
+}

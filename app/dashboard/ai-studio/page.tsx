@@ -9,12 +9,12 @@ import { Button } from '@/components/ui/button'
 import { 
   Moon, Sun, Star, Shield, TrendingUp, Users, BarChart3, Calendar,
   Wand2, MessageSquare, Camera, Sparkles, Brain, Zap, Heart, Target,
-  Palette, Music, Video, PenTool, Lightbulb, Flame, Eye, Lock
+  Palette, Music, Video, PenTool, Lightbulb, Flame, Eye, Lock, Crown
 } from 'lucide-react'
 import { CirceAssistant } from '@/components/ai/circe-assistant'
 import { VenusAssistant } from '@/components/ai/venus-assistant'
 import { CosmicCalendar } from '@/components/content/cosmic-calendar'
-import { CaptionGenerator } from '@/components/ai/caption-generator'
+import { AIToolsSelector } from '@/components/ai/ai-tools-selector'
 import { AIChatterWorkspace } from '@/components/ai/ai-chatter-workspace'
 
 export default function AIStudioPage() {
@@ -131,9 +131,9 @@ export default function AIStudioPage() {
             <Calendar className="h-4 w-4" />
             <span className="hidden sm:inline">Calendar</span>
           </TabsTrigger>
-          <TabsTrigger value="caption" className="gap-2 border border-border bg-card data-[state=active]:border-primary/50 sm:border-0 sm:bg-transparent">
-            <Wand2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Captions</span>
+          <TabsTrigger value="tools" className="gap-2 border border-border bg-card data-[state=active]:border-primary/50 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500/10 data-[state=active]:via-purple-500/10 data-[state=active]:to-cyan-500/10 sm:border-0 sm:bg-transparent">
+            <PenTool className="h-4 w-4 sparkle-icon" />
+            <span className="hidden sm:inline rainbow-text font-medium">Tools</span>
           </TabsTrigger>
           <TabsTrigger value="chatter" className="gap-2 border border-border bg-card data-[state=active]:border-primary/50 sm:border-0 sm:bg-transparent">
             <MessageSquare className="h-4 w-4" />
@@ -433,9 +433,9 @@ export default function AIStudioPage() {
           <CosmicCalendar />
         </TabsContent>
 
-        {/* Caption Generator Tab */}
-        <TabsContent value="caption">
-          <CaptionGenerator />
+        {/* AI Tools Tab */}
+        <TabsContent value="tools">
+          <AIToolsSelector />
         </TabsContent>
 
         {/* AI Chatter Tab */}

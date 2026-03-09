@@ -79,9 +79,9 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       },
       venus: {
         // Gold for Venus
-        active: 'bg-amber-500/20 text-amber-500 dark:text-amber-400',
-        inactive: 'text-amber-600/70 dark:text-amber-500/70 hover:bg-amber-500/10 hover:text-amber-500 dark:hover:text-amber-400',
-        icon: 'text-amber-500 dark:text-amber-400'
+        active: 'bg-gold/20 text-gold',
+        inactive: 'text-gold/70 hover:bg-gold/10 hover:text-gold',
+        icon: 'text-gold'
       },
       'ai-studio': {
         // Rainbow/multicolor animated
@@ -172,14 +172,14 @@ export function DashboardSidebar({ profile }: SidebarProps) {
         <div className="space-y-1">
           {!collapsed && (
             <div className="flex items-center gap-2 px-3 py-2">
-              <Sun className="h-4 w-4 text-amber-500 dark:text-amber-400" />
-              <span className="text-xs font-medium uppercase tracking-wider text-amber-600/70 dark:text-amber-500/70">
+              <Sun className="h-4 w-4 text-gold" />
+              <span className="text-xs font-medium uppercase tracking-wider text-gold/70">
                 Venus
               </span>
             </div>
           )}
           {venusNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="default" />
+            <NavLink key={item.name} item={item} variant="venus" />
           ))}
         </div>
       </nav>

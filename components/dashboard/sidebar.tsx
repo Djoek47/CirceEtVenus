@@ -179,7 +179,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
             </div>
           )}
           {venusNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="venus" />
+            <NavLink key={item.name} item={item} variant="default" />
           ))}
         </div>
       </nav>

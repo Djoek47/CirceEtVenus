@@ -109,7 +109,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
           className="flex-shrink-0 rounded-full"
         />
         {!collapsed && (
-          <span className="text-sm font-semibold tracking-wider text-primary">
+          <span className="font-serif text-sm font-semibold tracking-wider text-primary">
             CIRCE ET VENUS
           </span>
         )}

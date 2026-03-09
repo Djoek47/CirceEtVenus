@@ -130,7 +130,17 @@ export function PlatformConnector() {
         throw new Error(data.error)
       }
       
-      window.location.href = data.url
+      // OnlyFans API uses a manual auth URL or embedded widget
+      if (data.manualAuthUrl) {
+        // Open the OnlyFans API connect page
+        window.open(data.manualAuthUrl, '_blank', 'width=600,height=700')
+        setSuccess('Please complete authentication in the popup window, then click Sync to import your data.')
+        setConnecting(null)
+      } else if (data.url) {
+        window.location.href = data.url
+      } else {
+        throw new Error('No authentication URL received')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start connection')
       setConnecting(null)

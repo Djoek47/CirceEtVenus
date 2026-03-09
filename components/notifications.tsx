@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Bell, Check, MessageSquare, Shield, TrendingUp, Users, X, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,10 +40,10 @@ const getIcon = (type: Notification['type']) => {
   }
 }
 
-// Sample notifications for demo
-const sampleNotifications: Notification[] = [
+// Default sample notifications (will be merged with DB data)
+const getDefaultNotifications = (): Notification[] => [
   {
-    id: '1',
+    id: 'default-1',
     type: 'cosmic',
     title: 'Cosmic Alignment',
     description: 'Venus enters Taurus - optimal time for luxury content',
@@ -52,7 +52,7 @@ const sampleNotifications: Notification[] = [
     link: '/dashboard/content'
   },
   {
-    id: '2',
+    id: 'default-2',
     type: 'fan',
     title: 'New Whale Alert',
     description: 'DiamondKing subscribed with $500 tip',
@@ -61,7 +61,7 @@ const sampleNotifications: Notification[] = [
     link: '/dashboard/fans'
   },
   {
-    id: '3',
+    id: 'default-3',
     type: 'protection',
     title: 'Circe Alert',
     description: 'Potential leak detected on external site',
@@ -70,48 +70,146 @@ const sampleNotifications: Notification[] = [
     link: '/dashboard/protection'
   },
   {
-    id: '4',
+    id: 'default-4',
     type: 'message',
     title: 'Unread Messages',
     description: 'You have 12 unread messages from fans',
-    read: true,
+    read: false,
     created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     link: '/dashboard/messages'
   },
   {
-    id: '5',
+    id: 'default-5',
     type: 'mention',
     title: 'Venus Insight',
     description: 'Positive review trending on Reddit',
-    read: true,
+    read: false,
     created_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
     link: '/dashboard/mentions'
   },
 ]
 
 export function Notifications() {
-  const [notifications, setNotifications] = useState<Notification[]>(sampleNotifications)
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const supabase = createClient()
+  
+  // Load notifications from database
+  const loadNotifications = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setNotifications(getDefaultNotifications())
+      return
+    }
+    
+    setUserId(user.id)
+    
+    // Fetch notifications from database
+    const { data: dbNotifications, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('Error loading notifications:', error)
+      setNotifications(getDefaultNotifications())
+      return
+    }
+    
+    // If user has no notifications, create default ones
+    if (!dbNotifications || dbNotifications.length === 0) {
+      const defaultNotifs = getDefaultNotifications()
+      
+      // Insert default notifications for this user
+      const toInsert = defaultNotifs.map(n => ({
+        user_id: user.id,
+        type: n.type,
+        title: n.title,
+        description: n.description,
+        read: n.read,
+        link: n.link,
+      }))
+      
+      const { data: inserted, error: insertError } = await supabase
+        .from('notifications')
+        .insert(toInsert)
+        .select()
+      
+      if (insertError) {
+        console.error('Error creating notifications:', insertError)
+        setNotifications(defaultNotifs)
+      } else {
+        setNotifications(inserted || defaultNotifs)
+      }
+    } else {
+      setNotifications(dbNotifications)
+    }
+  }, [supabase])
   
   useEffect(() => {
     setMounted(true)
-  }, [])
+    loadNotifications()
+  }, [loadNotifications])
   
   const unreadCount = notifications.filter(n => !n.read).length
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
+    // Optimistically update UI
     setNotifications(prev => 
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     )
+    
+    // Persist to database
+    if (userId) {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', id)
+        .eq('user_id', userId)
+      
+      if (error) {
+        console.error('Error marking notification as read:', error)
+      }
+    }
   }
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    // Optimistically update UI
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    
+    // Persist to database
+    if (userId) {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', userId)
+        .eq('read', false)
+      
+      if (error) {
+        console.error('Error marking all notifications as read:', error)
+      }
+    }
   }
 
-  const removeNotification = (id: string) => {
+  const removeNotification = async (id: string) => {
+    // Optimistically update UI
     setNotifications(prev => prev.filter(n => n.id !== id))
+    
+    // Delete from database
+    if (userId) {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId)
+      
+      if (error) {
+        console.error('Error removing notification:', error)
+      }
+    }
   }
 
 // Render static button during SSR to avoid hydration mismatch with Radix IDs

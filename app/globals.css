@@ -3,92 +3,122 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* CREATRIX Brand Design System - Dark-first Creator Management Platform */
+/* CIRCE ET VENUS - Mythological Creator Management Platform */
+/* Color System: Gold (primary), Purple (Circe), White (Venus) on Black */
 :root {
-  /* Deep charcoal base with cyan accent */
-  --background: oklch(0.13 0.01 260);
+  /* Pure black base */
+  --background: oklch(0.08 0 0);
   --foreground: oklch(0.95 0 0);
-  --card: oklch(0.16 0.01 260);
+  --card: oklch(0.12 0.005 285);
   --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.14 0.01 260);
+  --popover: oklch(0.1 0.005 285);
   --popover-foreground: oklch(0.95 0 0);
-  /* Electric cyan primary */
-  --primary: oklch(0.75 0.18 195);
-  --primary-foreground: oklch(0.13 0.01 260);
-  --secondary: oklch(0.22 0.015 260);
+  
+  /* Gold primary - the underlying divine theme */
+  --primary: oklch(0.78 0.14 85);
+  --primary-foreground: oklch(0.12 0 0);
+  
+  /* Circe - Purple for retention, analytics, protection */
+  --circe: oklch(0.55 0.2 295);
+  --circe-light: oklch(0.7 0.18 295);
+  --circe-foreground: oklch(0.98 0 0);
+  
+  /* Venus - White/Cream for growth, seduction, attraction */
+  --venus: oklch(0.95 0.02 90);
+  --venus-light: oklch(0.98 0.01 90);
+  --venus-foreground: oklch(0.12 0 0);
+  
+  --secondary: oklch(0.18 0.01 285);
   --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.2 0.01 260);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.75 0.18 195);
-  --accent-foreground: oklch(0.13 0.01 260);
-  --destructive: oklch(0.65 0.25 25);
+  --muted: oklch(0.16 0.01 285);
+  --muted-foreground: oklch(0.6 0 0);
+  --accent: oklch(0.78 0.14 85);
+  --accent-foreground: oklch(0.12 0 0);
+  --destructive: oklch(0.6 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.25 0.015 260);
-  --input: oklch(0.2 0.01 260);
-  --ring: oklch(0.75 0.18 195);
-  /* Charts - Creator economy colors */
-  --chart-1: oklch(0.75 0.18 195);
-  --chart-2: oklch(0.7 0.2 150);
-  --chart-3: oklch(0.65 0.22 330);
-  --chart-4: oklch(0.75 0.18 85);
-  --chart-5: oklch(0.7 0.15 270);
+  --border: oklch(0.22 0.015 285);
+  --input: oklch(0.16 0.01 285);
+  --ring: oklch(0.78 0.14 85);
+  
+  /* Charts - Mythological palette */
+  --chart-1: oklch(0.78 0.14 85);   /* Gold */
+  --chart-2: oklch(0.55 0.2 295);   /* Circe purple */
+  --chart-3: oklch(0.95 0.02 90);   /* Venus white */
+  --chart-4: oklch(0.7 0.18 295);   /* Light purple */
+  --chart-5: oklch(0.65 0.12 85);   /* Dark gold */
+  
   --radius: 0.5rem;
+  
   /* Sidebar */
-  --sidebar: oklch(0.11 0.01 260);
+  --sidebar: oklch(0.06 0 0);
   --sidebar-foreground: oklch(0.9 0 0);
-  --sidebar-primary: oklch(0.75 0.18 195);
-  --sidebar-primary-foreground: oklch(0.13 0.01 260);
-  --sidebar-accent: oklch(0.18 0.015 260);
+  --sidebar-primary: oklch(0.78 0.14 85);
+  --sidebar-primary-foreground: oklch(0.12 0 0);
+  --sidebar-accent: oklch(0.14 0.01 285);
   --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.22 0.015 260);
-  --sidebar-ring: oklch(0.75 0.18 195);
-  /* Custom brand tokens */
-  --success: oklch(0.7 0.2 150);
-  --warning: oklch(0.8 0.18 85);
-  --info: oklch(0.7 0.15 230);
+  --sidebar-border: oklch(0.18 0.015 285);
+  --sidebar-ring: oklch(0.78 0.14 85);
+  
+  /* Custom tokens */
+  --success: oklch(0.7 0.18 150);
+  --warning: oklch(0.78 0.14 85);
+  --info: oklch(0.55 0.2 295);
 }
 
 .dark {
-  --background: oklch(0.13 0.01 260);
+  --background: oklch(0.08 0 0);
   --foreground: oklch(0.95 0 0);
-  --card: oklch(0.16 0.01 260);
+  --card: oklch(0.12 0.005 285);
   --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.14 0.01 260);
+  --popover: oklch(0.1 0.005 285);
   --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.75 0.18 195);
-  --primary-foreground: oklch(0.13 0.01 260);
-  --secondary: oklch(0.22 0.015 260);
+  --primary: oklch(0.78 0.14 85);
+  --primary-foreground: oklch(0.12 0 0);
+  --circe: oklch(0.55 0.2 295);
+  --circe-light: oklch(0.7 0.18 295);
+  --circe-foreground: oklch(0.98 0 0);
+  --venus: oklch(0.95 0.02 90);
+  --venus-light: oklch(0.98 0.01 90);
+  --venus-foreground: oklch(0.12 0 0);
+  --secondary: oklch(0.18 0.01 285);
   --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.2 0.01 260);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.75 0.18 195);
-  --accent-foreground: oklch(0.13 0.01 260);
-  --destructive: oklch(0.65 0.25 25);
+  --muted: oklch(0.16 0.01 285);
+  --muted-foreground: oklch(0.6 0 0);
+  --accent: oklch(0.78 0.14 85);
+  --accent-foreground: oklch(0.12 0 0);
+  --destructive: oklch(0.6 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.25 0.015 260);
-  --input: oklch(0.2 0.01 260);
-  --ring: oklch(0.75 0.18 195);
-  --chart-1: oklch(0.75 0.18 195);
-  --chart-2: oklch(0.7 0.2 150);
-  --chart-3: oklch(0.65 0.22 330);
-  --chart-4: oklch(0.75 0.18 85);
-  --chart-5: oklch(0.7 0.15 270);
-  --sidebar: oklch(0.11 0.01 260);
+  --border: oklch(0.22 0.015 285);
+  --input: oklch(0.16 0.01 285);
+  --ring: oklch(0.78 0.14 85);
+  --chart-1: oklch(0.78 0.14 85);
+  --chart-2: oklch(0.55 0.2 295);
+  --chart-3: oklch(0.95 0.02 90);
+  --chart-4: oklch(0.7 0.18 295);
+  --chart-5: oklch(0.65 0.12 85);
+  --sidebar: oklch(0.06 0 0);
   --sidebar-foreground: oklch(0.9 0 0);
-  --sidebar-primary: oklch(0.75 0.18 195);
-  --sidebar-primary-foreground: oklch(0.13 0.01 260);
-  --sidebar-accent: oklch(0.18 0.015 260);
+  --sidebar-primary: oklch(0.78 0.14 85);
+  --sidebar-primary-foreground: oklch(0.12 0 0);
+  --sidebar-accent: oklch(0.14 0.01 285);
   --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.22 0.015 260);
-  --sidebar-ring: oklch(0.75 0.18 195);
+  --sidebar-border: oklch(0.18 0.015 285);
+  --sidebar-ring: oklch(0.78 0.14 85);
 }
 
 @theme inline {
-  --font-sans: var(--font-inter), 'Inter', system-ui, sans-serif;
+  --font-sans: var(--font-cinzel), 'Cinzel', serif;
+  --font-serif: var(--font-cormorant), 'Cormorant Garamond', serif;
   --font-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-circe: var(--circe);
+  --color-circe-light: var(--circe-light);
+  --color-circe-foreground: var(--circe-foreground);
+  --color-venus: var(--venus);
+  --color-venus-light: var(--venus-light);
+  --color-venus-foreground: var(--venus-foreground);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -134,4 +164,29 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Circe styling utilities */
+.circe-glow {
+  box-shadow: 0 0 20px oklch(0.55 0.2 295 / 0.3);
+}
+
+.venus-glow {
+  box-shadow: 0 0 20px oklch(0.95 0.02 90 / 0.3);
+}
+
+.gold-glow {
+  box-shadow: 0 0 20px oklch(0.78 0.14 85 / 0.3);
+}
+
+/* Constellation background pattern */
+.constellation-bg {
+  background-image: 
+    radial-gradient(1px 1px at 20px 30px, oklch(0.78 0.14 85 / 0.4), transparent),
+    radial-gradient(1px 1px at 40px 70px, oklch(0.55 0.2 295 / 0.3), transparent),
+    radial-gradient(1px 1px at 50px 160px, oklch(0.95 0.02 90 / 0.3), transparent),
+    radial-gradient(1px 1px at 90px 40px, oklch(0.78 0.14 85 / 0.3), transparent),
+    radial-gradient(1px 1px at 130px 80px, oklch(0.55 0.2 295 / 0.2), transparent),
+    radial-gradient(1.5px 1.5px at 160px 120px, oklch(0.78 0.14 85 / 0.5), transparent);
+  background-size: 200px 200px;
 }

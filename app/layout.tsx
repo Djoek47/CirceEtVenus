@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Cinzel, Cormorant_Garamond, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const inter = Inter({ 
+const cinzel = Cinzel({ 
   subsets: ["latin"],
-  variable: '--font-inter'
+  variable: '--font-cinzel',
+  weight: ['400', '500', '600', '700']
+});
+
+const cormorant = Cormorant_Garamond({ 
+  subsets: ["latin"],
+  variable: '--font-cormorant',
+  weight: ['400', '500', '600', '700']
 });
 
 const jetbrainsMono = JetBrains_Mono({ 
@@ -14,31 +21,18 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CREATRIX - Creator Management Platform',
-  description: 'Professional management platform for content creators on OnlyFans, MYM, and Fansly. Manage fans, content, analytics, and more.',
+  title: 'Circe et Venus - Divine Creator Management',
+  description: 'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction. Manage fans, content, analytics with divine precision.',
   generator: 'v0.app',
-  keywords: ['creator management', 'OnlyFans', 'MYM', 'Fansly', 'content creator', 'fan management'],
+  keywords: ['creator management', 'OnlyFans', 'MYM', 'Fansly', 'content creator', 'fan management', 'AI assistant', 'astrology', 'Circe', 'Venus'],
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/logo.png',
+    apple: '/logo.png',
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0d1117',
+  themeColor: '#000000',
   width: 'device-width',
   initialScale: 1,
 }
@@ -50,7 +44,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+      <body className={`${cinzel.variable} ${cormorant.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         {children}
         <Analytics />
       </body>

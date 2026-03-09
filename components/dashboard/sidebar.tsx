@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
@@ -10,12 +11,13 @@ import {
   MessageSquare,
   BarChart3,
   Shield,
-  Bell,
+  TrendingUp,
   Settings,
-  Zap,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
+  Moon,
+  Sun,
+  Star,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
@@ -27,15 +29,24 @@ interface SidebarProps {
   profile: Profile | null
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'AI Studio', href: '/dashboard/ai-studio', icon: Sparkles, highlight: true },
-  { name: 'Fans', href: '/dashboard/fans', icon: Users },
-  { name: 'Content', href: '/dashboard/content', icon: Calendar },
-  { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
+// Circe's domain - Retention, Analytics, Protection (Purple)
+const circeNavigation = [
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Protection', href: '/dashboard/protection', icon: Shield },
-  { name: 'Mentions', href: '/dashboard/mentions', icon: Bell },
+]
+
+// Venus's domain - Growth, Attraction, Reputation (White)
+const venusNavigation = [
+  { name: 'Fans', href: '/dashboard/fans', icon: Users },
+  { name: 'Mentions', href: '/dashboard/mentions', icon: TrendingUp },
+]
+
+// Shared divine tools
+const sharedNavigation = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Content', href: '/dashboard/content', icon: Calendar },
+  { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
+  { name: 'AI Studio', href: '/dashboard/ai-studio', icon: Star },
 ]
 
 const bottomNavigation = [
@@ -46,6 +57,43 @@ export function DashboardSidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
 
+  const NavLink = ({ item, variant = 'default' }: { item: typeof sharedNavigation[0], variant?: 'default' | 'circe' | 'venus' }) => {
+    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+    
+    const variantStyles = {
+      default: {
+        active: 'bg-primary/20 text-primary',
+        inactive: 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+        icon: 'text-primary'
+      },
+      circe: {
+        active: 'bg-circe/20 text-circe-light',
+        inactive: 'text-sidebar-foreground/70 hover:bg-circe/10 hover:text-circe-light',
+        icon: 'text-circe-light'
+      },
+      venus: {
+        active: 'bg-venus/20 text-venus',
+        inactive: 'text-sidebar-foreground/70 hover:bg-venus/10 hover:text-venus',
+        icon: 'text-venus'
+      }
+    }
+    
+    const styles = variantStyles[variant]
+    
+    return (
+      <Link
+        href={item.href}
+        className={cn(
+          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+          isActive ? styles.active : styles.inactive
+        )}
+      >
+        <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive && styles.icon)} />
+        {!collapsed && <span>{item.name}</span>}
+      </Link>
+    )
+  }
+
   return (
     <aside
       className={cn(
@@ -54,68 +102,72 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-4">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
-          <Zap className="h-5 w-5 text-primary-foreground" />
-        </div>
+      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-4">
+        <Image 
+          src="/logo.png" 
+          alt="Circe et Venus" 
+          width={32} 
+          height={32} 
+          className="flex-shrink-0 rounded-full"
+        />
         {!collapsed && (
-          <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
-            CREATRIX
+          <span className="text-sm font-semibold tracking-wider text-primary">
+            CIRCE ET VENUS
           </span>
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-2">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-          const isHighlight = 'highlight' in item && item.highlight
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : isHighlight
-                  ? 'text-primary hover:bg-primary/10'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-              )}
-            >
-              <item.icon className={cn('h-5 w-5 flex-shrink-0', (isActive || isHighlight) && 'text-primary')} />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          )
-        })}
+      {/* Main Navigation */}
+      <nav className="flex-1 space-y-6 overflow-y-auto p-2">
+        {/* Dashboard & Shared */}
+        <div className="space-y-1">
+          {sharedNavigation.map((item) => (
+            <NavLink key={item.name} item={item} variant="default" />
+          ))}
+        </div>
+
+        {/* Circe's Domain */}
+        <div className="space-y-1">
+          {!collapsed && (
+            <div className="flex items-center gap-2 px-3 py-2">
+              <Moon className="h-4 w-4 text-circe-light" />
+              <span className="text-xs font-medium uppercase tracking-wider text-circe-light/70">
+                Circe
+              </span>
+            </div>
+          )}
+          {circeNavigation.map((item) => (
+            <NavLink key={item.name} item={item} variant="circe" />
+          ))}
+        </div>
+
+        {/* Venus's Domain */}
+        <div className="space-y-1">
+          {!collapsed && (
+            <div className="flex items-center gap-2 px-3 py-2">
+              <Sun className="h-4 w-4 text-venus" />
+              <span className="text-xs font-medium uppercase tracking-wider text-venus/70">
+                Venus
+              </span>
+            </div>
+          )}
+          {venusNavigation.map((item) => (
+            <NavLink key={item.name} item={item} variant="venus" />
+          ))}
+        </div>
       </nav>
 
       {/* Bottom Navigation */}
       <div className="border-t border-sidebar-border p-2">
-        {bottomNavigation.map((item) => {
-          const isActive = pathname === item.href
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-              )}
-            >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          )
-        })}
+        {bottomNavigation.map((item) => (
+          <NavLink key={item.name} item={item} variant="default" />
+        ))}
 
         {/* User info */}
         {!collapsed && profile && (
           <div className="mt-2 rounded-lg bg-sidebar-accent/30 p-3">
             <p className="truncate text-sm font-medium text-sidebar-foreground">
-              {profile.full_name || 'Creator'}
+              {profile.full_name || 'Divine Creator'}
             </p>
             <p className="truncate text-xs text-sidebar-foreground/60">
               {profile.email}

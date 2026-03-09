@@ -351,7 +351,7 @@ export default function LandingPage() {
                 height={32} 
                 className="rounded-full"
               />
-              <span className="font-serif font-semibold tracking-wider text-primary">CIRCE ET VENUS</span>
+              <span className="font-serif font-semibold tracking-wider text-primary dark:text-circe-light">CIRCE ET VENUS</span>
             </div>
             <nav className="flex flex-wrap justify-center gap-4 text-sm sm:gap-6">
               <Link href="/about" className="text-muted-foreground hover:text-foreground">About</Link>

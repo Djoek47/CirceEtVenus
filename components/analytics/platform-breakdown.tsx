@@ -4,6 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import type { AnalyticsSnapshot } from '@/lib/types'
 
+// Manual number formatting to avoid hydration mismatch (no Intl dependency)
+function formatNumber(amount: number): string {
+  const str = Math.round(amount).toString()
+  const parts: string[] = []
+  for (let i = str.length; i > 0; i -= 3) {
+    parts.unshift(str.slice(Math.max(0, i - 3), i))
+  }
+  return parts.join(',')
+}
+
 interface PlatformBreakdownProps {
   analytics: AnalyticsSnapshot[]
 }
@@ -50,7 +60,7 @@ export function PlatformBreakdown({ analytics }: PlatformBreakdownProps) {
                   borderRadius: '8px',
                   color: 'oklch(0.95 0 0)'
                 }}
-                formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                formatter={(value: number) => [`$${formatNumber(value)}`, 'Revenue']}
               />
               <Legend />
             </PieChart>
@@ -67,7 +77,7 @@ export function PlatformBreakdown({ analytics }: PlatformBreakdownProps) {
                 <span>{platform.name}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-medium">${platform.value.toLocaleString()}</span>
+                <span className="font-medium">${formatNumber(platform.value)}</span>
                 <span className="text-muted-foreground">
                   ({((platform.value / total) * 100).toFixed(1)}%)
                 </span>

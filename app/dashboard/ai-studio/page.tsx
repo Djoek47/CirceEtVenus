@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -239,8 +240,8 @@ export default function AIStudioPage() {
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-serif text-lg font-semibold">AI Tools</h2>
-              <Button variant="ghost" size="sm" className="text-primary">
-                View All
+              <Button variant="ghost" size="sm" className="text-primary" asChild>
+                <Link href="/dashboard/ai-studio/tools">View All</Link>
               </Button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

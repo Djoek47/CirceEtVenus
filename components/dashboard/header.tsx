@@ -120,7 +120,7 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
               <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
                 <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                   <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.full_name || 'User'} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
+                  <AvatarFallback className="bg-primary dark:bg-circe text-primary-foreground dark:text-circe-foreground text-xs sm:text-sm">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -160,7 +160,7 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
         ) : (
           <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
             <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
+              <AvatarFallback className="bg-primary dark:bg-circe text-primary-foreground dark:text-circe-foreground text-xs sm:text-sm">
                 {initials}
               </AvatarFallback>
             </Avatar>

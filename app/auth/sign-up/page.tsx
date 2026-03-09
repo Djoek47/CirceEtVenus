@@ -78,7 +78,7 @@ export default function SignUpPage() {
             className="rounded-full"
             priority
           />
-          <h1 className="font-serif text-xl font-bold tracking-wider text-primary">CIRCE ET VENUS</h1>
+          <h1 className="font-serif text-xl font-bold tracking-wider text-primary dark:text-circe-light">CIRCE ET VENUS</h1>
         </div>
 
         <Card className="w-full max-w-md border-primary/20 bg-card">
@@ -139,7 +139,7 @@ export default function SignUpPage() {
                 </p>
               </div>
 
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={loading}>
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 dark:bg-circe dark:hover:bg-circe/90 text-primary-foreground" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

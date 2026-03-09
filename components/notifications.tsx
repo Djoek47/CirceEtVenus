@@ -114,13 +114,13 @@ export function Notifications() {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }
 
-  // Render static button during SSR to avoid hydration mismatch with Radix IDs
+// Render static button during SSR to avoid hydration mismatch with Radix IDs
   if (!mounted) {
     return (
       <Button variant="ghost" size="icon" className="relative">
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+          <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary dark:bg-circe text-[10px] font-bold text-primary-foreground dark:text-circe-foreground">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}

@@ -99,7 +99,7 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
           className="flex-shrink-0 rounded-full"
           priority
         />
-        <span className="font-serif text-sm font-semibold tracking-wider text-primary">
+        <span className="font-serif text-sm font-semibold tracking-wider text-primary dark:text-circe-light">
           CIRCE ET VENUS
         </span>
       </div>

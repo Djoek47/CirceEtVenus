@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Moon, Sun, Star, Shield, TrendingUp, Users, BarChart3, Calendar } from 'lucide-react'
 import { CirceAssistant } from '@/components/ai/circe-assistant'
 import { VenusAssistant } from '@/components/ai/venus-assistant'
-import { CosmicCalendar } from '@/components/ai/cosmic-calendar'
+import { CosmicCalendar } from '@/components/content/cosmic-calendar'
 
 export default function AIStudioPage() {
   const [activeTab, setActiveTab] = useState('overview')

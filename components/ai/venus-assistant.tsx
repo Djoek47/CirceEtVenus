@@ -106,7 +106,7 @@ export function VenusAssistant() {
       {
         id: 'welcome',
         role: 'assistant',
-        content: "Welcome, radiant creator. I am Venus, goddess of love, beauty, and irresistible attraction. My golden light reveals the paths to grow your following and enhance your magnetic allure. What aspects of your empire do you wish to expand?"
+        content: "Welcome, beautiful creator. I am Venus, goddess of love and attraction. My divine sight reveals the paths to grow your following and enhance your irresistible allure. What aspects of your empire do you wish to expand?"
       }
     ]
   })

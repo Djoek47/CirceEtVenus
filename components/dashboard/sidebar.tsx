@@ -18,6 +18,7 @@ import {
   Moon,
   Sun,
   Star,
+  LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
@@ -29,91 +30,109 @@ interface SidebarProps {
   profile: Profile | null
 }
 
+interface NavItem {
+  name: string
+  href: string
+  icon: LucideIcon
+}
+
 // Circe's domain - Retention, Analytics, Protection (Purple)
-const circeNavigation = [
+const circeNavigation: NavItem[] = [
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Protection', href: '/dashboard/protection', icon: Shield },
 ]
 
 // Venus's domain - Growth, Attraction, Reputation (White)
-const venusNavigation = [
+const venusNavigation: NavItem[] = [
   { name: 'Fans', href: '/dashboard/fans', icon: Users },
   { name: 'Mentions', href: '/dashboard/mentions', icon: TrendingUp },
 ]
 
 // Silver themed navigation
-const silverNavigation = [
+const silverNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Content', href: '/dashboard/content', icon: Calendar },
   { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
 ]
 
 // AI Studio - Rainbow animated
-const aiStudioNavigation = [
+const aiStudioNavigation: NavItem[] = [
   { name: 'AI Studio', href: '/dashboard/ai-studio', icon: Star },
 ]
 
-const bottomNavigation = [
+const bottomNavigation: NavItem[] = [
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
+
+const variantStyles = {
+  default: {
+    // Black in light mode, white/silver in dark mode
+    active: 'bg-sidebar-accent text-sidebar-foreground',
+    inactive: 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+    icon: 'text-sidebar-foreground'
+  },
+  circe: {
+    active: 'bg-circe/20 text-circe-light',
+    inactive: 'text-sidebar-foreground/70 hover:bg-circe/10 hover:text-circe-light',
+    icon: 'text-circe-light'
+  },
+  venus: {
+    // Gold for Venus
+    active: 'bg-gold/20 text-gold',
+    inactive: 'text-gold/70 hover:bg-gold/10 hover:text-gold',
+    icon: 'text-gold'
+  },
+  'ai-studio': {
+    // Rainbow/multicolor animated
+    active: 'bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-gradient-x',
+    inactive: 'text-sidebar-foreground/70 hover:bg-gradient-to-r hover:from-pink-500/10 hover:via-purple-500/10 hover:to-cyan-500/10',
+    icon: 'text-purple-500'
+  }
+} as const
+
+type NavVariant = keyof typeof variantStyles
+
+function NavLink({ 
+  item, 
+  variant = 'default', 
+  pathname, 
+  collapsed 
+}: { 
+  item: NavItem
+  variant?: NavVariant
+  pathname: string
+  collapsed: boolean
+}) {
+  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+  const isAiStudio = variant === 'ai-studio'
+  const styles = variantStyles[variant]
+  const Icon = item.icon
+  
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+        isActive ? styles.active : styles.inactive
+      )}
+    >
+      <Icon className={cn(
+        'h-5 w-5 flex-shrink-0', 
+        isActive && styles.icon,
+        isAiStudio && 'animate-hue-rotate'
+      )} />
+      {!collapsed && (
+        <span className={cn(
+          isAiStudio && isActive && 'bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 bg-clip-text text-transparent'
+        )}>{item.name}</span>
+      )}
+    </Link>
+  )
+}
 
 export function DashboardSidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
-
-  const NavLink = ({ item, variant = 'default' }: { item: typeof silverNavigation[0], variant?: 'default' | 'circe' | 'venus' | 'ai-studio' }) => {
-    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-    const isAiStudio = variant === 'ai-studio'
-    
-    const variantStyles = {
-      default: {
-        // Black in light mode, white/silver in dark mode
-        active: 'bg-sidebar-accent text-sidebar-foreground',
-        inactive: 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-        icon: 'text-sidebar-foreground'
-      },
-      circe: {
-        active: 'bg-circe/20 text-circe-light',
-        inactive: 'text-sidebar-foreground/70 hover:bg-circe/10 hover:text-circe-light',
-        icon: 'text-circe-light'
-      },
-      venus: {
-        // Gold for Venus
-        active: 'bg-gold/20 text-gold',
-        inactive: 'text-gold/70 hover:bg-gold/10 hover:text-gold',
-        icon: 'text-gold'
-      },
-      'ai-studio': {
-        // Rainbow/multicolor animated
-        active: 'bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 animate-gradient-x',
-        inactive: 'text-sidebar-foreground/70 hover:bg-gradient-to-r hover:from-pink-500/10 hover:via-purple-500/10 hover:to-cyan-500/10',
-        icon: 'text-purple-500'
-      }
-    }
-    
-    const styles = variantStyles[variant]
-    
-    return (
-      <Link
-        href={item.href}
-        className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-          isActive ? styles.active : styles.inactive
-        )}
-      >
-        <item.icon className={cn(
-          'h-5 w-5 flex-shrink-0', 
-          isActive && styles.icon,
-          isAiStudio && 'animate-hue-rotate'
-        )} />
-        {!collapsed && (
-          <span className={cn(
-            isAiStudio && isActive && 'bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 bg-clip-text text-transparent'
-          )}>{item.name}</span>
-        )}
-      </Link>
-    )
-  }
 
   return (
     <aside
@@ -142,14 +161,14 @@ export function DashboardSidebar({ profile }: SidebarProps) {
         {/* Dashboard, Content, Messages - Black light/White dark */}
         <div className="space-y-1">
           {silverNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="default" />
+            <NavLink key={item.name} item={item} variant="default" pathname={pathname} collapsed={collapsed} />
           ))}
         </div>
 
         {/* AI Studio - Rainbow/Multicolor */}
         <div className="space-y-1">
           {aiStudioNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="ai-studio" />
+            <NavLink key={item.name} item={item} variant="ai-studio" pathname={pathname} collapsed={collapsed} />
           ))}
         </div>
 
@@ -164,7 +183,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
             </div>
           )}
           {circeNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="circe" />
+            <NavLink key={item.name} item={item} variant="circe" pathname={pathname} collapsed={collapsed} />
           ))}
         </div>
 
@@ -179,7 +198,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
             </div>
           )}
           {venusNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="default" />
+            <NavLink key={item.name} item={item} variant="default" pathname={pathname} collapsed={collapsed} />
           ))}
         </div>
       </nav>
@@ -187,7 +206,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
       {/* Bottom Navigation */}
       <div className="border-t border-sidebar-border p-2">
         {bottomNavigation.map((item) => (
-          <NavLink key={item.name} item={item} variant="default" />
+          <NavLink key={item.name} item={item} variant="default" pathname={pathname} collapsed={collapsed} />
         ))}
 
         {/* User info - Gold in light mode, Purple in dark mode */}

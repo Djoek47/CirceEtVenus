@@ -97,6 +97,7 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
           width={36} 
           height={36} 
           className="flex-shrink-0 rounded-full"
+          priority
         />
         <span className="font-serif text-sm font-semibold tracking-wider text-primary">
           CIRCE ET VENUS

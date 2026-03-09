@@ -107,6 +107,7 @@ export function DashboardSidebar({ profile }: SidebarProps) {
           width={32} 
           height={32} 
           className="flex-shrink-0 rounded-full"
+          priority
         />
         {!collapsed && (
           <span className="font-serif text-sm font-semibold tracking-wider text-primary">

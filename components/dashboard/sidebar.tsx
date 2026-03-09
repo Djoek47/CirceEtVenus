@@ -165,18 +165,18 @@ export function DashboardSidebar({ profile }: SidebarProps) {
           ))}
         </div>
 
-        {/* Venus's Domain - Gold */}
+        {/* Venus's Domain - Silver (like Analytics/Protection) */}
         <div className="space-y-1">
           {!collapsed && (
             <div className="flex items-center gap-2 px-3 py-2">
-              <Sun className="h-4 w-4 text-amber-400" />
-              <span className="text-xs font-medium uppercase tracking-wider text-amber-500/70">
+              <Sun className="h-4 w-4 text-slate-400" />
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-400/70">
                 Venus
               </span>
             </div>
           )}
           {venusNavigation.map((item) => (
-            <NavLink key={item.name} item={item} variant="venus" />
+            <NavLink key={item.name} item={item} variant="silver" />
           ))}
         </div>
       </nav>

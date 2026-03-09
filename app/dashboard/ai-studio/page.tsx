@@ -239,7 +239,7 @@ export default function AIStudioPage() {
           {/* AI Tools Grid */}
           <div>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-serif text-lg font-semibold">AI Tools</h2>
+              <h2 className="text-lg font-semibold">AI Tools</h2>
               <Button variant="ghost" size="sm" className="text-primary" asChild>
                 <Link href="/dashboard/ai-studio/tools">View All</Link>
               </Button>
@@ -410,7 +410,7 @@ export default function AIStudioPage() {
               <Button 
                 onClick={() => setActiveTab('cosmic')}
                 variant="outline"
-                className="w-full"
+                className="w-full border-primary/50 text-foreground hover:bg-primary/10 dark:border-primary/30 dark:text-foreground"
               >
                 View Full Calendar
               </Button>

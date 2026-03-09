@@ -314,6 +314,128 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Pricing Section */}
+        <section id="pricing" className="border-y border-border/30 bg-card/30 px-4 py-16 sm:px-6 sm:py-24">
+          <div className="mx-auto max-w-6xl">
+            <div className="text-center">
+              <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                Simple, <span className="text-primary">Divine</span> Pricing
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
+                Start with a 14-day free trial. No credit card required.
+              </p>
+            </div>
+            
+            <div className="mt-12 grid gap-8 lg:grid-cols-3">
+              {/* Starter Plan */}
+              <div className="rounded-2xl border border-border bg-card p-8">
+                <h3 className="text-lg font-semibold">Starter</h3>
+                <p className="mt-1 text-sm text-muted-foreground">For new creators</p>
+                <p className="mt-6">
+                  <span className="text-4xl font-bold">$29</span>
+                  <span className="text-muted-foreground">/month</span>
+                </p>
+                <ul className="mt-6 space-y-3 text-sm">
+                  <li className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span>50 AI Credits/month</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span>1 Platform Integration</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span>Basic Analytics</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span>Email Support</span>
+                  </li>
+                </ul>
+                <Link href="/auth/sign-up">
+                  <Button variant="outline" className="mt-8 w-full">Start Free Trial</Button>
+                </Link>
+              </div>
+
+              {/* Pro Plan */}
+              <div className="relative rounded-2xl border-2 border-primary bg-gradient-to-b from-primary/10 to-card p-8">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="rounded-full bg-primary px-4 py-1 text-sm font-medium text-primary-foreground">
+                    Most Popular
+                  </span>
+                </div>
+                <h3 className="text-lg font-semibold">Pro</h3>
+                <p className="mt-1 text-sm text-muted-foreground">For established creators</p>
+                <p className="mt-6">
+                  <span className="text-4xl font-bold">$49</span>
+                  <span className="text-muted-foreground">/month</span>
+                </p>
+                <ul className="mt-6 space-y-3 text-sm">
+                  <li className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-primary" />
+                    <span>Unlimited AI Credits</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-primary" />
+                    <span>3 Platform Integrations</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-primary" />
+                    <span>Advanced Analytics</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-primary" />
+                    <span>Leak Detection</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-primary" />
+                    <span>Priority Support</span>
+                  </li>
+                </ul>
+                <Link href="/auth/sign-up">
+                  <Button className="mt-8 w-full bg-primary">Start Free Trial</Button>
+                </Link>
+              </div>
+
+              {/* Agency Plan */}
+              <div className="rounded-2xl border border-border bg-card p-8">
+                <h3 className="text-lg font-semibold">Agency</h3>
+                <p className="mt-1 text-sm text-muted-foreground">For teams & agencies</p>
+                <p className="mt-6">
+                  <span className="text-4xl font-bold">$149</span>
+                  <span className="text-muted-foreground">/month</span>
+                </p>
+                <ul className="mt-6 space-y-3 text-sm">
+                  <li className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-circe-light" />
+                    <span>Everything in Pro</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-circe-light" />
+                    <span>Unlimited Platforms</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-circe-light" />
+                    <span>Team Management</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-circe-light" />
+                    <span>White-label Options</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-circe-light" />
+                    <span>Dedicated Success Manager</span>
+                  </li>
+                </ul>
+                <Link href="/auth/sign-up">
+                  <Button variant="outline" className="mt-8 w-full">Contact Sales</Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* CTA Section */}
         <section className="px-4 py-16 sm:px-6 sm:py-24">
           <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-circe/5 via-card to-venus/5 p-8 text-center sm:p-12">
@@ -355,10 +477,10 @@ export default function LandingPage() {
             </div>
             <nav className="flex flex-wrap justify-center gap-4 text-sm sm:gap-6">
               <Link href="/about" className="text-muted-foreground hover:text-foreground">About</Link>
-              <Link href="/contact" className="text-muted-foreground hover:text-foreground">Contact</Link>
+              <Link href="/how-it-works" className="text-muted-foreground hover:text-foreground">How It Works</Link>
+              <Link href="#pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link>
               <Link href="/terms" className="text-muted-foreground hover:text-foreground">Terms</Link>
               <Link href="/privacy" className="text-muted-foreground hover:text-foreground">Privacy</Link>
-              <Link href="/cookies" className="text-muted-foreground hover:text-foreground">Cookies</Link>
             </nav>
           </div>
           <div className="mt-6 border-t border-border/30 pt-6 text-center">

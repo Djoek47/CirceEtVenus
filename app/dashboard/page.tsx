@@ -4,6 +4,7 @@ import { RevenueChart } from '@/components/dashboard/revenue-chart'
 import { RecentFans } from '@/components/dashboard/recent-fans'
 import { QuickActions } from '@/components/dashboard/quick-actions'
 import { AlertsWidget } from '@/components/dashboard/alerts-widget'
+import { PlatformIntegrationWidget } from '@/components/dashboard/platform-integration-widget'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -118,8 +119,11 @@ export default async function DashboardPage() {
           <RevenueChart analytics={analytics || []} />
         </div>
 
-        {/* Quick Actions */}
-        <QuickActions />
+        {/* Quick Actions & Platform Integration */}
+        <div className="space-y-4">
+          <PlatformIntegrationWidget />
+          <QuickActions />
+        </div>
       </div>
 
       {/* Bottom Grid */}

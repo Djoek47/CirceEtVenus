@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardSidebar } from '@/components/dashboard/sidebar'
 import { DashboardHeader } from '@/components/dashboard/header'
+import { OnboardingProvider } from '@/components/onboarding/onboarding-provider'
 
 export default async function DashboardLayout({
   children,
@@ -22,17 +23,23 @@ export default async function DashboardLayout({
     .single()
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Desktop sidebar - hidden on mobile */}
-      <div className="hidden md:block">
-        <DashboardSidebar user={user} profile={profile} />
+    <OnboardingProvider 
+      userId={user.id} 
+      userName={profile?.full_name || undefined}
+      onboardingCompleted={profile?.onboarding_completed || false}
+    >
+      <div className="flex h-screen bg-background">
+        {/* Desktop sidebar - hidden on mobile */}
+        <div className="hidden md:block">
+          <DashboardSidebar user={user} profile={profile} />
+        </div>
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <DashboardHeader user={user} profile={profile} />
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+            {children}
+          </main>
+        </div>
       </div>
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <DashboardHeader user={user} profile={profile} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {children}
-        </main>
-      </div>
-    </div>
+    </OnboardingProvider>
   )
 }

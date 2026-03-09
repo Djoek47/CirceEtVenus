@@ -30,8 +30,41 @@ export async function POST(request: NextRequest) {
     const event = JSON.parse(rawBody)
     const supabase = await createClient()
 
+    // OnlyFansAPI webhook events based on their settings
     switch (event.type) {
-      case 'subscription.created':
+      // Chat events
+      case 'chat.message':
+        await handleNewMessage(supabase, event.data)
+        break
+      
+      case 'chat.tip':
+      case 'post.tip':
+      case 'story.tip':
+      case 'stream.tip':
+      case 'subscription.tip':
+        await handleTip(supabase, event.data)
+        break
+      
+      case 'chat.purchase':
+      case 'post.purchase':
+        await handlePurchase(supabase, event.data)
+        break
+      
+      // Post/Story/Stream engagement events
+      case 'post.comment':
+      case 'story.comment':
+      case 'stream.comment':
+        await handleComment(supabase, event.data)
+        break
+      
+      case 'post.like':
+      case 'story.like':
+      case 'stream.like':
+        await handleLike(supabase, event.data)
+        break
+      
+      // Subscription events
+      case 'subscription.new':
         await handleNewSubscription(supabase, event.data)
         break
       
@@ -43,16 +76,9 @@ export async function POST(request: NextRequest) {
         await handleExpiration(supabase, event.data)
         break
       
-      case 'message.received':
-        await handleNewMessage(supabase, event.data)
-        break
-      
-      case 'tip.received':
-        await handleTip(supabase, event.data)
-        break
-      
-      case 'purchase.created':
-        await handlePurchase(supabase, event.data)
+      // User spending event
+      case 'user.spent':
+        await handleUserSpent(supabase, event.data)
         break
       
       default:
@@ -276,4 +302,85 @@ async function handlePurchase(supabase: ReturnType<typeof createClient> extends 
     p_fan_id: data.purchase.fromUser.id,
     p_amount: data.purchase.amount,
   })
+}
+
+// Handle comment events
+async function handleComment(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+  accountId: string
+  comment: {
+    fromUser: { id: string; username: string; name: string }
+    text: string
+    contentId: string
+  }
+}) {
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('user_id')
+    .eq('platform', 'onlyfans')
+    .eq('access_token', data.accountId)
+    .single()
+
+  if (!connection) return
+
+  // Update fan's last activity
+  await supabase.from('fans')
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq('user_id', connection.user_id)
+    .eq('platform_fan_id', data.comment.fromUser.id)
+}
+
+// Handle like events
+async function handleLike(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+  accountId: string
+  like: {
+    fromUser: { id: string; username: string; name: string }
+    contentId: string
+  }
+}) {
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('user_id')
+    .eq('platform', 'onlyfans')
+    .eq('access_token', data.accountId)
+    .single()
+
+  if (!connection) return
+
+  // Update fan's last activity
+  await supabase.from('fans')
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq('user_id', connection.user_id)
+    .eq('platform_fan_id', data.like.fromUser.id)
+}
+
+// Handle user spending event
+async function handleUserSpent(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+  accountId: string
+  user: { id: string; username: string; name: string }
+  amount: number
+  type: string
+}) {
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('user_id')
+    .eq('platform', 'onlyfans')
+    .eq('access_token', data.accountId)
+    .single()
+
+  if (!connection) return
+
+  // Update fan's total spent and tier
+  await supabase.rpc('increment_fan_spending', {
+    p_user_id: connection.user_id,
+    p_fan_id: data.user.id,
+    p_amount: data.amount,
+  })
+
+  // Update analytics
+  await supabase.from('analytics_snapshots')
+    .update({ 
+      revenue: supabase.rpc('get_daily_revenue', { p_user_id: connection.user_id })
+    })
+    .eq('user_id', connection.user_id)
+    .eq('date', new Date().toISOString().split('T')[0])
 }

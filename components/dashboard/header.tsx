@@ -12,11 +12,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Bell, Search, LogOut, User, Settings } from 'lucide-react'
+import { Search, LogOut, User, Settings, Menu } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import type { Profile } from '@/lib/types'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { Notifications } from '@/components/notifications'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { MobileSidebar } from '@/components/dashboard/mobile-sidebar'
 
 interface HeaderProps {
   user: SupabaseUser
@@ -30,8 +34,8 @@ const pageNames: Record<string, string> = {
   '/dashboard/content': 'Cosmic Content Calendar',
   '/dashboard/messages': 'Messages',
   '/dashboard/analytics': 'Analytics',
-  '/dashboard/protection': 'Circe\'s Protection',
-  '/dashboard/mentions': 'Venus\' Watch',
+  '/dashboard/protection': "Circe's Protection",
+  '/dashboard/mentions': "Venus' Watch",
   '/dashboard/settings': 'Settings',
 }
 
@@ -62,34 +66,47 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
     .toUpperCase() || user.email?.[0].toUpperCase() || 'U'
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
-      <div className="flex items-center gap-4">
-        <h1 className="text-xl font-semibold">{getPageName()}</h1>
+    <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4 sm:h-16 sm:px-6">
+      <div className="flex items-center gap-3">
+        {/* Mobile menu button */}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="md:hidden">
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Open menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-72 p-0">
+            <MobileSidebar user={user} profile={profile} />
+          </SheetContent>
+        </Sheet>
+        
+        <h1 className="font-serif text-lg font-semibold sm:text-xl">{getPageName()}</h1>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Search */}
-        <div className="relative hidden md:block">
+      <div className="flex items-center gap-2 sm:gap-4">
+        {/* Search - hidden on mobile */}
+        <div className="relative hidden lg:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search fans, content..."
-            className="w-64 bg-input pl-9"
+            className="w-48 bg-input pl-9 xl:w-64"
           />
         </div>
 
+        {/* Theme Toggle */}
+        <ThemeToggle />
+
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" />
-        </Button>
+        <Notifications />
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-              <Avatar className="h-9 w-9">
+            <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
+              <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                 <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.full_name || 'User'} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
                   {initials}
                 </AvatarFallback>
               </Avatar>

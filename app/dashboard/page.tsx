@@ -64,44 +64,44 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Divine Assistants Quick Access */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Card className="border-circe/30 bg-gradient-to-br from-circe/10 via-circe/5 to-transparent">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-circe">
-              <Moon className="h-5 w-5" />
-              Circe - Retention Enchantress
+          <CardHeader className="pb-2 sm:pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-circe sm:text-lg">
+              <Moon className="h-4 w-4 sm:h-5 sm:w-5" />
+              Circe - Retention
             </CardTitle>
-            <CardDescription>Analytics, retention spells, and fan enchantment</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Analytics & fan enchantment</CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              <span className="text-circe font-medium">{currentMoonPhase}</span> - {phaseIndex < 4 ? 'Growing energy' : 'Releasing energy'}
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-muted-foreground sm:text-sm">
+              <span className="font-medium text-circe">{currentMoonPhase}</span>
             </div>
-            <Button asChild variant="outline" size="sm" className="border-circe/50 text-circe hover:bg-circe/10">
+            <Button asChild variant="outline" size="sm" className="w-full border-circe/50 text-circe hover:bg-circe/10 sm:w-auto">
               <Link href="/dashboard/ai-studio?ai=circe">
                 <Sparkles className="mr-2 h-4 w-4" />
-                Consult Circe
+                Consult
               </Link>
             </Button>
           </CardContent>
         </Card>
 
-        <Card className="border-venus/30 bg-gradient-to-br from-venus/10 via-venus/5 to-transparent">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-venus">
-              <Sun className="h-5 w-5" />
-              Venus - Growth Goddess
+        <Card className="border-venus/30 bg-gradient-to-br from-venus/10 via-venus/5 to-transparent dark:border-venus/30">
+          <CardHeader className="pb-2 sm:pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-venus sm:text-lg dark:text-venus">
+              <Sun className="h-4 w-4 sm:h-5 sm:w-5" />
+              Venus - Growth
             </CardTitle>
-            <CardDescription>Attraction strategies, growth magic, and seduction</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Attraction & seduction</CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              <span className="text-venus font-medium">Radiant</span> - Perfect for attracting new admirers
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-muted-foreground sm:text-sm">
+              <span className="font-medium text-venus dark:text-venus">Radiant</span> - Attract admirers
             </div>
-            <Button asChild variant="outline" size="sm" className="border-venus/50 text-venus hover:bg-venus/10">
+            <Button asChild variant="outline" size="sm" className="w-full border-venus/50 text-venus hover:bg-venus/10 sm:w-auto dark:text-venus">
               <Link href="/dashboard/ai-studio?ai=venus">
                 <Star className="mr-2 h-4 w-4" />
-                Consult Venus
+                Consult
               </Link>
             </Button>
           </CardContent>
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
       <StatsCards stats={stats} />
 
       {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Revenue Chart - Takes 2 columns */}
         <div className="lg:col-span-2">
           <RevenueChart analytics={analytics || []} />
@@ -123,7 +123,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Bottom Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Recent Fans */}
         <RecentFans fans={fans || []} />
 

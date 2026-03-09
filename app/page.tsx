@@ -19,27 +19,29 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background constellation-bg">
       {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-xl">
-        <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-3">
+        <nav className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">
+          <Link href="/" className="flex items-center gap-2 sm:gap-3">
             <Image 
               src="/logo.png" 
               alt="Circe et Venus" 
-              width={40} 
-              height={40} 
-              className="rounded-full"
+              width={36} 
+              height={36} 
+              className="rounded-full sm:h-10 sm:w-10"
               priority
             />
-            <span className="text-xl font-semibold tracking-wider text-primary">CIRCE ET VENUS</span>
+            <span className="hidden font-serif text-lg font-semibold tracking-wider text-primary sm:inline sm:text-xl">CIRCE ET VENUS</span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/auth/login">
               <Button variant="ghost" size="sm" className="text-foreground/80 hover:text-foreground">
                 Sign In
               </Button>
             </Link>
             <Link href="/auth/sign-up">
-              <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
-                Begin Your Journey <ArrowRight className="h-4 w-4" />
+              <Button size="sm" className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 sm:gap-2">
+                <span className="hidden sm:inline">Begin Your Journey</span>
+                <span className="sm:hidden">Start</span>
+                <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>
@@ -47,8 +49,8 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <main className="pt-16">
-        <section className="relative overflow-hidden px-6 py-24 sm:py-32">
+      <main className="pt-14 sm:pt-16">
+        <section className="relative overflow-hidden px-4 py-16 sm:px-6 sm:py-24 lg:py-32">
           {/* Divine gradient background */}
           <div className="absolute inset-0 -z-10">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent" />
@@ -58,13 +60,13 @@ export default function LandingPage() {
           
           <div className="mx-auto max-w-4xl text-center">
             {/* Logo */}
-            <div className="mb-8 flex justify-center">
+            <div className="mb-6 flex justify-center sm:mb-8">
               <Image 
                 src="/logo.png" 
                 alt="Circe et Venus" 
                 width={180} 
                 height={180} 
-                className="gold-glow rounded-full"
+                className="gold-glow h-32 w-32 rounded-full sm:h-44 sm:w-44"
                 priority
               />
             </div>
@@ -74,12 +76,12 @@ export default function LandingPage() {
               Divine AI for Modern Creators
             </div>
             
-            <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
               Where <span className="text-circe-light">Enchantment</span> Meets{' '}
-              <span className="text-venus">Attraction</span>
+              <span className="text-venus dark:text-venus">Attraction</span>
             </h1>
             
-            <p className="mx-auto mt-6 max-w-2xl font-serif text-lg text-muted-foreground sm:text-xl">
+            <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:mt-6 sm:text-lg md:text-xl">
               Two divine AIs guide your creator empire. Circe enchants your audience to stay, 
               while Venus attracts new admirers to your realm.
             </p>
@@ -100,7 +102,7 @@ export default function LandingPage() {
         </section>
 
         {/* Two Goddesses Section */}
-        <section id="ai-goddesses" className="px-6 py-24">
+        <section id="ai-goddesses" className="px-4 py-16 sm:px-6 sm:py-24">
           <div className="mx-auto max-w-6xl">
             <div className="text-center">
               <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -192,7 +194,7 @@ export default function LandingPage() {
         </section>
 
         {/* Astrology Section */}
-        <section className="border-y border-border/30 bg-card/30 px-6 py-24">
+        <section className="border-y border-border/30 bg-card/30 px-4 py-16 sm:px-6 sm:py-24">
           <div className="mx-auto max-w-6xl">
             <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
@@ -238,7 +240,7 @@ export default function LandingPage() {
         </section>
 
         {/* Features Grid */}
-        <section className="px-6 py-24">
+        <section className="px-4 py-16 sm:px-6 sm:py-24">
           <div className="mx-auto max-w-6xl">
             <div className="text-center">
               <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -316,7 +318,7 @@ export default function LandingPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="px-6 py-24">
+        <section className="px-4 py-16 sm:px-6 sm:py-24">
           <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-circe/5 via-card to-venus/5 p-8 text-center sm:p-12">
             <div className="mb-6 flex justify-center">
               <Image 
@@ -345,7 +347,7 @@ export default function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border/30 bg-card/30 px-6 py-12">
+      <footer className="border-t border-border/30 bg-card/30 px-4 py-8 sm:px-6 sm:py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-3">
             <Image 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
-import { Cinzel, Cormorant_Garamond, JetBrains_Mono } from 'next/font/google'
+import { Cinzel, DM_Sans, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 const cinzel = Cinzel({ 
@@ -9,9 +10,9 @@ const cinzel = Cinzel({
   weight: ['400', '500', '600', '700']
 });
 
-const cormorant = Cormorant_Garamond({ 
+const dmSans = DM_Sans({ 
   subsets: ["latin"],
-  variable: '--font-cormorant',
+  variable: '--font-dm-sans',
   weight: ['400', '500', '600', '700']
 });
 
@@ -43,9 +44,16 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${cinzel.variable} ${cormorant.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${cinzel.variable} ${dmSans.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

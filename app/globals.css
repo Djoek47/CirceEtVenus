@@ -4,67 +4,68 @@
 @custom-variant dark (&:is(.dark *));
 
 /* CIRCE ET VENUS - Mythological Creator Management Platform */
-/* Color System: Gold (primary), Purple (Circe), White (Venus) on Black */
+/* Color System: Gold (primary), Purple (Circe), White/Cream (Venus) */
+
+/* LIGHT THEME - Day Mode (Venus dominant) */
 :root {
-  /* Pure black base */
-  --background: oklch(0.08 0 0);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.12 0.005 285);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.1 0.005 285);
-  --popover-foreground: oklch(0.95 0 0);
+  --background: oklch(0.98 0.005 90);
+  --foreground: oklch(0.15 0.01 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.01 285);
   
-  /* Gold primary - the underlying divine theme */
-  --primary: oklch(0.78 0.14 85);
-  --primary-foreground: oklch(0.12 0 0);
+  /* Gold primary */
+  --primary: oklch(0.65 0.16 85);
+  --primary-foreground: oklch(0.98 0 0);
   
-  /* Circe - Purple for retention, analytics, protection */
-  --circe: oklch(0.55 0.2 295);
-  --circe-light: oklch(0.7 0.18 295);
+  /* Circe - Purple */
+  --circe: oklch(0.45 0.22 295);
+  --circe-light: oklch(0.55 0.2 295);
   --circe-foreground: oklch(0.98 0 0);
   
-  /* Venus - White/Cream for growth, seduction, attraction */
-  --venus: oklch(0.95 0.02 90);
-  --venus-light: oklch(0.98 0.01 90);
-  --venus-foreground: oklch(0.12 0 0);
+  /* Venus - Deep elegant tone for light mode */
+  --venus: oklch(0.35 0.08 285);
+  --venus-light: oklch(0.45 0.06 285);
+  --venus-foreground: oklch(0.98 0 0);
   
-  --secondary: oklch(0.18 0.01 285);
-  --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.16 0.01 285);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.78 0.14 85);
-  --accent-foreground: oklch(0.12 0 0);
-  --destructive: oklch(0.6 0.22 25);
+  --secondary: oklch(0.94 0.01 90);
+  --secondary-foreground: oklch(0.2 0.01 285);
+  --muted: oklch(0.94 0.01 90);
+  --muted-foreground: oklch(0.45 0.01 285);
+  --accent: oklch(0.65 0.16 85);
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.55 0.25 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.22 0.015 285);
-  --input: oklch(0.16 0.01 285);
-  --ring: oklch(0.78 0.14 85);
+  --border: oklch(0.88 0.01 90);
+  --input: oklch(0.94 0.01 90);
+  --ring: oklch(0.65 0.16 85);
   
-  /* Charts - Mythological palette */
-  --chart-1: oklch(0.78 0.14 85);   /* Gold */
-  --chart-2: oklch(0.55 0.2 295);   /* Circe purple */
-  --chart-3: oklch(0.95 0.02 90);   /* Venus white */
-  --chart-4: oklch(0.7 0.18 295);   /* Light purple */
-  --chart-5: oklch(0.65 0.12 85);   /* Dark gold */
+  /* Charts */
+  --chart-1: oklch(0.65 0.16 85);
+  --chart-2: oklch(0.45 0.22 295);
+  --chart-3: oklch(0.35 0.08 285);
+  --chart-4: oklch(0.55 0.2 295);
+  --chart-5: oklch(0.55 0.14 85);
   
   --radius: 0.5rem;
   
-  /* Sidebar */
-  --sidebar: oklch(0.06 0 0);
-  --sidebar-foreground: oklch(0.9 0 0);
-  --sidebar-primary: oklch(0.78 0.14 85);
-  --sidebar-primary-foreground: oklch(0.12 0 0);
-  --sidebar-accent: oklch(0.14 0.01 285);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.18 0.015 285);
-  --sidebar-ring: oklch(0.78 0.14 85);
+  /* Sidebar - Light */
+  --sidebar: oklch(0.96 0.005 90);
+  --sidebar-foreground: oklch(0.2 0.01 285);
+  --sidebar-primary: oklch(0.65 0.16 85);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.92 0.01 90);
+  --sidebar-accent-foreground: oklch(0.15 0.01 285);
+  --sidebar-border: oklch(0.88 0.01 90);
+  --sidebar-ring: oklch(0.65 0.16 85);
   
-  /* Custom tokens */
-  --success: oklch(0.7 0.18 150);
-  --warning: oklch(0.78 0.14 85);
-  --info: oklch(0.55 0.2 295);
+  --success: oklch(0.6 0.18 150);
+  --warning: oklch(0.65 0.16 85);
+  --info: oklch(0.45 0.22 295);
 }
 
+/* DARK THEME - Night Mode (Circe dominant) */
 .dark {
   --background: oklch(0.08 0 0);
   --foreground: oklch(0.95 0 0);
@@ -72,14 +73,18 @@
   --card-foreground: oklch(0.95 0 0);
   --popover: oklch(0.1 0.005 285);
   --popover-foreground: oklch(0.95 0 0);
+  
   --primary: oklch(0.78 0.14 85);
   --primary-foreground: oklch(0.12 0 0);
+  
   --circe: oklch(0.55 0.2 295);
   --circe-light: oklch(0.7 0.18 295);
   --circe-foreground: oklch(0.98 0 0);
+  
   --venus: oklch(0.95 0.02 90);
   --venus-light: oklch(0.98 0.01 90);
   --venus-foreground: oklch(0.12 0 0);
+  
   --secondary: oklch(0.18 0.01 285);
   --secondary-foreground: oklch(0.9 0 0);
   --muted: oklch(0.16 0.01 285);
@@ -91,11 +96,13 @@
   --border: oklch(0.22 0.015 285);
   --input: oklch(0.16 0.01 285);
   --ring: oklch(0.78 0.14 85);
+  
   --chart-1: oklch(0.78 0.14 85);
   --chart-2: oklch(0.55 0.2 295);
   --chart-3: oklch(0.95 0.02 90);
   --chart-4: oklch(0.7 0.18 295);
   --chart-5: oklch(0.65 0.12 85);
+  
   --sidebar: oklch(0.06 0 0);
   --sidebar-foreground: oklch(0.9 0 0);
   --sidebar-primary: oklch(0.78 0.14 85);
@@ -104,11 +111,15 @@
   --sidebar-accent-foreground: oklch(0.95 0 0);
   --sidebar-border: oklch(0.18 0.015 285);
   --sidebar-ring: oklch(0.78 0.14 85);
+  
+  --success: oklch(0.7 0.18 150);
+  --warning: oklch(0.78 0.14 85);
+  --info: oklch(0.55 0.2 295);
 }
 
 @theme inline {
-  --font-sans: var(--font-cinzel), 'Cinzel', serif;
-  --font-serif: var(--font-cormorant), 'Cormorant Garamond', serif;
+  --font-sans: var(--font-dm-sans), 'DM Sans', system-ui, sans-serif;
+  --font-serif: var(--font-cinzel), 'Cinzel', serif;
   --font-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -164,6 +175,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Titles use Cinzel */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-serif);
+  }
 }
 
 /* Circe styling utilities */
@@ -189,4 +204,11 @@
     radial-gradient(1px 1px at 130px 80px, oklch(0.55 0.2 295 / 0.2), transparent),
     radial-gradient(1.5px 1.5px at 160px 120px, oklch(0.78 0.14 85 / 0.5), transparent);
   background-size: 200px 200px;
+}
+
+/* Mobile responsive utilities */
+@media (max-width: 768px) {
+  .mobile-full {
+    width: 100%;
+  }
 }

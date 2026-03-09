@@ -31,6 +31,16 @@ export default function LandingPage() {
             <span className="hidden font-serif text-lg font-semibold tracking-wider text-primary sm:inline sm:text-xl">CIRCE ET VENUS</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-4">
+            <Link href="/features" className="hidden md:block">
+              <Button variant="ghost" size="sm" className="text-foreground/80 hover:text-foreground">
+                Features
+              </Button>
+            </Link>
+            <Link href="/pricing" className="hidden md:block">
+              <Button variant="ghost" size="sm" className="text-foreground/80 hover:text-foreground">
+                Pricing
+              </Button>
+            </Link>
             <Link href="/auth/login">
               <Button variant="ghost" size="sm" className="text-foreground/80 hover:text-foreground">
                 Sign In
@@ -476,11 +486,11 @@ export default function LandingPage() {
               <span className="font-serif font-semibold tracking-wider text-primary dark:text-circe-light">CIRCE ET VENUS</span>
             </div>
             <nav className="flex flex-wrap justify-center gap-4 text-sm sm:gap-6">
-              <Link href="/about" className="text-muted-foreground hover:text-foreground">About</Link>
+              <Link href="/features" className="text-muted-foreground hover:text-foreground">Features</Link>
+              <Link href="/pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link>
               <Link href="/how-it-works" className="text-muted-foreground hover:text-foreground">How It Works</Link>
-              <Link href="#pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link>
+              <Link href="/about" className="text-muted-foreground hover:text-foreground">About</Link>
               <Link href="/terms" className="text-muted-foreground hover:text-foreground">Terms</Link>
-              <Link href="/privacy" className="text-muted-foreground hover:text-foreground">Privacy</Link>
             </nav>
           </div>
           <div className="mt-6 border-t border-border/30 pt-6 text-center">

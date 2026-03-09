@@ -1,7 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
+
+// Consistent number formatting to avoid hydration mismatch
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'decimal',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+// Consistent date formatting to avoid hydration mismatch
+function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+}
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -119,11 +134,11 @@ export function FansTable({ fans }: FansTableProps) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  ${fan.total_spent.toLocaleString()}
+                  ${formatCurrency(fan.total_spent)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {fan.last_interaction
-                    ? new Date(fan.last_interaction).toLocaleDateString()
+                    ? formatDate(fan.last_interaction)
                     : 'Never'}
                 </TableCell>
                 <TableCell className="text-right">

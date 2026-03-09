@@ -87,19 +87,19 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-venus/30 bg-gradient-to-br from-venus/10 via-venus/5 to-transparent dark:border-venus/30">
+        <Card className="border-gold/30 bg-gradient-to-br from-gold/10 via-amber-500/5 to-transparent gold-glow">
           <CardHeader className="pb-2 sm:pb-3">
-            <CardTitle className="flex items-center gap-2 text-base text-venus sm:text-lg dark:text-venus">
+            <CardTitle className="flex items-center gap-2 text-base text-gold sm:text-lg">
               <Sun className="h-4 w-4 sm:h-5 sm:w-5" />
               Venus - Growth
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Attraction & seduction</CardDescription>
+            <CardDescription className="text-xs sm:text-sm text-amber-600/80 dark:text-amber-400/80">Attraction & seduction</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-muted-foreground sm:text-sm">
-              <span className="font-medium text-venus dark:text-venus">Radiant</span> - Attract admirers
+              <span className="font-medium text-gold">Radiant</span> - Attract admirers
             </div>
-            <Button asChild variant="outline" size="sm" className="w-full border-venus/50 text-venus hover:bg-venus/10 sm:w-auto dark:text-venus">
+            <Button asChild variant="outline" size="sm" className="w-full border-gold/50 text-gold hover:bg-gold/10 sm:w-auto">
               <Link href="/dashboard/ai-studio?ai=venus">
                 <Star className="mr-2 h-4 w-4" />
                 Consult

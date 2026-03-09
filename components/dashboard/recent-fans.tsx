@@ -9,13 +9,14 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import type { Fan } from '@/lib/types'
 
-// Consistent number formatting to avoid hydration mismatch
+// Manual number formatting to avoid hydration mismatch (no Intl dependency)
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'decimal',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
+  const str = Math.round(amount).toString()
+  const parts: string[] = []
+  for (let i = str.length; i > 0; i -= 3) {
+    parts.unshift(str.slice(Math.max(0, i - 3), i))
+  }
+  return parts.join(',')
 }
 
 interface RecentFansProps {

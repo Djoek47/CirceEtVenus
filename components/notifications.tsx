@@ -92,6 +92,11 @@ const sampleNotifications: Notification[] = [
 export function Notifications() {
   const [notifications, setNotifications] = useState<Notification[]>(sampleNotifications)
   const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   
   const unreadCount = notifications.filter(n => !n.read).length
 
@@ -107,6 +112,20 @@ export function Notifications() {
 
   const removeNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
+  // Render static button during SSR to avoid hydration mismatch with Radix IDs
+  if (!mounted) {
+    return (
+      <Button variant="ghost" size="icon" className="relative">
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </Button>
+    )
   }
 
   return (
@@ -174,7 +193,7 @@ export function Notifications() {
                         {notification.description}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground/70">
-                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                        {mounted ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true }) : ''}
                       </p>
                     </a>
                   </div>

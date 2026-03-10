@@ -96,7 +96,7 @@ class OnlyFansAPI {
    * Start authentication - POST /api/authenticate
    * Returns attempt_id and polling_url
    */
-  async startAuthentication(email: string, password: string, proxyCountry: string = 'us'): Promise<{
+  async startAuthentication(email: string, password: string, proxyCountry: string = 'us', forceConnect: boolean = true): Promise<{
     success: boolean
     attempt_id?: string
     polling_url?: string
@@ -109,7 +109,7 @@ class OnlyFansAPI {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password, proxyCountry }),
+        body: JSON.stringify({ email, password, proxyCountry, force_connect: forceConnect }),
       })
 
       const data = await response.json()
@@ -118,12 +118,14 @@ class OnlyFansAPI {
       // The API returns attempt_id and polling_url even on 400 status when auth is in progress
       // This is not an error - it means we need to poll
       if (data.attempt_id || data.polling_url) {
-        return {
+        const result = {
           success: true,
           attempt_id: data.attempt_id,
           polling_url: data.polling_url,
           message: data.message
         }
+        console.log('[v0] OnlyFans returning success with attempt_id:', result)
+        return result
       }
       
       if (!response.ok) {

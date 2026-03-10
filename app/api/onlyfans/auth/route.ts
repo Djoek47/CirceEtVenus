@@ -144,8 +144,19 @@ export async function POST(request: NextRequest) {
 
     console.log('[v0] OnlyFans starting authentication for:', email)
     const result = await api.startAuthentication(email, password, proxyCountry)
-    console.log('[v0] OnlyFans startAuthentication result:', result)
+    console.log('[v0] OnlyFans startAuthentication result:', JSON.stringify(result))
 
+    // If we have an attempt_id, return it for polling (this is success)
+    if (result.attempt_id) {
+      console.log('[v0] OnlyFans got attempt_id, returning for polling')
+      return NextResponse.json({
+        attemptId: result.attempt_id,
+        polling_url: result.polling_url,
+        message: result.message || 'Authentication started. Please wait...'
+      })
+    }
+
+    // No attempt_id means actual error
     if (!result.success) {
       return NextResponse.json({ error: result.message || 'Failed to start authentication' }, { status: 400 })
     }

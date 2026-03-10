@@ -20,9 +20,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+    console.log('[v0] Fansly auth request body:', { 
+      hasUsername: !!body.username, 
+      hasPassword: !!body.password,
+      has2FA: !!body.twoFactorToken,
+      countryCode: body.countryCode 
+    })
+    
     const { username, password, twoFactorToken, twoFactorCode, countryCode = 'US' } = body
 
     if (!username || !password) {
+      console.log('[v0] Fansly auth error: Missing credentials')
       return NextResponse.json({ error: 'Username and password are required' }, { status: 400 })
     }
 
@@ -68,7 +76,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Initial connection attempt
+    console.log('[v0] Fansly attempting connection for:', username)
     const result = await api.connectAccount(username, password, countryCode)
+    console.log('[v0] Fansly connection result:', { 
+      success: result.success, 
+      requires_2fa: result.requires_2fa,
+      hasAccountId: !!result.account_id 
+    })
 
     if (result.requires_2fa && result.twoFactorToken) {
       return NextResponse.json({

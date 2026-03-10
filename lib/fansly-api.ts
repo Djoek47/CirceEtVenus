@@ -71,15 +71,35 @@ class FanslyAPI {
   /**
    * Connect a Fansly account with username/password
    * May return 2FA requirement
+   * API Response format: { statusCode, message, data: { status_code, account_id, requires_2fa, twofa_token, ... } }
    */
   async connectAccount(username: string, password: string, countryCode: string = 'US'): Promise<{
     success?: boolean
     account_id?: string
     requires_2fa?: boolean
     twoFactorToken?: string
+    masked_email?: string
     message?: string
   }> {
-    return this.request('/api/fansly/connect', {
+    const response = await this.request<{
+      statusCode: number
+      message: string
+      data: {
+        status_code: number
+        account_id?: string
+        requires_2fa?: boolean
+        twofa_token?: string
+        masked_email?: string
+        message?: string
+        data?: {
+          success?: boolean
+          response?: {
+            accountId: string
+            token: string
+          }
+        }
+      }
+    }>('/api/fansly/connect', {
       method: 'POST',
       body: JSON.stringify({
         username,
@@ -87,10 +107,36 @@ class FanslyAPI {
         countryCode,
       }),
     })
+
+    // Parse the nested response
+    const data = response.data
+    
+    if (data.requires_2fa) {
+      return {
+        requires_2fa: true,
+        twoFactorToken: data.twofa_token,
+        masked_email: data.masked_email,
+        message: data.message || 'Two-factor authentication required'
+      }
+    }
+
+    if (data.account_id) {
+      return {
+        success: true,
+        account_id: data.account_id,
+        message: 'Connected successfully'
+      }
+    }
+
+    return {
+      success: false,
+      message: data.message || response.message || 'Connection failed'
+    }
   }
 
   /**
    * Submit 2FA code to complete authentication
+   * API endpoint: POST /api/fansly/verify-2fa
    */
   async submit2FA(
     username: string,
@@ -104,7 +150,22 @@ class FanslyAPI {
     account_id?: string
     message?: string
   }> {
-    return this.request('/api/fansly/verify-2fa', {
+    const response = await this.request<{
+      statusCode: number
+      message: string
+      data: {
+        status_code: number
+        account_id?: string
+        message?: string
+        data?: {
+          success?: boolean
+          response?: {
+            accountId: string
+            token: string
+          }
+        }
+      }
+    }>('/api/fansly/verify-2fa', {
       method: 'POST',
       body: JSON.stringify({
         username,
@@ -115,6 +176,21 @@ class FanslyAPI {
         countryCode,
       }),
     })
+
+    const data = response.data
+
+    if (data.account_id) {
+      return {
+        success: true,
+        account_id: data.account_id,
+        message: 'Connected successfully'
+      }
+    }
+
+    return {
+      success: false,
+      message: data.message || response.message || '2FA verification failed'
+    }
   }
 
   // ============ ACCOUNT ============

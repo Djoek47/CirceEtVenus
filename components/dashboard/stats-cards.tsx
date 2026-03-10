@@ -83,7 +83,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
               </div>
             ) : (
               <div className="mt-4 text-xs text-muted-foreground">
-                Connect platforms to track
+                {hasConnectedPlatforms ? 'No prior period yet' : 'Connect platforms to track'}
               </div>
             )}
           </CardContent>

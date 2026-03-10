@@ -62,21 +62,27 @@ export default async function DashboardPage() {
   
   // Calculate revenue change (compare last 15 days to previous 15 days)
   const recentRevenue = analytics?.slice(0, 15).reduce((sum, a) => sum + (a.revenue || 0), 0) || 0
-  const previousRevenue = analytics?.slice(15, 30).reduce((sum, a) => sum + (a.revenue || 0), 0) || 1
-  const revenueChange = previousRevenue > 0 ? ((recentRevenue - previousRevenue) / previousRevenue) * 100 : 0
+  const previousRevenue = analytics?.slice(15, 30).reduce((sum, a) => sum + (a.revenue || 0), 0) || 0
+  // Only compute % change when we have a real prior period to compare against.
+  const revenueChange =
+    (analytics?.length || 0) >= 30 && previousRevenue > 0
+      ? ((recentRevenue - previousRevenue) / previousRevenue) * 100
+      : null
   
   // Calculate new fans in last 30 days
   const newFansCount = analytics?.reduce((sum, a) => sum + (a.new_fans || 0), 0) || 0
 
   const stats = {
     totalRevenue,
-    revenueChange: Math.round(revenueChange * 10) / 10,
+    revenueChange: revenueChange === null ? null : Math.round(revenueChange * 10) / 10,
     totalFans,
-    fansChange: newFansCount > 0 ? Math.round((newFansCount / Math.max(totalFans, 1)) * 100 * 10) / 10 : 0,
+    fansChange: (analytics?.length || 0) >= 30 && totalFans > 0
+      ? Math.round((newFansCount / Math.max(totalFans, 1)) * 100 * 10) / 10
+      : null,
     activeConversations,
-    conversationsChange: 0,
+    conversationsChange: null,
     scheduledContent,
-    contentChange: 0,
+    contentChange: null,
     leakAlerts: leakAlerts?.length || 0,
     mentionsToReview: mentions?.length || 0,
     hasConnectedPlatforms,

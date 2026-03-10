@@ -140,13 +140,13 @@ export interface AnalyticsSnapshot {
 // Dashboard Stats
 export interface DashboardStats {
   totalRevenue: number
-  revenueChange: number
+  revenueChange: number | null
   totalFans: number
-  fansChange: number
+  fansChange: number | null
   activeConversations: number
-  conversationsChange: number
+  conversationsChange: number | null
   scheduledContent: number
-  contentChange: number
+  contentChange: number | null
   leakAlerts: number
   mentionsToReview: number
   hasConnectedPlatforms: boolean

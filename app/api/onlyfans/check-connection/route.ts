@@ -82,12 +82,16 @@ export async function GET() {
       .eq('user_id', user.id)
       .eq('platform', 'onlyfans')
     
+    // Get display name from onlyfans_user_data
+    const userData = (account as any)?.onlyfans_user_data || {}
+    const displayName = userData.name || account.onlyfans_username || 'Unknown'
+    
     const { error: insertError } = await supabase
       .from('platform_connections')
       .insert({
         user_id: user.id,
         platform: 'onlyfans',
-        platform_username: account.onlyfans_username || 'Connected',
+        platform_username: displayName,
         is_connected: true,
         access_token: account.id,
         last_sync_at: new Date().toISOString(),
@@ -100,7 +104,7 @@ export async function GET() {
     return NextResponse.json({
       connected: true,
       accountId: account.id,
-      username: account.onlyfans_username,
+      username: displayName,
       newlySynced: true
     })
 

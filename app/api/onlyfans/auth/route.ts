@@ -99,6 +99,8 @@ export async function POST(request: NextRequest) {
       if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
         // Use the most recent account
         const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+        const userData = (account as any)?.onlyfans_user_data || {}
+        const displayName = userData.name || account.onlyfans_username || 'Unknown'
         
         // Save connection
         await supabase
@@ -106,8 +108,7 @@ export async function POST(request: NextRequest) {
           .upsert({
             user_id: user.id,
             platform: 'onlyfans',
-            
-            platform_username: account.onlyfans_username || 'Connected',
+            platform_username: displayName,
             is_connected: true,
             access_token: account.id,
             last_sync_at: new Date().toISOString(),
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ 
           success: true, 
           accountId: account.id,
-          username: account.onlyfans_username
+          username: displayName
         })
       }
 
@@ -150,6 +151,8 @@ export async function POST(request: NextRequest) {
     
     if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
       const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+      const userData2 = (account as any)?.onlyfans_user_data || {}
+      const displayName2 = userData2.name || account.onlyfans_username || 'Unknown'
       
       // Save connection to our database
       const { error: dbError } = await supabase
@@ -157,8 +160,7 @@ export async function POST(request: NextRequest) {
         .upsert({
           user_id: user.id,
           platform: 'onlyfans',
-          
-          platform_username: account.onlyfans_username || 'Connected',
+          platform_username: displayName2,
           is_connected: true,
           access_token: account.id,
           last_sync_at: new Date().toISOString(),
@@ -170,7 +172,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ 
           success: true, 
           accountId: account.id,
-          username: account.onlyfans_username,
+          username: displayName2,
           message: 'OnlyFans account connected successfully!'
         })
       }

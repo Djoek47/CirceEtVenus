@@ -50,7 +50,7 @@ export default async function DashboardPage() {
           .insert({
             user_id: user.id,
             platform: 'onlyfans',
-            platform_username: account.onlyfans_username || 'Connected',
+            platform_username: userData.name || account.onlyfans_username || 'Unknown',
             is_connected: true,
             access_token: account.id,
             last_sync_at: new Date().toISOString(),

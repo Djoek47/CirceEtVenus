@@ -30,7 +30,9 @@ export async function POST(request: NextRequest) {
       
       if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
         const account = accountsResult.accounts[accountsResult.accounts.length - 1]
-        console.log('[v0] Sync - Found account:', account.id, account.onlyfans_username)
+        const accountUserData = (account as any)?.onlyfans_user_data || {}
+        const displayName = accountUserData.name || account.onlyfans_username || 'Unknown'
+        console.log('[v0] Sync - Found account:', account.id, displayName)
         
         // Delete any old disconnected entries first
         await supabase
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
           .insert({
             user_id: user.id,
             platform: 'onlyfans',
-            platform_username: account.onlyfans_username || 'Connected',
+            platform_username: displayName,
             is_connected: true,
             access_token: account.id,
             last_sync_at: new Date().toISOString(),

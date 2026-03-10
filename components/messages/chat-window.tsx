@@ -33,25 +33,40 @@ interface OnlyFansConversation {
   unreadCount: number
 }
 
+interface OnlyFansMedia {
+  id: number | string
+  type: 'photo' | 'video'
+  canView: boolean
+  files?: {
+    full?: { url: string | null; width?: number; height?: number }
+    thumb?: { url: string | null }
+    preview?: { url: string | null }
+    squarePreview?: { url: string | null }
+  }
+  // Legacy format fallback
+  url?: string
+  preview?: string
+}
+
 interface OnlyFansMessage {
-  id: string
+  id: string | number
   fromUser: {
-    id: string
-    username: string
-    name: string
-    avatar: string
+    id: string | number
+    username?: string
+    name?: string
+    avatar?: string
   }
   text: string
   createdAt: string
-  isRead: boolean
-  media: {
-    id: string
-    type: 'photo' | 'video'
-    url: string
-    preview: string
-  }[]
-  price: number | null
-  isPaid: boolean
+  isRead?: boolean
+  isOpened?: boolean
+  isSentByMe?: boolean
+  media?: OnlyFansMedia[]
+  previews?: { url: string }[]
+  price?: number | null
+  isPaid?: boolean
+  isFree?: boolean
+  mediaCount?: number
 }
 
 interface ChatWindowProps {
@@ -255,23 +270,71 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                   >
                     {msg.media && msg.media.length > 0 && (
                       <div className="mb-2 space-y-2">
-                        {msg.media.map((m) => (
-                          <div key={m.id} className="relative">
-                            {m.type === 'photo' ? (
-                              <img 
-                                src={m.preview || m.url} 
-                                alt="Media" 
-                                className="rounded-lg max-w-full"
-                              />
-                            ) : (
-                              <video 
-                                src={m.url} 
-                                poster={m.preview}
-                                controls 
-                                className="rounded-lg max-w-full"
-                              />
-                            )}
-                          </div>
+                        {msg.media.map((m) => {
+                          // Get the best available URL from the OnlyFans API response
+                          const imageUrl = m.files?.thumb?.url || m.files?.squarePreview?.url || m.files?.preview?.url || m.files?.full?.url || m.preview || m.url
+                          const videoUrl = m.files?.full?.url || m.url
+                          const posterUrl = m.files?.thumb?.url || m.files?.preview?.url || m.preview
+                          
+                          // Check if media can be viewed
+                          if (!m.canView && m.canView !== undefined) {
+                            return (
+                              <div key={m.id} className="relative rounded-lg bg-muted/50 p-4 text-center">
+                                <p className="text-sm text-muted-foreground">Locked media</p>
+                              </div>
+                            )
+                          }
+                          
+                          return (
+                            <div key={m.id} className="relative">
+                              {m.type === 'photo' ? (
+                                imageUrl ? (
+                                  <img 
+                                    src={imageUrl} 
+                                    alt="Media" 
+                                    className="rounded-lg max-w-full"
+                                    onError={(e) => {
+                                      // Hide broken images
+                                      (e.target as HTMLImageElement).style.display = 'none'
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="rounded-lg bg-muted/50 p-4 text-center">
+                                    <p className="text-sm text-muted-foreground">Image unavailable</p>
+                                  </div>
+                                )
+                              ) : (
+                                videoUrl ? (
+                                  <video 
+                                    src={videoUrl} 
+                                    poster={posterUrl || undefined}
+                                    controls 
+                                    className="rounded-lg max-w-full"
+                                  />
+                                ) : (
+                                  <div className="rounded-lg bg-muted/50 p-4 text-center">
+                                    <p className="text-sm text-muted-foreground">Video unavailable</p>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {/* Show preview images if media array is empty but previews exist */}
+                    {(!msg.media || msg.media.length === 0) && msg.previews && msg.previews.length > 0 && (
+                      <div className="mb-2 space-y-2">
+                        {msg.previews.map((p, idx) => (
+                          <img 
+                            key={idx}
+                            src={p.url} 
+                            alt="Preview" 
+                            className="rounded-lg max-w-full"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
                         ))}
                       </div>
                     )}

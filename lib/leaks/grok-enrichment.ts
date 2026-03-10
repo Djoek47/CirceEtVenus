@@ -25,7 +25,8 @@ export async function enrichWithGrok(opts: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'grok-2-latest',
+      // Updated Grok model; old 'grok-2-latest' is deprecated
+      model: 'grok-2-1212',
       temperature: 0.2,
       messages: [
         { role: 'system', content: system },

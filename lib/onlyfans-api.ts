@@ -253,15 +253,19 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
+      console.log('[v0] OnlyFans listAccounts response:', JSON.stringify(data))
 
       if (Array.isArray(data)) {
+        console.log('[v0] OnlyFans found', data.length, 'accounts (array format)')
         return { success: true, accounts: data }
       }
       
       if (data.accounts && Array.isArray(data.accounts)) {
+        console.log('[v0] OnlyFans found', data.accounts.length, 'accounts (object format)')
         return { success: true, accounts: data.accounts }
       }
 
+      console.log('[v0] OnlyFans no accounts found:', data.message)
       return { success: false, message: data.message || 'No accounts found' }
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : 'Failed to list accounts' }

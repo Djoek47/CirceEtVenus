@@ -29,6 +29,7 @@ import { MoreHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { NICHE_LABELS, NicheKey, BOUNDARY_NICHES } from '@/lib/niches'
+import { cn } from '@/lib/utils'
 
 interface PlatformConnection {
   id: string

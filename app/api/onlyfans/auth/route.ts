@@ -22,6 +22,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email, password, attemptId, twoFactorCode, proxyCountry = 'us' } = body
 
+    console.log('[v0] OnlyFans auth request:', { 
+      hasEmail: !!email, 
+      hasPassword: !!password, 
+      attemptId, 
+      has2FA: !!twoFactorCode 
+    })
+
     const api = createOnlyFansAPI()
 
     // If 2FA code provided, submit it
@@ -134,7 +141,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
+    console.log('[v0] OnlyFans starting authentication for:', email)
     const result = await api.startAuthentication(email, password, proxyCountry)
+    console.log('[v0] OnlyFans startAuthentication result:', result)
 
     if (!result.success) {
       return NextResponse.json({ error: result.message || 'Failed to start authentication' }, { status: 400 })

@@ -1,0 +1,30 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+
+// POST: Disconnect Instagram account
+export async function POST() {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Delete the connection from database
+    const { error } = await supabase
+      .from('platform_connections')
+      .update({ is_connected: false, access_token: null, refresh_token: null })
+      .eq('user_id', user.id)
+      .eq('platform', 'instagram')
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('[v0] Instagram disconnect error:', error)
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Disconnect failed' 
+    }, { status: 500 })
+  }
+}

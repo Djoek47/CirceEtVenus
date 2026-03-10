@@ -94,6 +94,7 @@ export function PlatformIntegrationWidget() {
   const [fansly2FAToken, setFansly2FAToken] = useState<string | null>(null)
   const [fansly2FACode, setFansly2FACode] = useState('')
   const [fanslyLoading, setFanslyLoading] = useState(false)
+  const [upgradeRequired, setUpgradeRequired] = useState<string | null>(null)
   
   const supabase = createClient()
 
@@ -216,6 +217,10 @@ export function PlatformIntegrationWidget() {
         setSuccess('Fansly connected!')
         await loadConnections()
         setTimeout(() => setSuccess(null), 3000)
+      } else if (data.upgradeRequired) {
+        setUpgradeRequired(data.upgradeUrl || 'https://apifansly.com/pricing')
+        setFanslyDialogOpen(false)
+        setError('Fansly API account limit reached. Upgrade required to connect more accounts.')
       } else {
         throw new Error(data.error || 'Connection failed')
       }
@@ -277,7 +282,22 @@ export function PlatformIntegrationWidget() {
         </CardHeader>
         
         <CardContent className="p-4 space-y-3">
-          {error && (
+          {upgradeRequired && (
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-600 dark:text-amber-400">
+              <div className="flex items-center justify-between gap-2">
+                <span>Fansly API plan limit reached</span>
+                <a 
+                  href={upgradeRequired} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium bg-amber-500 text-white px-3 py-1 rounded-full hover:bg-amber-600 transition-colors"
+                >
+                  Upgrade Plan
+                </a>
+              </div>
+            </div>
+          )}
+          {error && !upgradeRequired && (
             <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-center gap-2">
               <X className="h-4 w-4 flex-shrink-0" />
               {error}

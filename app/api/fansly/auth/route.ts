@@ -20,17 +20,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    console.log('[v0] Fansly auth request body:', { 
-      hasUsername: !!body.username, 
-      hasPassword: !!body.password,
-      has2FA: !!body.twoFactorToken,
-      countryCode: body.countryCode 
-    })
-    
     const { username, password, twoFactorToken, twoFactorCode, countryCode = 'US' } = body
 
     if (!username || !password) {
-      console.log('[v0] Fansly auth error: Missing credentials')
       return NextResponse.json({ error: 'Username and password are required' }, { status: 400 })
     }
 
@@ -76,13 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Initial connection attempt
-    console.log('[v0] Fansly attempting connection for:', username)
     const result = await api.connectAccount(username, password, countryCode)
-    console.log('[v0] Fansly connection result:', { 
-      success: result.success, 
-      requires_2fa: result.requires_2fa,
-      hasAccountId: !!result.account_id 
-    })
 
     if (result.requires_2fa && result.twoFactorToken) {
       return NextResponse.json({
@@ -121,8 +107,32 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Fansly auth error:', error)
+    
+    const errorMessage = error instanceof Error ? error.message : 'Authentication failed'
+    
+    // Handle specific API errors with user-friendly messages
+    if (errorMessage.includes('Account limit reached')) {
+      return NextResponse.json({
+        error: 'Account limit reached on your Fansly API plan. Please upgrade at apifansly.com to connect more accounts.',
+        upgradeRequired: true,
+        upgradeUrl: 'https://apifansly.com/pricing'
+      }, { status: 402 })
+    }
+    
+    if (errorMessage.includes('Invalid credentials') || errorMessage.includes('incorrect')) {
+      return NextResponse.json({
+        error: 'Invalid Fansly username or password. Please check your credentials and try again.'
+      }, { status: 401 })
+    }
+    
+    if (errorMessage.includes('rate limit') || errorMessage.includes('too many')) {
+      return NextResponse.json({
+        error: 'Too many requests. Please wait a moment and try again.'
+      }, { status: 429 })
+    }
+    
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Authentication failed' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

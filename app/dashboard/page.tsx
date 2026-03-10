@@ -5,6 +5,7 @@ import { RecentFans } from '@/components/dashboard/recent-fans'
 import { QuickActions } from '@/components/dashboard/quick-actions'
 import { AlertsWidget } from '@/components/dashboard/alerts-widget'
 import { PlatformIntegrationWidget } from '@/components/dashboard/platform-integration-widget'
+import { SocialReputationWidget } from '@/components/dashboard/social-reputation-widget'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -143,6 +144,9 @@ export default async function DashboardPage() {
         {/* Alerts & Mentions */}
         <AlertsWidget leakAlerts={leakAlerts || []} mentions={mentions || []} />
       </div>
+
+      {/* Social Media Reputation */}
+      <SocialReputationWidget />
     </div>
   )
 }

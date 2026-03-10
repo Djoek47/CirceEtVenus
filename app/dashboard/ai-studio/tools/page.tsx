@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ import {
   Scroll, Compass, Feather, Wind, Droplets, Mountain, Leaf
 } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 interface AITool {
   id: string
@@ -338,6 +339,37 @@ const allTools: AITool[] = [
 export default function AIToolsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
+  const [credits, setCredits] = useState<{ used: number; limit: number } | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    const loadCredits = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('ai_credits_used,ai_credits_limit')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (data) {
+          setCredits({
+            used: data.ai_credits_used ?? 0,
+            limit: data.ai_credits_limit ?? 100,
+          })
+        } else {
+          setCredits({ used: 0, limit: 100 })
+        }
+      } catch {
+        // silent; fallback stays null
+      }
+    }
+    loadCredits()
+  }, [])
 
   const filteredTools = allTools.filter(tool => {
     const matchesSearch = tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -375,11 +407,19 @@ export default function AIToolsPage() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="gap-1">
             <Zap className="h-3 w-3" />
-            47 Credits
+            {credits
+              ? `${credits.limit === 999999 ? '∞' : credits.limit - credits.used} credits left`
+              : 'AI Credits'}
           </Badge>
-          <Button size="sm" className="gap-1 bg-gradient-to-r from-circe to-venus">
-            <Crown className="h-4 w-4" />
-            Upgrade to Pro
+          <Button
+            size="sm"
+            className="gap-1 bg-gradient-to-r from-circe to-venus"
+            asChild
+          >
+            <Link href="/dashboard/settings?tab=billing#pricing-plans">
+              <Crown className="h-4 w-4" />
+              Upgrade to Pro
+            </Link>
           </Button>
         </div>
       </div>
@@ -396,6 +436,20 @@ export default function AIToolsPage() {
           />
         </div>
       </div>
+
+      {credits && (
+        <p className="text-xs text-muted-foreground">
+          You have{' '}
+          <span className="font-semibold">
+            {credits.limit === 999999 ? 'unlimited' : credits.limit - credits.used}
+          </span>{' '}
+          of{' '}
+          <span className="font-semibold">
+            {credits.limit === 999999 ? '∞' : credits.limit}
+          </span>{' '}
+          AI credits remaining this period.
+        </p>
+      )}
 
       {/* Categories */}
       <Tabs value={activeCategory} onValueChange={setActiveCategory}>
@@ -465,17 +519,22 @@ export default function AIToolsPage() {
                 </CardContent>
                 <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="absolute bottom-0 left-0 right-0 translate-y-full p-4 transition-transform group-hover:translate-y-0">
-                  <Button 
-                    size="sm" 
-                    className={`w-full ${
-                      tool.isPro 
-                        ? 'bg-gradient-to-r from-circe to-venus hover:opacity-90' 
-                        : ''
-                    }`}
-                    variant={tool.isPro ? 'default' : 'secondary'}
-                  >
-                    {tool.isPro ? 'Unlock with Pro' : 'Use Tool'}
-                  </Button>
+                  {tool.isPro ? (
+                    <Button
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-circe to-venus hover:opacity-90"
+                      variant="default"
+                      asChild
+                    >
+                      <Link href="/dashboard/settings?tab=billing#pricing-plans">
+                        Unlock with Pro
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" className="w-full" variant="secondary">
+                      Use Tool
+                    </Button>
+                  )}
                 </div>
               </Card>
             ))}

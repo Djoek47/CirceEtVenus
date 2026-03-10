@@ -172,6 +172,8 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
     )
   }
 
+  const isPaidPlan = subscription?.planId && subscription.planId !== 'divine-trial'
+
   return (
     <>
       {/* Current Plan */}
@@ -203,7 +205,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
-              {subscription?.status === 'active' ? (
+              {subscription?.status === 'active' || isPaidPlan ? (
                 <>
                   <Button 
                     onClick={handleManageBilling} 

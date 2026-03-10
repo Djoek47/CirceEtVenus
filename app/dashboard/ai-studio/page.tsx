@@ -125,7 +125,7 @@ export default function AIStudioPage() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="gap-1">
             <Zap className="h-3 w-3" />
-            47 AI Credits
+            AI Studio
           </Badge>
         </div>
       </div>
@@ -355,7 +355,11 @@ export default function AIStudioPage() {
                   <Sparkles className="h-5 w-5 text-primary" />
                   <CardTitle>Premium AI Features</CardTitle>
                 </div>
-                <Button size="sm">Upgrade to Pro</Button>
+                <Button size="sm" asChild>
+                  <Link href="/dashboard/settings?tab=billing#pricing-plans">
+                    Upgrade to Pro
+                  </Link>
+                </Button>
               </div>
               <CardDescription>
                 Unlock advanced AI capabilities with a Pro subscription

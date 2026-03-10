@@ -189,14 +189,67 @@ export async function getSubscriptionStatus() {
     return { status: 'none', plan: null }
   }
 
-  // Primary source of truth for the app UI is our DB row (kept in sync via webhook).
-  const { data } = await supabase
+  // Primary source of truth for the app UI is our DB row (kept in sync via webhook),
+  // but we also reconcile with Stripe if needed so upgrades still work even when
+  // the webhook isn't fully configured yet.
+  let { data } = await supabase
     .from('subscriptions')
-    .select('plan_id,status,current_period_end,cancel_at_period_end')
+    .select('plan_id,status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id')
     .eq('user_id', user.id)
     .maybeSingle()
 
   if (!data) return { status: 'none', plan: null }
+
+  // If we don't have an active subscription recorded yet but there is a Stripe customer,
+  // try to reconcile with Stripe directly.
+  const needsSync =
+    !data.plan_id ||
+    !data.status ||
+    data.status === 'trial' ||
+    !data.stripe_subscription_id
+
+  try {
+    if (needsSync) {
+      let customerId = data.stripe_customer_id as string | null | undefined
+
+      // Ensure we have a Stripe customer id for this user
+      if (!customerId && user.email) {
+        customerId = await findOrCreateStripeCustomer({ userId: user.id, email: user.email })
+      }
+
+      if (customerId) {
+        const subs = await stripe.subscriptions.list({
+          customer: customerId,
+          status: 'all',
+          limit: 1,
+        })
+
+        const sub = subs.data[0]
+        if (sub) {
+          const planIdFromMetadata = (sub.metadata?.productId as string | undefined) || (data.plan_id as string | undefined)
+          await upsertSubscriptionRow(user.id, {
+            stripe_customer_id: customerId,
+            stripe_subscription_id: sub.id,
+            plan_id: planIdFromMetadata,
+            status: sub.status,
+            current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
+            current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+            cancel_at_period_end: sub.cancel_at_period_end,
+          })
+
+          data = {
+            ...data,
+            plan_id: planIdFromMetadata,
+            status: sub.status,
+            current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+            cancel_at_period_end: sub.cancel_at_period_end,
+          } as typeof data
+        }
+      }
+    }
+  } catch {
+    // If reconciliation fails for any reason, fall back to whatever is in our DB.
+  }
 
   const product = PRODUCTS.find((p) => p.id === data.plan_id)
   return {

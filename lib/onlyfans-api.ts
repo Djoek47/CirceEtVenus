@@ -96,7 +96,7 @@ class OnlyFansAPI {
    * Start authentication - POST /api/authenticate
    * Returns attempt_id and polling_url
    */
-  async startAuthentication(email: string, password: string, proxyCountry: string = 'us', forceConnect: boolean = true): Promise<{
+  async startAuthentication(email: string, password: string, proxyCountry: string = 'us'): Promise<{
     success: boolean
     attempt_id?: string
     polling_url?: string
@@ -109,7 +109,7 @@ class OnlyFansAPI {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password, proxyCountry, force_connect: forceConnect }),
+        body: JSON.stringify({ email, password, proxyCountry }),
       })
 
       const data = await response.json()

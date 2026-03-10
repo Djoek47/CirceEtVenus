@@ -25,24 +25,28 @@ export async function GET(request: Request) {
     }
 
     const api = createOnlyFansAPI()
-    console.log('[v0] Conversations - Setting account ID:', connection.access_token)
-    api.setAccountId(connection.access_token)
+    
+    // Fetch fresh account ID from API (stored token may be outdated)
+    const accountsResult = await api.listAccounts()
+    if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
+      return NextResponse.json({ error: 'No OnlyFans accounts found' }, { status: 400 })
+    }
+    
+    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+    api.setAccountId(account.id)
 
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
     const unreadOnly = searchParams.get('unreadOnly') === 'true'
 
-    console.log('[v0] Conversations - Fetching with params:', { limit, offset, unreadOnly })
     const result = await api.getConversations({ limit, offset, unreadOnly })
-    console.log('[v0] Conversations - Result:', JSON.stringify(result).slice(0, 500))
 
     return NextResponse.json({
       conversations: result.conversations || [],
       total: result.total || 0,
     })
   } catch (error) {
-    console.error('[v0] Conversations - Error:', error)
     return NextResponse.json(
       { error: 'Failed to fetch conversations', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

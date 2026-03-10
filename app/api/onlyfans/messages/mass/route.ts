@@ -25,7 +25,14 @@ export async function POST(request: Request) {
     }
 
     const api = createOnlyFansAPI()
-    api.setAccountId(connection.access_token)
+    
+    // Fetch fresh account ID from API
+    const accountsResult = await api.listAccounts()
+    if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
+      return NextResponse.json({ error: 'No OnlyFans accounts found' }, { status: 400 })
+    }
+    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+    api.setAccountId(account.id)
 
     const body = await request.json()
     const { text, mediaIds, price, targetLists, excludeLists } = body

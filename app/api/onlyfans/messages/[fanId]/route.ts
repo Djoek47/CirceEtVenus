@@ -29,7 +29,14 @@ export async function GET(
     }
 
     const api = createOnlyFansAPI()
-    api.setAccountId(connection.access_token)
+    
+    // Fetch fresh account ID from API
+    const accountsResult = await api.listAccounts()
+    if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
+      return NextResponse.json({ error: 'No OnlyFans accounts found' }, { status: 400 })
+    }
+    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+    api.setAccountId(account.id)
 
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
@@ -76,7 +83,14 @@ export async function POST(
     }
 
     const api = createOnlyFansAPI()
-    api.setAccountId(connection.access_token)
+    
+    // Fetch fresh account ID from API
+    const accountsResult = await api.listAccounts()
+    if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
+      return NextResponse.json({ error: 'No OnlyFans accounts found' }, { status: 400 })
+    }
+    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+    api.setAccountId(account.id)
 
     const body = await request.json()
     const { text, mediaIds, price } = body

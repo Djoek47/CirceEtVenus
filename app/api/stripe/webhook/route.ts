@@ -47,12 +47,31 @@ async function upsertSubscriptionByStripeCustomerId(
 ) {
   const { data: existing } = await supabase
     .from('subscriptions')
-    .select('user_id')
+    .select('user_id,current_period_start,last_reset_at')
     .eq('stripe_customer_id', stripeCustomerId)
     .maybeSingle()
 
   if (!existing?.user_id) return
-  await upsertSubscriptionByUserId(supabase, existing.user_id, patch)
+
+  // Reset monthly counters when Stripe rolls to a new billing period.
+  // We detect this by a change in current_period_start.
+  const incomingStart = patch.current_period_start as string | undefined
+  const existingStart = existing.current_period_start as string | null | undefined
+  const shouldReset =
+    typeof incomingStart === 'string' &&
+    incomingStart.length > 0 &&
+    (!existingStart || new Date(incomingStart).getTime() !== new Date(existingStart).getTime())
+
+  const resetPatch = shouldReset
+    ? {
+        ai_credits_used: 0,
+        messages_sent: 0,
+        api_calls_used: 0,
+        last_reset_at: new Date().toISOString(),
+      }
+    : {}
+
+  await upsertSubscriptionByUserId(supabase, existing.user_id, { ...patch, ...resetPatch })
 }
 
 export async function POST(req: NextRequest) {

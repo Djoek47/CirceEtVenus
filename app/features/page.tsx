@@ -17,7 +17,7 @@ export const metadata = {
 }
 
 export default function FeaturesPage() {
-  const circeFeatres = [
+  const circeFeatures = [
     {
       icon: Shield,
       title: 'Aegis Protection',
@@ -223,7 +223,7 @@ export default function FeaturesPage() {
   }: { 
     title: string
     description: string
-    features: typeof circeFeatres
+    features: typeof circeFeatures
     color: 'circe' | 'venus' | 'primary'
   }) => (
     <div className="mb-16">
@@ -349,7 +349,7 @@ export default function FeaturesPage() {
             <FeatureSection
               title="Circe - Retention & Protection"
               description="The enchantress who keeps your fans captivated and your content safe."
-              features={circeFeatres}
+              features={circeFeatures}
               color="circe"
             />
 

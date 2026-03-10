@@ -153,8 +153,8 @@ ${task}`
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      // Updated to current Grok chat model; old 'grok-2-latest' is deprecated
-      model: 'grok-2-1212',
+      // Updated to current Grok chat model; old grok-2-* models are deprecated
+      model: 'grok-4-1-fast-reasoning',
       temperature: 0.65,
       messages: [
         { role: 'system', content: 'Return ONLY JSON. Do not include any commentary.' },

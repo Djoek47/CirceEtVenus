@@ -46,8 +46,8 @@ ${JSON.stringify(items, null, 2)}`
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      // Updated Grok model; old 'grok-2-latest' is deprecated
-      model: 'grok-2-1212',
+      // Updated Grok model; old grok-2-* models are deprecated
+      model: 'grok-4-1-fast-reasoning',
       temperature: 0.2,
       messages: [
         { role: 'system', content: system },

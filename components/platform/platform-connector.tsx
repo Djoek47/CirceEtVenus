@@ -123,6 +123,7 @@ export function PlatformConnector() {
     setError(null)
     
     try {
+      // Get client session token from our API
       const response = await fetch(`/api/${platformId}/auth`)
       const data = await response.json()
       
@@ -130,16 +131,42 @@ export function PlatformConnector() {
         throw new Error(data.error)
       }
       
-      // OnlyFans API uses a manual auth URL or embedded widget
-      if (data.manualAuthUrl) {
-        // Open the OnlyFans API connect page
-        window.open(data.manualAuthUrl, '_blank', 'width=600,height=700')
-        setSuccess('Please complete authentication in the popup window, then click Sync to import your data.')
-        setConnecting(null)
-      } else if (data.url) {
-        window.location.href = data.url
+      if (data.token) {
+        // Use the @onlyfansapi/auth package for embedded auth
+        const { startOnlyFansAuthentication } = await import('@onlyfansapi/auth')
+        
+        startOnlyFansAuthentication(data.token, {
+          onSuccess: async (authData) => {
+            // Store the connection in database
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              await supabase
+                .from('platform_connections')
+                .upsert({
+                  user_id: user.id,
+                  platform: 'onlyfans',
+                  platform_user_id: authData.accountId,
+                  platform_username: authData.username || 'Connected',
+                  is_connected: true,
+                  access_token: authData.accountId,
+                  last_sync_at: new Date().toISOString(),
+                }, {
+                  onConflict: 'user_id,platform'
+                })
+              
+              setSuccess(`Successfully connected OnlyFans account: @${authData.username}`)
+              await loadConnections()
+              setTimeout(() => setSuccess(null), 3000)
+            }
+            setConnecting(null)
+          },
+          onError: (authError) => {
+            setError(authError.message || 'Authentication failed')
+            setConnecting(null)
+          }
+        })
       } else {
-        throw new Error('No authentication URL received')
+        throw new Error('No authentication token received')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start connection')

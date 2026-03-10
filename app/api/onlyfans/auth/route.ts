@@ -13,7 +13,6 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.ONLYFANS_API_KEY
-    console.log('[v0] OnlyFans API key check:', { hasKey: !!apiKey, keyLength: apiKey?.length })
     if (!apiKey) {
       return NextResponse.json({ 
         error: 'OnlyFans API not configured. Please contact support.' 
@@ -22,13 +21,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { email, password, attemptId, twoFactorCode, proxyCountry = 'us' } = body
-
-    console.log('[v0] OnlyFans auth request:', { 
-      hasEmail: !!email, 
-      hasPassword: !!password, 
-      attemptId, 
-      has2FA: !!twoFactorCode 
-    })
 
     const api = createOnlyFansAPI()
 
@@ -142,30 +134,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
-    console.log('[v0] OnlyFans starting authentication for:', email)
     const result = await api.startAuthentication(email, password, proxyCountry)
-    console.log('[v0] OnlyFans startAuthentication result:', JSON.stringify(result))
 
-    // If we have an attempt_id, return it for polling (this is success)
+    // If we have an attempt_id, return success for polling
     if (result.attempt_id) {
-      console.log('[v0] OnlyFans got attempt_id, returning for polling')
       return NextResponse.json({
         attemptId: result.attempt_id,
         polling_url: result.polling_url,
         message: result.message || 'Authentication started. Please wait...'
-      })
+      }, { status: 200 })
+    }
+
+    // No attempt_id - check if this is an "already connected" error
+    if (result.message?.includes('already connected')) {
+      // Try to get existing accounts
+      const accountsResult = await api.listAccounts()
+      if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
+        const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+        
+        // Save connection
+        await supabase
+          .from('platform_connections')
+          .upsert({
+            user_id: user.id,
+            platform: 'onlyfans',
+            platform_user_id: account.id,
+            platform_username: account.onlyfans_username || 'Connected',
+            is_connected: true,
+            access_token: account.id,
+            last_sync_at: new Date().toISOString(),
+          }, {
+            onConflict: 'user_id,platform'
+          })
+
+        return NextResponse.json({ 
+          success: true, 
+          accountId: account.id,
+          username: account.onlyfans_username,
+          message: 'Account already connected - synced successfully!'
+        })
+      }
     }
 
     // No attempt_id means actual error
-    if (!result.success) {
-      return NextResponse.json({ error: result.message || 'Failed to start authentication' }, { status: 400 })
-    }
-
-    return NextResponse.json({
-      attemptId: result.attempt_id,
-      polling_url: result.polling_url,
-      message: result.message || 'Authentication started. Please wait...'
-    })
+    return NextResponse.json({ error: result.message || 'Failed to start authentication' }, { status: 400 })
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Authentication failed'

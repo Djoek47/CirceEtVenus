@@ -113,19 +113,16 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
-      console.log('[v0] OnlyFans startAuthentication response:', { status: response.status, data })
       
       // The API returns attempt_id and polling_url even on 400 status when auth is in progress
       // This is not an error - it means we need to poll
       if (data.attempt_id || data.polling_url) {
-        const result = {
+        return {
           success: true,
           attempt_id: data.attempt_id,
           polling_url: data.polling_url,
           message: data.message
         }
-        console.log('[v0] OnlyFans returning success with attempt_id:', result)
-        return result
       }
       
       if (!response.ok) {
@@ -161,7 +158,6 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
-      console.log('[v0] OnlyFans pollAuthenticationStatus response:', JSON.stringify(data))
 
       // Check for 2FA requirement
       if (data.twoFactorPending) {
@@ -212,7 +208,6 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
-      console.log('[v0] OnlyFans submit2FA response:', JSON.stringify(data))
 
       // API returns account object with id field on success (per docs)
       const accountId = data.account?.id || data.accountId || data.account_id || data.id
@@ -254,7 +249,6 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
-      console.log('[v0] OnlyFans listAccounts response:', JSON.stringify(data))
 
       if (Array.isArray(data)) {
         return { success: true, accounts: data }

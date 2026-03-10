@@ -40,6 +40,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useTheme } from 'next-themes'
 import { BirthdaySettings } from '@/components/settings/birthday-settings'
 import { BillingSection } from '@/components/settings/billing-section'
+import { SecuritySettings } from '@/components/settings/security-settings'
 import { PlatformConnector } from '@/components/platform/platform-connector'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
@@ -55,7 +56,6 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [fullName, setFullName] = useState('')
   const [timezone, setTimezone] = useState('America/Los_Angeles')
-  const [showApiKey, setShowApiKey] = useState(false)
   const [notifications, setNotifications] = useState({
     email: true,
     leakAlerts: true,
@@ -486,60 +486,7 @@ export default function SettingsPage() {
           {/* Security Section */}
           {activeTab === 'security' && (
             <>
-              <Card className="border-border bg-card">
-                <CardHeader>
-<CardTitle className="flex items-center gap-2 font-semibold">
-                <Shield className="h-5 w-5" />
-                Security Settings
-              </CardTitle>
-                  <CardDescription>
-                    Manage your account security and authentication
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label>Change Password</Label>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Input type="password" placeholder="Current password" className="bg-input" />
-                      <Input type="password" placeholder="New password" className="bg-input" />
-                    </div>
-                    <Button variant="outline" className="mt-2">Update Password</Button>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Smartphone className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Two-Factor Authentication</p>
-                        <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
-                      </div>
-                    </div>
-                    <Button variant="outline">Enable 2FA</Button>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Key className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">API Key</p>
-                        <p className="text-sm text-muted-foreground">For third-party integrations</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="rounded bg-muted px-2 py-1 text-xs">
-                        {showApiKey ? 'cev_live_sk_xxxxxxxxxxx' : '••••••••••••••••'}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                      >
-                        {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <SecuritySettings />
 
               <Card className="border-border bg-card">
                 <CardHeader>

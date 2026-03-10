@@ -75,7 +75,6 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient>, 
   
   if (!connection) return
   
-  // Add or update fan record
   await supabase
     .from('fans')
     .upsert({
@@ -92,6 +91,17 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient>, 
     }, {
       onConflict: 'user_id,platform,platform_fan_id'
     })
+
+  await supabase.from('notifications').insert({
+    user_id: connection.user_id,
+    type: 'fan',
+    title: 'New Subscriber',
+    description: `${subscriber.display_name || subscriber.username} subscribed on Fansly`,
+    link: '/dashboard/fans',
+    read: false,
+    platform: 'fansly',
+    avatar_url: subscriber.avatar || undefined,
+  })
 }
 
 async function handleSubscriptionRenewed(supabase: ReturnType<typeof createClient>, payload: any) {
@@ -179,7 +189,6 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient>, paylo
   }
   
   if (conversationId) {
-    // Add message
     await supabase
       .from('messages')
       .insert({
@@ -188,8 +197,7 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient>, paylo
         is_from_fan: true,
         platform_message_id: message.id,
       })
-    
-    // Update conversation last message
+
     await supabase
       .from('conversations')
       .update({
@@ -198,6 +206,19 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient>, paylo
         unread_count: supabase.rpc('increment_unread', { conv_id: conversationId })
       })
       .eq('id', conversationId)
+
+    const displayName = sender.display_name || sender.username ? `@${sender.username}` : 'a fan'
+    const preview = (message.text || '').trim().slice(0, 140)
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'message',
+      title: `New message from ${displayName}`,
+      description: preview || 'Sent you a new message',
+      link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
+      read: false,
+      platform: 'fansly',
+      avatar_url: sender.avatar || undefined,
+    })
   }
 }
 
@@ -213,13 +234,25 @@ async function handleNewTip(supabase: ReturnType<typeof createClient>, payload: 
   
   if (!connection) return
   
-  // Update fan's total spent
   await supabase.rpc('increment_fan_spent', {
     p_user_id: connection.user_id,
     p_platform: 'fansly',
     p_fan_id: sender.id,
     p_amount: tip.amount
   })
+
+  if (tip.amount >= 50) {
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'fan',
+      title: tip.amount >= 100 ? 'Whale Alert!' : 'Big Tip Received',
+      description: `${sender.display_name || sender.username} tipped $${tip.amount} on Fansly`,
+      link: '/dashboard/messages?fanId=' + encodeURIComponent(sender.id),
+      read: false,
+      platform: 'fansly',
+      avatar_url: sender.avatar || undefined,
+    })
+  }
 }
 
 async function handleNewFollower(supabase: ReturnType<typeof createClient>, payload: any) {

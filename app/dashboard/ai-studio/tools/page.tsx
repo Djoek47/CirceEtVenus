@@ -17,6 +17,7 @@ import {
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
+// Per-tool credits are shown below; each /api/ai/* route can deduct that tool's credits when run.
 interface AITool {
   id: string
   name: string

@@ -327,7 +327,7 @@ export default function AIStudioPage() {
             </Card>
           </div>
 
-          {/* AI Tools Grid */}
+          {/* AI Tools Grid — all cards open the Tools tab with real tools */}
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">AI Tools</h2>
@@ -335,6 +335,7 @@ export default function AIStudioPage() {
                 <Link href="/dashboard/ai-studio/tools">View All</Link>
               </Button>
             </div>
+            <p className="mb-3 text-sm text-muted-foreground">Click any card to open the Tools library. Each tool uses credits when run.</p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {aiTools.map((tool) => (
                 <Card 

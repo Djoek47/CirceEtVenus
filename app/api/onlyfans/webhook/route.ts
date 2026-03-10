@@ -131,7 +131,6 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient> e
     onConflict: 'user_id,platform,platform_fan_id'
   })
 
-  // Create notification
   await supabase.from('notifications').insert({
     user_id: connection.user_id,
     type: 'fan',
@@ -139,6 +138,8 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient> e
     description: `${data.fan.name} just subscribed for $${data.fan.subscriptionPrice}`,
     link: '/dashboard/fans',
     read: false,
+    platform: 'onlyfans',
+    avatar_url: data.fan.avatar || undefined,
   })
 }
 
@@ -208,7 +209,7 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
   accountId: string
   message: {
     id: string
-    fromUser: { id: string; username: string; name: string }
+    fromUser: { id: string; username: string; name: string; avatar?: string }
     text: string
     createdAt: string
   }
@@ -234,17 +235,23 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
     is_read: false,
   })
 
-  // Update fan's last activity
+  // Get fan for avatar and whale tier (total_spent)
+  const { data: fan } = await supabase
+    .from('fans')
+    .select('avatar_url, total_spent')
+    .eq('user_id', connection.user_id)
+    .eq('platform', 'onlyfans')
+    .eq('platform_fan_id', data.message.fromUser.id)
+    .maybeSingle()
+
   await supabase.from('fans')
     .update({ last_activity_at: new Date().toISOString() })
     .eq('user_id', connection.user_id)
     .eq('platform_fan_id', data.message.fromUser.id)
 
-  // Create an in-app notification for the new message
   const displayName =
     data.message.fromUser.name ||
     (data.message.fromUser.username ? `@${data.message.fromUser.username}` : 'a fan')
-
   const rawText = data.message.text || ''
   const trimmedText = rawText.trim()
   const maxLength = 140
@@ -255,13 +262,21 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
         ? trimmedText.slice(0, maxLength - 1) + '…'
         : trimmedText
 
+  const totalSpent = fan?.total_spent != null ? Number(fan.total_spent) : 0
+  const isWhale = totalSpent >= 100
+  const title = isWhale ? `Whale wrote back` : `New message from ${displayName}`
+  const avatarUrl =
+    data.message.fromUser.avatar || (fan?.avatar_url ?? null)
+
   await supabase.from('notifications').insert({
     user_id: connection.user_id,
     type: 'message',
-    title: `New message from ${displayName}`,
+    title,
     description: preview,
     link: `/dashboard/messages?fanId=${encodeURIComponent(data.message.fromUser.id)}`,
     read: false,
+    platform: 'onlyfans',
+    avatar_url: avatarUrl || undefined,
   })
 }
 
@@ -289,15 +304,17 @@ async function handleTip(supabase: ReturnType<typeof createClient> extends Promi
     p_amount: data.tip.amount,
   })
 
-  // Create notification for large tips
   if (data.tip.amount >= 50) {
+    const fromUser = data.tip.fromUser as { id: string; username: string; name: string; avatar?: string }
     await supabase.from('notifications').insert({
       user_id: connection.user_id,
       type: 'fan',
       title: data.tip.amount >= 100 ? 'Whale Alert!' : 'Big Tip Received',
-      description: `${data.tip.fromUser.name} tipped $${data.tip.amount}`,
-      link: '/dashboard/fans',
+      description: `${fromUser.name} tipped $${data.tip.amount}`,
+      link: '/dashboard/messages?fanId=' + encodeURIComponent(fromUser.id),
       read: false,
+      platform: 'onlyfans',
+      avatar_url: fromUser.avatar || undefined,
     })
   }
 }

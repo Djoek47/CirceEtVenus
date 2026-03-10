@@ -7,6 +7,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
+const PRO_PLANS = ['venus-pro', 'circe-elite', 'divine-duo']
+
 function getPlanLimits(planId: string) {
   switch (planId) {
     case 'venus-pro':
@@ -40,6 +42,22 @@ async function upsertSubscriptionByUserId(
     )
 }
 
+async function notifyPlanChange(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  planId: string | undefined,
+) {
+  if (!planId || !PRO_PLANS.includes(planId.toLowerCase())) return
+  await supabase.from('notifications').insert({
+    user_id: userId,
+    type: 'system',
+    title: 'Plan upgraded',
+    description: 'Your Pro plan is now active. You have full access to Circe & Venus tools.',
+    link: '/dashboard/ai-studio',
+    read: false,
+  })
+}
+
 async function upsertSubscriptionByStripeCustomerId(
   supabase: ReturnType<typeof createClient>,
   stripeCustomerId: string,
@@ -47,14 +65,12 @@ async function upsertSubscriptionByStripeCustomerId(
 ) {
   const { data: existing } = await supabase
     .from('subscriptions')
-    .select('user_id,current_period_start,last_reset_at')
+    .select('user_id,current_period_start,last_reset_at,plan_id')
     .eq('stripe_customer_id', stripeCustomerId)
     .maybeSingle()
 
   if (!existing?.user_id) return
 
-  // Reset monthly counters when Stripe rolls to a new billing period.
-  // We detect this by a change in current_period_start.
   const incomingStart = patch.current_period_start as string | undefined
   const existingStart = existing.current_period_start as string | null | undefined
   const shouldReset =
@@ -71,7 +87,15 @@ async function upsertSubscriptionByStripeCustomerId(
       }
     : {}
 
+  const incomingPlanId = (patch.plan_id as string)?.toLowerCase()
+  const wasPro = existing.plan_id && PRO_PLANS.includes(String(existing.plan_id).toLowerCase())
+  const isPro = incomingPlanId && PRO_PLANS.includes(incomingPlanId)
+
   await upsertSubscriptionByUserId(supabase, existing.user_id, { ...patch, ...resetPatch })
+
+  if (isPro && !wasPro) {
+    await notifyPlanChange(supabase, existing.user_id, patch.plan_id)
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -109,6 +133,7 @@ export async function POST(req: NextRequest) {
             stripe_customer_id: customerId,
             ...(planId ? { plan_id: planId } : {}),
           })
+          if (planId) await notifyPlanChange(supabase, userId, planId)
         }
         break
       }

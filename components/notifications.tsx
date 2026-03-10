@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import { Bell, Check, MessageSquare, Shield, TrendingUp, Users, X, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +22,8 @@ interface Notification {
   read: boolean
   created_at: string
   link?: string
+  platform?: 'onlyfans' | 'fansly' | null
+  avatar_url?: string | null
 }
 
 const getIcon = (type: Notification['type']) => {
@@ -109,7 +112,7 @@ export function Notifications() {
     // Fetch notifications from database
     const { data: dbNotifications, error } = await supabase
       .from('notifications')
-      .select('*')
+      .select('id, type, title, description, read, created_at, link, platform, avatar_url')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
     
@@ -131,6 +134,8 @@ export function Notifications() {
         description: n.description,
         read: n.read,
         link: n.link,
+        platform: null,
+        avatar_url: null,
       }))
       
       const { data: inserted, error: insertError } = await supabase
@@ -270,7 +275,39 @@ export function Notifications() {
                   )}
                 >
                   <div className="mt-0.5 flex-shrink-0">
-                    {getIcon(notification.type)}
+                    {notification.platform ? (
+                      <div className="relative h-10 w-10">
+                        {notification.avatar_url ? (
+                          <div className="relative h-10 w-10 overflow-hidden rounded-full bg-muted ring-2 ring-border">
+                            <Image
+                              src={notification.avatar_url}
+                              alt=""
+                              width={40}
+                              height={40}
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted ring-2 ring-border">
+                            {notification.platform === 'onlyfans' ? (
+                              <img src="/onlyfans-logo.png" alt="OnlyFans" className="h-5 w-5 object-contain" />
+                            ) : (
+                              <img src="/fansly-logo.png" alt="Fansly" className="h-5 w-5 object-contain" />
+                            )}
+                          </div>
+                        )}
+                        <div className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-muted overflow-hidden">
+                          {notification.platform === 'onlyfans' ? (
+                            <img src="/onlyfans-logo.png" alt="" className="h-3 w-3 object-contain" />
+                          ) : (
+                            <img src="/fansly-logo.png" alt="" className="h-3 w-3 object-contain" />
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      getIcon(notification.type)
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <a 

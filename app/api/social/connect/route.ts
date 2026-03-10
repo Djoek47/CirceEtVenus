@@ -17,25 +17,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Platform and username are required' }, { status: 400 })
     }
 
-    // For now, we'll create a placeholder profile
-    // In production, you would integrate with each platform's API:
-    // - Instagram: Meta Graph API (requires business account)
-    // - TikTok: TikTok API for Business
-    // - Twitter/X: X API v2
-    
-    // Generate realistic placeholder data based on platform
+    // Store profile for reputation scanning; platform stats require official API keys.
     const profileData = {
       user_id: user.id,
       platform,
       username: username.replace('@', ''),
-      followers: Math.floor(Math.random() * 50000) + 1000,
-      following: Math.floor(Math.random() * 1000) + 100,
-      posts: Math.floor(Math.random() * 500) + 50,
-      engagement_rate: parseFloat((Math.random() * 5 + 1).toFixed(2)),
-      avg_likes: Math.floor(Math.random() * 5000) + 100,
-      avg_comments: Math.floor(Math.random() * 200) + 10,
-      reputation_score: Math.floor(Math.random() * 40) + 50, // 50-90 range
-      sentiment: ['positive', 'neutral', 'negative'][Math.floor(Math.random() * 3)] as 'positive' | 'neutral' | 'negative',
+      followers: 0,
+      following: 0,
+      posts: 0,
+      engagement_rate: 0,
+      avg_likes: 0,
+      avg_comments: 0,
+      reputation_score: 50,
+      sentiment: 'neutral' as const,
       last_updated: new Date().toISOString(),
     }
 

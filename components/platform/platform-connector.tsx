@@ -108,9 +108,10 @@ export function PlatformConnector() {
 
     try {
       if (platformId === 'onlyfans') {
-        // Open OnlyFans API connect page
-        window.open('https://app.onlyfansapi.com/connect', '_blank', 'width=600,height=700')
-        setSuccess('Complete authentication in the popup window, then click Sync to import your data.')
+        // Open OnlyFans API Console to connect account
+        // Users connect their OF account there, then come back to sync
+        window.open('https://app.onlyfansapi.com/accounts', '_blank', 'width=800,height=700')
+        setSuccess('Connect your OnlyFans account in the console, then return here and click "Sync Now" to import your data.')
         
         // Create a pending connection record
         const { data: { user } } = await supabase.auth.getUser()

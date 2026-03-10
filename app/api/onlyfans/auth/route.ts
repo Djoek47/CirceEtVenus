@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
-// GET: Create a client session token for embedded auth
+// GET: Return the OnlyFans API console URL for manual connection
+// Users connect their account in the OnlyFansAPI console, then sync from our app
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -20,35 +21,16 @@ export async function GET() {
       }, { status: 500 })
     }
 
-    try {
-      const api = createOnlyFansAPI()
-      
-      // Create a client session for embedded auth widget
-      // POST /client-sessions returns a token like ofapi_cs_xxx
-      const session = await api.createClientSession(
-        `Circe et Venus - ${user.email}`,
-        'us'
-      )
-
-      return NextResponse.json({ 
-        token: session.token,
-        userId: user.id
-      })
-    } catch (apiError) {
-      console.error('OnlyFans API error:', apiError)
-      
-      // Fallback: Return the API key directly as token if client session creation fails
-      // The @onlyfansapi/auth package can use the API key directly in some cases
-      return NextResponse.json({ 
-        token: apiKey,
-        userId: user.id,
-        fallback: true
-      })
-    }
+    // Return the console URL - users connect their OF account there
+    return NextResponse.json({ 
+      consoleUrl: 'https://app.onlyfansapi.com/accounts',
+      userId: user.id,
+      instructions: 'Connect your OnlyFans account in the console, then return here and sync.'
+    })
   } catch (error) {
-    console.error('Error creating client session:', error)
+    console.error('Error in auth endpoint:', error)
     return NextResponse.json(
-      { error: 'Failed to create authentication session. Please try again.' },
+      { error: 'Failed to initialize. Please try again.' },
       { status: 500 }
     )
   }

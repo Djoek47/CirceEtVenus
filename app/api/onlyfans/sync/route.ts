@@ -12,8 +12,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get the OnlyFans connection
-    const { data: connection } = await supabase
+    const api = createOnlyFansAPI()
+    
+    // First check if we have an existing connection
+    let { data: connection } = await supabase
       .from('platform_connections')
       .select('*')
       .eq('user_id', user.id)
@@ -21,20 +23,69 @@ export async function POST(request: NextRequest) {
       .eq('is_connected', true)
       .single()
 
+    // If no connection, try to auto-detect from OnlyFans API
+    if (!connection) {
+      console.log('[v0] Sync - No connection found, auto-detecting from API')
+      const accountsResult = await api.listAccounts()
+      
+      if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
+        const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+        console.log('[v0] Sync - Found account:', account.id, account.onlyfans_username)
+        
+        // Delete any old disconnected entries first
+        await supabase
+          .from('platform_connections')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('platform', 'onlyfans')
+        
+        // Insert the new connection
+        const { error: insertError } = await supabase
+          .from('platform_connections')
+          .insert({
+            user_id: user.id,
+            platform: 'onlyfans',
+            platform_username: account.onlyfans_username || 'Connected',
+            is_connected: true,
+            access_token: account.id,
+            last_sync_at: new Date().toISOString(),
+          })
+        
+        if (insertError) {
+          console.log('[v0] Sync - Failed to save connection:', insertError.message)
+          return NextResponse.json({ error: 'Failed to save connection: ' + insertError.message }, { status: 500 })
+        }
+        
+        // Re-fetch the connection
+        const { data: newConn } = await supabase
+          .from('platform_connections')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('platform', 'onlyfans')
+          .eq('is_connected', true)
+          .single()
+        
+        connection = newConn
+        console.log('[v0] Sync - Connection saved successfully')
+      } else {
+        console.log('[v0] Sync - No accounts found on API')
+        return NextResponse.json({ error: 'No OnlyFans account connected. Please connect your account first.' }, { status: 400 })
+      }
+    }
+
     if (!connection) {
       return NextResponse.json({ error: 'OnlyFans not connected' }, { status: 400 })
     }
 
-    const api = createOnlyFansAPI()
     // Set the account ID for API requests
     api.setAccountId(connection.access_token)
 
-    // First, try to get account data from listAccounts (which includes onlyfans_user_data)
+    // Get account data from listAccounts (which includes onlyfans_user_data)
     const accountsResult = await api.listAccounts()
     const accountData = accountsResult.accounts?.find(a => a.id === connection.access_token)
     const userData = (accountData as any)?.onlyfans_user_data || {}
 
-
+    console.log('[v0] Sync - Got userData with keys:', Object.keys(userData).slice(0, 10))
 
     // Try to fetch detailed data, fall back to userData from listAccounts
     let stats = { fans: { total: 0, active: 0, expired: 0, new: 0 }, earnings: { today: 0, thisWeek: 0, thisMonth: 0, total: 0 }, content: { posts: 0, photos: 0, videos: 0 } }
@@ -57,7 +108,6 @@ export async function POST(request: NextRequest) {
       if (fansRes) fansData = fansRes
       if (convoRes) conversationsData = convoRes
       if (chartRes) chartData = chartRes
-      
     } catch {
       // API fetch failed, will use userData fallback
     }
@@ -73,28 +123,39 @@ export async function POST(request: NextRequest) {
       stats.content.videos = userData.videosCount || 0
     }
 
+    console.log('[v0] Sync - Stats:', { totalFans: stats.fans.total, posts: stats.content.posts })
+
     // Store today's analytics snapshot
-    // Delete existing entry for today first, then insert (no unique constraint for upsert)
     const today = new Date().toISOString().split('T')[0]
+    
+    // Delete existing entry for today first
     await supabase.from('analytics_snapshots')
       .delete()
       .eq('user_id', user.id)
       .eq('platform', 'onlyfans')
       .eq('date', today)
     
-    const { error: snapshotError } = await supabase.from('analytics_snapshots').insert({
+    const snapshotData = {
       user_id: user.id,
       platform: 'onlyfans',
       date: today,
-      total_fans: stats.fans.total,
+      total_fans: stats.fans.total || 0,
       new_fans: stats.fans.new || 0,
       churned_fans: stats.fans.expired || 0,
       revenue: stats.earnings?.today || earningsData.total || 0,
       messages_received: conversationsData.conversations?.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0) || 0,
       messages_sent: 0,
-    })
+    }
     
-
+    console.log('[v0] Sync - Inserting snapshot:', snapshotData)
+    
+    const { error: snapshotError } = await supabase.from('analytics_snapshots').insert(snapshotData)
+    
+    if (snapshotError) {
+      console.log('[v0] Sync - Snapshot insert error:', snapshotError.message)
+    } else {
+      console.log('[v0] Sync - Snapshot inserted successfully')
+    }
 
     // Store historical chart data (last 30 days) - skip if no data
     if (chartData.data && chartData.data.length > 0) {
@@ -103,10 +164,10 @@ export async function POST(request: NextRequest) {
         .delete()
         .eq('user_id', user.id)
         .eq('platform', 'onlyfans')
-        .neq('date', today) // Don't delete today's data we just inserted
+        .neq('date', today)
       
       const chartSnapshots = chartData.data
-        .filter((point: any) => point.date !== today) // Skip today since we already inserted it
+        .filter((point: any) => point.date !== today)
         .map((point: any) => ({
           user_id: user.id,
           platform: 'onlyfans',
@@ -134,13 +195,10 @@ export async function POST(request: NextRequest) {
         username: fan.username,
         display_name: fan.name,
         avatar_url: fan.avatar,
-        subscribed_at: fan.subscribedAt,
-        expires_at: fan.expiresAt,
+        first_subscribed_at: fan.subscribedAt,
         total_spent: fan.totalSpent,
-        subscription_price: fan.subscriptionPrice,
-        is_renewing: fan.isRenewOn,
-        tier: fan.totalSpent >= 500 ? 'vip' : fan.totalSpent >= 100 ? 'whale' : 'regular',
-        last_activity_at: new Date().toISOString(),
+        subscription_tier: fan.totalSpent >= 500 ? 'vip' : fan.totalSpent >= 100 ? 'whale' : 'regular',
+        last_interaction_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id,platform,platform_fan_id'
       })
@@ -164,7 +222,7 @@ export async function POST(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error('Sync error:', error)
+    console.error('[v0] Sync error:', error)
     return NextResponse.json(
       { error: 'Failed to sync data' },
       { status: 500 }

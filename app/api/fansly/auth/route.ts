@@ -68,7 +68,8 @@ export async function GET() {
   }
 }
 
-// POST: Link an existing Fansly account to user's CRM profile
+// POST: Link an existing Fansly account (already connected to API) to user's CRM profile
+// This does NOT create new connections to the Fansly API - it just links existing accounts
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -78,127 +79,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const apiKey = process.env.FANSLY_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ 
-        error: 'Fansly API not configured. Please add FANSLY_API_KEY to environment variables.' 
-      }, { status: 500 })
-    }
-
     const body = await request.json()
-    const { username, password, twoFactorToken, twoFactorCode, countryCode = 'US' } = body
+    const { accountId, username, displayName } = body
 
-    if (!username || !password) {
-      return NextResponse.json({ error: 'Username and password are required' }, { status: 400 })
+    // Validate required fields - we only need accountId and username from the pre-connected account
+    if (!accountId) {
+      return NextResponse.json({ error: 'Account ID is required' }, { status: 400 })
     }
 
-    const api = createFanslyAPI()
-
-    // If 2FA token and code are provided, submit 2FA
-    if (twoFactorToken && twoFactorCode) {
-      const result = await api.submit2FA(
-        username,
-        password,
-        twoFactorToken,
-        twoFactorCode,
-        `Circe et Venus - ${user.email}`,
-        countryCode
-      )
-
-      if (result.success && result.account_id) {
-        // Store the connection
-        await supabase
-          .from('platform_connections')
-          .upsert({
-            user_id: user.id,
-            platform: 'fansly',
-            platform_user_id: result.account_id,
-            platform_username: username,
-            is_connected: true,
-            access_token: result.account_id,
-            last_sync_at: new Date().toISOString(),
-          }, {
-            onConflict: 'user_id,platform'
-          })
-
-        return NextResponse.json({ 
-          success: true, 
-          accountId: result.account_id,
-          username: username
-        })
-      }
-
-      return NextResponse.json({ 
-        error: result.message || '2FA verification failed' 
-      }, { status: 400 })
-    }
-
-    // Initial connection attempt
-    const result = await api.connectAccount(username, password, countryCode)
-
-    if (result.requires_2fa && result.twoFactorToken) {
-      return NextResponse.json({
-        requires_2fa: true,
-        twoFactorToken: result.twoFactorToken,
-        message: 'Please enter the 2FA code sent to your email/phone'
+    // Store the connection in database - linking existing API account to CRM user
+    const { error: dbError } = await supabase
+      .from('platform_connections')
+      .upsert({
+        user_id: user.id,
+        platform: 'fansly',
+        platform_user_id: accountId,
+        platform_username: username || displayName || 'Fansly User',
+        is_connected: true,
+        access_token: accountId, // Store accountId as token for API calls
+        last_sync_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,platform'
       })
-    }
 
-    if (result.success && result.account_id) {
-      // Store the connection
-      await supabase
-        .from('platform_connections')
-        .upsert({
-          user_id: user.id,
-          platform: 'fansly',
-          platform_user_id: result.account_id,
-          platform_username: username,
-          is_connected: true,
-          access_token: result.account_id,
-          last_sync_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,platform'
-        })
-
-      return NextResponse.json({ 
-        success: true, 
-        accountId: result.account_id,
-        username: username
-      })
+    if (dbError) {
+      console.error('Database error linking Fansly account:', dbError)
+      return NextResponse.json({ error: 'Failed to save connection' }, { status: 500 })
     }
 
     return NextResponse.json({ 
-      error: result.message || 'Connection failed' 
-    }, { status: 400 })
+      success: true, 
+      accountId: accountId,
+      username: username || displayName
+    })
 
   } catch (error) {
-    console.error('Fansly auth error:', error)
-    
-    const errorMessage = error instanceof Error ? error.message : 'Authentication failed'
-    
-    // Handle specific API errors with user-friendly messages
-    if (errorMessage.includes('Account limit reached')) {
-      return NextResponse.json({
-        error: 'Account limit reached on your Fansly API plan. Please upgrade at apifansly.com to connect more accounts.',
-        upgradeRequired: true,
-        upgradeUrl: 'https://apifansly.com/pricing'
-      }, { status: 402 })
-    }
-    
-    if (errorMessage.includes('Invalid credentials') || errorMessage.includes('incorrect')) {
-      return NextResponse.json({
-        error: 'Invalid Fansly username or password. Please check your credentials and try again.'
-      }, { status: 401 })
-    }
-    
-    if (errorMessage.includes('rate limit') || errorMessage.includes('too many')) {
-      return NextResponse.json({
-        error: 'Too many requests. Please wait a moment and try again.'
-      }, { status: 429 })
-    }
-    
+    console.error('Fansly link error:', error)
     return NextResponse.json(
-      { error: errorMessage },
+      { error: error instanceof Error ? error.message : 'Failed to link account' },
       { status: 500 }
     )
   }

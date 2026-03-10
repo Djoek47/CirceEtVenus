@@ -88,6 +88,15 @@ export function PlatformIntegrationWidget() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   
+  // OnlyFans login dialog state
+  const [onlyfansDialogOpen, setOnlyfansDialogOpen] = useState(false)
+  const [onlyfansEmail, setOnlyfansEmail] = useState('')
+  const [onlyfansPassword, setOnlyfansPassword] = useState('')
+  const [onlyfansAttemptId, setOnlyfansAttemptId] = useState<string | null>(null)
+  const [onlyfans2FACode, setOnlyfans2FACode] = useState('')
+  const [onlyfansLoading, setOnlyfansLoading] = useState(false)
+  const [onlyfansStatus, setOnlyfansStatus] = useState<string | null>(null)
+  
   // Fansly login dialog state
   const [fanslyDialogOpen, setFanslyDialogOpen] = useState(false)
   const [fanslyEmail, setFanslyEmail] = useState('')
@@ -202,93 +211,143 @@ export function PlatformIntegrationWidget() {
     }
   }
 
-  const handleConnectOnlyFans = async () => {
-    setConnecting('onlyfans')
+  // Open OnlyFans login dialog
+  const openOnlyfansDialog = () => {
+    setOnlyfansEmail('')
+    setOnlyfansPassword('')
+    setOnlyfansAttemptId(null)
+    setOnlyfans2FACode('')
+    setOnlyfansStatus(null)
+    setOnlyfansDialogOpen(true)
+  }
+
+  // Handle OnlyFans login
+  const handleOnlyfansLogin = async () => {
+    setOnlyfansLoading(true)
     setError(null)
-    
+    setOnlyfansStatus(null)
+
     try {
-      const response = await fetch('/api/onlyfans/auth')
+      const response = await fetch('/api/onlyfans/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: onlyfansEmail,
+          password: onlyfansPassword,
+          attemptId: onlyfansAttemptId,
+          twoFactorCode: onlyfans2FACode || undefined,
+        }),
+      })
+
       const data = await response.json()
-      
+
+      // If we got an attemptId, start polling for status
+      if (data.attemptId && !data.success && !data.requires_2fa) {
+        setOnlyfansAttemptId(data.attemptId)
+        setOnlyfansStatus(data.message || 'Processing authentication...')
+        
+        // Start polling
+        pollOnlyfansStatus(data.attemptId)
+        return
+      }
+
+      // If 2FA required
+      if (data.requires_2fa) {
+        setOnlyfansAttemptId(data.attemptId)
+        setOnlyfansStatus('2FA code required')
+        setOnlyfansLoading(false)
+        return
+      }
+
+      // If error
       if (data.error) {
         throw new Error(data.error)
       }
-      
-      if (!data.token) {
-        throw new Error('No authentication token received')
+
+      // Success!
+      if (data.success) {
+        setOnlyfansDialogOpen(false)
+        setOnlyfansEmail('')
+        setOnlyfansPassword('')
+        setOnlyfansAttemptId(null)
+        setOnlyfans2FACode('')
+        setSuccess('OnlyFans connected! Syncing your data...')
+        await loadConnections()
+
+        // Auto-sync data
+        try {
+          await fetch('/api/onlyfans/sync', { method: 'POST' })
+          setSuccess('OnlyFans synced! Refreshing...')
+          setTimeout(() => window.location.reload(), 1500)
+        } catch {
+          setSuccess('Connected! Click Sync to import your data.')
+          setTimeout(() => setSuccess(null), 3000)
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect OnlyFans')
+    } finally {
+      setOnlyfansLoading(false)
+    }
+  }
+
+  // Poll for OnlyFans authentication status
+  const pollOnlyfansStatus = async (attemptId: string) => {
+    let pollCount = 0
+    const maxPolls = 30 // Poll for up to 1 minute
+
+    const poll = async () => {
+      pollCount++
+      if (pollCount > maxPolls) {
+        setOnlyfansLoading(false)
+        setError('Authentication timed out. Please try again.')
+        return
       }
 
-      const { startOnlyFansAuthentication } = await import('@onlyfansapi/auth')
-      
-      // Store user ID for the callback
-      const { data: { user } } = await supabase.auth.getUser()
-      const userId = user?.id
-      
-      // Start polling to check for new accounts via API
-      let pollCount = 0
-      const maxPolls = 60 // Poll for up to 2 minutes
-      const pollInterval = setInterval(async () => {
-        pollCount++
-        if (pollCount > maxPolls) {
-          clearInterval(pollInterval)
+      try {
+        const response = await fetch('/api/onlyfans/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attemptId }),
+        })
+
+        const data = await response.json()
+
+        if (data.requires_2fa) {
+          setOnlyfansStatus('Please enter your 2FA code')
+          setOnlyfansLoading(false)
           return
         }
-        
-        try {
-          // Check if account was connected via API callback
-          const checkResponse = await fetch('/api/onlyfans/check-connection')
-          const checkData = await checkResponse.json()
-          
-          if (checkData.connected && checkData.accountId) {
-            clearInterval(pollInterval)
-            handleOnlyFansCallback(checkData.accountId, checkData.username || '')
-            setConnecting(null)
-          }
-        } catch {
-          // Continue polling
-        }
-      }, 2000)
 
-      startOnlyFansAuthentication(data.token, {
-        onSuccess: async (result: { accountId: string; username?: string }) => {
-          clearInterval(pollInterval)
-          
-          if (userId) {
-            await handleOnlyFansCallback(result.accountId, result.username || '')
+        if (data.success && data.accountId) {
+          setOnlyfansDialogOpen(false)
+          setSuccess('OnlyFans connected! Syncing...')
+          await loadConnections()
+          try {
+            await fetch('/api/onlyfans/sync', { method: 'POST' })
+            setTimeout(() => window.location.reload(), 1500)
+          } catch {
+            setTimeout(() => setSuccess(null), 3000)
           }
-          setConnecting(null)
-        },
-        onError: (err: { message?: string }) => {
-          clearInterval(pollInterval)
-          setError(err.message || 'Authentication failed')
-          setConnecting(null)
-        },
-        onClose: () => {
-          // Give it a moment then check if connected
-          setTimeout(async () => {
-            clearInterval(pollInterval)
-            
-            // Check via API if connection was made
-            try {
-              const checkResponse = await fetch('/api/onlyfans/check-connection')
-              const checkData = await checkResponse.json()
-              
-              if (checkData.connected && checkData.accountId) {
-                handleOnlyFansCallback(checkData.accountId, checkData.username || '')
-              }
-            } catch {
-              // Silent fail
-            }
-            
-            setConnecting(null)
-          }, 500)
+          setOnlyfansLoading(false)
+          return
         }
-      })
-    } catch (err) {
-      console.error('[v0] OnlyFans connection error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to connect')
-      setConnecting(null)
+
+        if (data.error || data.status === 'failed') {
+          setError(data.error || data.message || 'Authentication failed')
+          setOnlyfansLoading(false)
+          return
+        }
+
+        // Still pending, continue polling
+        setOnlyfansStatus(data.message || 'Processing...')
+        setTimeout(poll, 2000)
+      } catch {
+        setTimeout(poll, 2000)
+      }
     }
+
+    poll()
   }
 
   // Open Fansly login dialog
@@ -362,7 +421,7 @@ export function PlatformIntegrationWidget() {
 
   const handleConnect = async (platformId: string) => {
     if (platformId === 'onlyfans') {
-      handleConnectOnlyFans()
+      openOnlyfansDialog()
     } else if (platformId === 'fansly') {
       openFanslyDialog()
     } else {
@@ -638,6 +697,121 @@ export function PlatformIntegrationWidget() {
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
               {fansly2FAToken ? 'Verify & Connect' : 'Connect Fansly'}
+            </Button>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Your credentials are securely encrypted and never stored locally
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* OnlyFans Login Dialog */}
+      <Dialog open={onlyfansDialogOpen} onOpenChange={setOnlyfansDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div 
+                className="flex h-12 w-12 items-center justify-center rounded-xl"
+                style={{ backgroundColor: '#00AFF015', color: '#00AFF0' }}
+              >
+                <OnlyFansLogo />
+              </div>
+              <div>
+                <DialogTitle>Connect OnlyFans</DialogTitle>
+                <DialogDescription>
+                  {onlyfansAttemptId && onlyfansStatus?.includes('2FA')
+                    ? 'Enter your 2FA code to complete authentication'
+                    : 'Sign in with your OnlyFans credentials'
+                  }
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {onlyfansStatus && (
+              <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-sm text-blue-400 flex items-center gap-2">
+                {onlyfansLoading && <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />}
+                {onlyfansStatus}
+              </div>
+            )}
+
+            {!onlyfansAttemptId ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="onlyfans-email" className="text-sm font-medium">
+                    Email
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="onlyfans-email"
+                      type="email"
+                      placeholder="your@email.com"
+                      value={onlyfansEmail}
+                      onChange={(e) => setOnlyfansEmail(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="onlyfans-password" className="text-sm font-medium">
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="onlyfans-password"
+                      type="password"
+                      placeholder="Enter your password"
+                      value={onlyfansPassword}
+                      onChange={(e) => setOnlyfansPassword(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : onlyfansStatus?.includes('2FA') ? (
+              <div className="space-y-2">
+                <Label htmlFor="onlyfans-2fa" className="text-sm font-medium">
+                  Verification Code
+                </Label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="onlyfans-2fa"
+                    type="text"
+                    placeholder="Enter 6-digit code"
+                    value={onlyfans2FACode}
+                    onChange={(e) => setOnlyfans2FACode(e.target.value)}
+                    className="pl-10 text-center text-lg tracking-widest"
+                    maxLength={6}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Check your email or authenticator app for the code
+                </p>
+              </div>
+            ) : null}
+
+            <Button
+              className="w-full"
+              style={{ 
+                background: 'linear-gradient(135deg, #00AFF0, #0090C0)',
+              }}
+              onClick={handleOnlyfansLogin}
+              disabled={onlyfansLoading || (!onlyfansAttemptId && (!onlyfansEmail || !onlyfansPassword))}
+            >
+              {onlyfansLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              {onlyfansAttemptId && onlyfansStatus?.includes('2FA') 
+                ? 'Verify & Connect' 
+                : onlyfansAttemptId 
+                  ? 'Processing...'
+                  : 'Connect OnlyFans'
+              }
             </Button>
 
             <p className="text-xs text-muted-foreground text-center">

@@ -90,6 +90,123 @@ class OnlyFansAPI {
     this.accountId = options?.accountId || null
   }
 
+  // ============ DIRECT AUTHENTICATION (bypassing SDK modal) ============
+
+  /**
+   * Start authentication - POST /api/authenticate
+   * Returns attempt_id and polling_url
+   */
+  async startAuthentication(email: string, password: string, proxyCountry: string = 'us'): Promise<{
+    success: boolean
+    attempt_id?: string
+    polling_url?: string
+    message?: string
+  }> {
+    try {
+      const response = await fetch(`${ONLYFANS_API_BASE}/authenticate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, proxyCountry }),
+      })
+
+      const data = await response.json()
+      
+      if (!response.ok) {
+        return { success: false, message: data.message || data.error || 'Authentication failed' }
+      }
+
+      return {
+        success: true,
+        attempt_id: data.attempt_id,
+        polling_url: data.polling_url,
+        message: data.message
+      }
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Connection failed' }
+    }
+  }
+
+  /**
+   * Poll authentication status - GET /api/authenticate/{attempt_id}
+   */
+  async pollAuthenticationStatus(attemptId: string): Promise<{
+    status: 'pending' | 'success' | 'failed' | '2fa_required'
+    accountId?: string
+    username?: string
+    twoFactorPending?: boolean
+    message?: string
+  }> {
+    try {
+      const response = await fetch(`${ONLYFANS_API_BASE}/authenticate/${attemptId}`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (data.twoFactorPending) {
+        return { status: '2fa_required', message: 'Please enter your 2FA code' }
+      }
+
+      if (data.accountId || data.account_id) {
+        return {
+          status: 'success',
+          accountId: data.accountId || data.account_id,
+          username: data.username,
+        }
+      }
+
+      if (data.error || data.failed) {
+        return { status: 'failed', message: data.message || data.error }
+      }
+
+      return { status: 'pending', message: data.message || 'Processing...' }
+    } catch (error) {
+      return { status: 'failed', message: error instanceof Error ? error.message : 'Poll failed' }
+    }
+  }
+
+  /**
+   * Submit 2FA code - PUT /api/authenticate/{attempt_id}
+   */
+  async submit2FA(attemptId: string, code: string): Promise<{
+    success: boolean
+    accountId?: string
+    username?: string
+    message?: string
+  }> {
+    try {
+      const response = await fetch(`${ONLYFANS_API_BASE}/authenticate/${attemptId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code }),
+      })
+
+      const data = await response.json()
+
+      if (data.accountId || data.account_id) {
+        return {
+          success: true,
+          accountId: data.accountId || data.account_id,
+          username: data.username,
+        }
+      }
+
+      return { success: false, message: data.message || data.error || '2FA verification failed' }
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : '2FA submission failed' }
+    }
+  }
+
+  // ============ API REQUESTS ============
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${this.apiKey}`,

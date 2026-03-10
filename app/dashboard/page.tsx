@@ -217,7 +217,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Revenue Chart - Takes 2 columns */}
         <div className="lg:col-span-2">
-          <RevenueChart analytics={analytics || []} />
+          <RevenueChart analytics={analytics || []} hasConnectedPlatforms={hasConnectedPlatforms} />
         </div>
 
         {/* Quick Actions & Platform Integration */}

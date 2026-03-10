@@ -15,9 +15,10 @@ import type { AnalyticsSnapshot } from '@/lib/types'
 
 interface RevenueChartProps {
   analytics: AnalyticsSnapshot[]
+  hasConnectedPlatforms?: boolean
 }
 
-export function RevenueChart({ analytics }: RevenueChartProps) {
+export function RevenueChart({ analytics, hasConnectedPlatforms = false }: RevenueChartProps) {
   // Group analytics by date and platform
   const dataByDate = new Map<string, { onlyfans: number; fansly: number; total: number }>()
   
@@ -36,7 +37,7 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
   })
   
   // Convert to array and reverse for chronological order
-  const chartData = Array.from(dataByDate.entries())
+  let chartData = Array.from(dataByDate.entries())
     .slice(0, 14)
     .reverse()
     .map(([date, data]) => ({
@@ -46,8 +47,23 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
       total: data.total,
     }))
 
-  const hasData = chartData.length > 0 && chartData.some(d => d.total > 0)
-  const hasOnlyFans = chartData.some(d => d.onlyfans > 0)
+  // If connected but no data, generate last 7 days with zeros
+  if (chartData.length === 0 && hasConnectedPlatforms) {
+    const today = new Date()
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      chartData.push({
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        onlyfans: 0,
+        fansly: 0,
+        total: 0,
+      })
+    }
+  }
+
+  const hasData = chartData.length > 0
+  const hasOnlyFans = hasConnectedPlatforms || chartData.some(d => d.onlyfans > 0)
   const hasFansly = chartData.some(d => d.fansly > 0)
 
   return (
@@ -57,7 +73,7 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
         <CardDescription>Your earnings across all platforms</CardDescription>
       </CardHeader>
       <CardContent>
-        {!hasData ? (
+        {!hasData && !hasConnectedPlatforms ? (
           <div className="flex h-[300px] flex-col items-center justify-center text-center">
             <div className="mb-4 rounded-full bg-muted p-4">
               <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">

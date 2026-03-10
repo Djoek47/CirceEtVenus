@@ -43,11 +43,13 @@ import {
   Mic,
   Users,
   TrendingDown,
-  Send
+  Send,
+  Heart
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { getToolMeta } from '@/lib/ai-tools-data'
 
 // Define the non-Pro AI tools that work
 const workingTools = [
@@ -191,6 +193,18 @@ const proTools = [
     credits: 2,
     isPro: true,
   },
+  {
+    id: 'standard-of-attraction',
+    name: 'Standard of Attraction',
+    description: 'Pro rating of how commercially attractive your content is',
+    longDescription: 'Let Venus and Circe rate how commercially attractive your latest photos and videos are—through their eyes—before you post.',
+    icon: Heart,
+    color: 'text-gold',
+    bgColor: 'bg-gold/10',
+    borderColor: 'border-gold/30',
+    credits: 3,
+    isPro: true,
+  },
 ]
 
 // Caption Generator Result Interface
@@ -225,10 +239,42 @@ interface AIResult {
   analysis?: Record<string, unknown>
 }
 
+// Standard of Attraction result
+interface AttractionResult {
+  score: number
+  verdict: string
+  venusTake: string
+  circeTake: string
+  strengths: string[]
+  improvements: string[]
+}
+
 type ToolType = typeof workingTools[0] | typeof proTools[0]
 
-export function AIToolsSelector() {
+function makeGenericTool(toolId: string): ToolType {
+  const meta = getToolMeta(toolId)
+  return {
+    id: toolId,
+    name: meta?.name ?? toolId,
+    description: meta?.description ?? 'AI-powered tool',
+    longDescription: meta?.longDescription ?? 'Describe what you need below and run.',
+    icon: Wand2,
+    color: 'text-primary',
+    bgColor: 'bg-primary/10',
+    borderColor: 'border-primary/30',
+    credits: meta?.credits ?? 1,
+  }
+}
+
+export function AIToolsSelector({
+  initialToolId,
+  backHref = '/dashboard/ai-studio/tools',
+}: {
+  initialToolId?: string
+  backHref?: string
+} = {}) {
   const [selectedTool, setSelectedTool] = useState<ToolType | null>(null)
+  const [resolvingInitial, setResolvingInitial] = useState(!!initialToolId)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<CaptionResult | ContentIdeasResult | AIResult | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -260,6 +306,21 @@ export function AIToolsSelector() {
   useEffect(() => {
     loadSubscription()
   }, [loadSubscription])
+
+  useEffect(() => {
+    if (!initialToolId) {
+      setResolvingInitial(false)
+      return
+    }
+    const all = [...workingTools, ...proTools]
+    const found = all.find((t) => t.id === initialToolId)
+    if (found) {
+      setSelectedTool(found)
+    } else {
+      setSelectedTool(makeGenericTool(initialToolId) as ToolType)
+    }
+    setResolvingInitial(false)
+  }, [initialToolId])
   
   // Form states for different tools
   const [contentType, setContentType] = useState('photo')
@@ -443,9 +504,66 @@ export function AIToolsSelector() {
             }),
           })
           break
+
+        case 'standard-of-attraction':
+          response = await fetch('/api/ai/standard-of-attraction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              description: contentDescription,
+              niche: niche || undefined,
+              platform,
+            }),
+          })
+          break
+
+        case 'venus-attraction':
+          response = await fetch('/api/ai/venus-attraction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: contentDescription, niche: niche || undefined, platform }),
+          })
+          break
+        case 'venus-cupid':
+          response = await fetch('/api/ai/venus-cupid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: contentDescription, niche: niche || undefined }),
+          })
+          break
+        case 'venus-garden':
+          response = await fetch('/api/ai/venus-garden', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: contentDescription, niche: niche || undefined }),
+          })
+          break
+        case 'circe-oracle':
+          response = await fetch('/api/ai/circe-oracle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: contentDescription, niche: niche || undefined }),
+          })
+          break
+        case 'circe-transformation':
+          response = await fetch('/api/ai/circe-transformation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: contentDescription, niche: niche || undefined }),
+          })
+          break
           
-        default:
-          throw new Error('Tool not implemented')
+        default: {
+          response = await fetch('/api/ai/tool-run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              toolId: selectedTool.id,
+              prompt: contentDescription || 'Help me with this.',
+            }),
+          })
+          break
+        }
       }
       
       if (!response.ok) throw new Error('Failed to run tool')
@@ -844,6 +962,91 @@ export function AIToolsSelector() {
             </div>
           </div>
         )
+
+      case 'standard-of-attraction':
+        return (
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Your Niche (optional)</Label>
+                <Input
+                  placeholder="e.g., fitness, cosplay, GFE..."
+                  value={niche}
+                  onChange={(e) => setNiche(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Platform</Label>
+                <Select value={platform} onValueChange={setPlatform}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="onlyfans">OnlyFans</SelectItem>
+                    <SelectItem value="fansly">Fansly</SelectItem>
+                    <SelectItem value="mym">MYM</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Describe your photos or videos</Label>
+                <VoiceInputButton
+                  onTranscript={(text) => setContentDescription(prev => prev + (prev ? ' ' : '') + text)}
+                  size="sm"
+                  variant="ghost"
+                />
+              </div>
+              <Textarea
+                placeholder="Describe the content you want rated: setting, outfit, mood, type (photo/video), what’s in frame... The more detail, the better Venus and Circe can judge commercial appeal."
+                value={contentDescription}
+                onChange={(e) => setContentDescription(e.target.value)}
+                className="min-h-[120px]"
+              />
+            </div>
+          </div>
+        )
+
+      case 'venus-attraction':
+      case 'venus-cupid':
+      case 'venus-garden':
+      case 'circe-oracle':
+      case 'circe-transformation':
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Your Niche (optional)</Label>
+              <Input
+                placeholder="e.g., fitness, cosplay, GFE..."
+                value={niche}
+                onChange={(e) => setNiche(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>
+                  {selectedTool.id === 'venus-attraction' && 'What do you want to optimize for attraction?'}
+                  {selectedTool.id === 'venus-cupid' && 'Who do you want to target or where do you struggle?'}
+                  {selectedTool.id === 'venus-garden' && 'What part of your fan relationships do you want to improve?'}
+                  {selectedTool.id === 'circe-oracle' && 'What do you want the Oracle to see? (subscribers, churn, trends)'}
+                  {selectedTool.id === 'circe-transformation' && 'Describe your fans or goals for turning casuals into whales'}
+                </Label>
+                <VoiceInputButton
+                  onTranscript={(text) => setContentDescription(prev => prev + (prev ? ' ' : '') + text)}
+                  size="sm"
+                  variant="ghost"
+                />
+              </div>
+              <Textarea
+                placeholder="Describe your situation, goals, or ask a specific question. Grok (Venus/Circe) will respond with tailored advice."
+                value={contentDescription}
+                onChange={(e) => setContentDescription(e.target.value)}
+                className="min-h-[120px]"
+              />
+            </div>
+          </div>
+        )
         
       default:
         return (
@@ -998,6 +1201,53 @@ export function AIToolsSelector() {
       </div>
     </div>
   )
+
+  // Render Standard of Attraction results
+  const renderAttractionResults = (res: AttractionResult) => (
+    <div className="space-y-4 pt-4 border-t border-border">
+      <div className="flex items-center gap-3 rounded-lg border border-gold/30 bg-gold/10 p-4">
+        <span className="text-3xl font-bold text-gold">{res.score}</span>
+        <span className="text-sm text-muted-foreground">/ 10</span>
+        <p className="text-sm font-medium flex-1">{res.verdict}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-venus/20 bg-venus/5 p-3">
+          <h4 className="text-xs font-medium text-venus mb-1">Venus</h4>
+          <p className="text-sm">{res.venusTake}</p>
+        </div>
+        <div className="rounded-lg border border-circe/20 bg-circe/5 p-3">
+          <h4 className="text-xs font-medium text-circe-light mb-1">Circe</h4>
+          <p className="text-sm">{res.circeTake}</p>
+        </div>
+      </div>
+      {res.strengths?.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Strengths</h4>
+          <ul className="space-y-1">
+            {res.strengths.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <ChevronRight className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {res.improvements?.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Improvements</h4>
+          <ul className="space-y-1">
+            {res.improvements.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <ChevronRight className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
   
   // Render generic results
   const renderGenericResults = (res: AIResult) => (
@@ -1021,8 +1271,18 @@ export function AIToolsSelector() {
     </div>
   )
   
-  // Tool selection view
-  if (!selectedTool) {
+  if (initialToolId && resolvingInitial) {
+    return (
+      <Card className="border-primary/20">
+        <CardContent className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Tool selection view (grid) — only when no initialToolId
+  if (!selectedTool && !initialToolId) {
     return (
       <Card className="border-primary/20">
         <CardHeader>
@@ -1152,14 +1412,22 @@ export function AIToolsSelector() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={resetTool}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+            {backHref ? (
+              <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                <Link href={backHref}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={resetTool}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
             <div className={`rounded-lg p-2 ${selectedTool.bgColor}`}>
               <selectedTool.icon className={`h-5 w-5 ${selectedTool.color}`} />
             </div>
@@ -1201,7 +1469,9 @@ export function AIToolsSelector() {
         {result && (
           selectedTool.id === 'caption-generator' && 'captions' in result
             ? renderCaptionResults(result as CaptionResult)
-            : renderGenericResults(result as AIResult)
+            : selectedTool.id === 'standard-of-attraction' && 'score' in result
+              ? renderAttractionResults(result as AttractionResult)
+              : renderGenericResults(result as AIResult)
         )}
       </CardContent>
     </Card>

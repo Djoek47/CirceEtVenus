@@ -41,7 +41,7 @@ export default async function ContentPage() {
             size="sm"
             className="bg-gradient-to-r from-circe to-venus text-white hover:opacity-90"
           >
-            <Link href="/dashboard/ai-studio/tools?tab=premium">
+            <Link href="/dashboard/ai-studio/tools/standard-of-attraction">
               Open Pro Tool
             </Link>
           </Button>

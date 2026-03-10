@@ -16,7 +16,7 @@ import { CirceAssistant } from '@/components/ai/circe-assistant'
 import { VenusAssistant } from '@/components/ai/venus-assistant'
 import { FlirtAssistant } from '@/components/ai/flirt-assistant'
 import { CosmicCalendar } from '@/components/content/cosmic-calendar'
-import { AIToolsSelector } from '@/components/ai/ai-tools-selector'
+import { AIToolsLibrary } from '@/components/ai/ai-tools-library'
 import { AIChatterWorkspace } from '@/components/ai/ai-chatter-workspace'
 import { createClient } from '@/lib/supabase/client'
 
@@ -537,9 +537,9 @@ export default function AIStudioPage() {
           <CosmicCalendar />
         </TabsContent>
 
-        {/* AI Tools Tab */}
+        {/* AI Tools Tab — single merged library; each tool opens its runner */}
         <TabsContent value="tools">
-          <AIToolsSelector />
+          <AIToolsLibrary compact />
         </TabsContent>
 
         {/* AI Chatter Tab */}

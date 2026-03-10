@@ -65,6 +65,13 @@ export default function SettingsPage() {
     newFeatures: true,
     marketingEmails: false,
   })
+  const [platformNotifPrefs, setPlatformNotifPrefs] = useState({
+    notify_new_message: true,
+    notify_new_subscriber: true,
+    notify_new_tip: true,
+    notify_subscription_expired: true,
+    notify_subscription_renewed: false,
+  })
   const [preferences, setPreferences] = useState({
     language: 'en',
     dateFormat: 'MM/DD/YYYY',
@@ -116,6 +123,18 @@ export default function SettingsPage() {
         setFullName(profile.full_name || '')
         setTimezone(profile.timezone || 'America/Los_Angeles')
         setHasBirthdaySet(profile.has_birthday_set || false)
+      }
+
+      const prefsRes = await fetch('/api/user/notification-preferences')
+      if (prefsRes.ok) {
+        const prefs = await prefsRes.json()
+        setPlatformNotifPrefs({
+          notify_new_message: prefs.notify_new_message ?? true,
+          notify_new_subscriber: prefs.notify_new_subscriber ?? true,
+          notify_new_tip: prefs.notify_new_tip ?? true,
+          notify_subscription_expired: prefs.notify_subscription_expired ?? true,
+          notify_subscription_renewed: prefs.notify_subscription_renewed ?? false,
+        })
       }
       
       setLoading(false)
@@ -429,6 +448,80 @@ export default function SettingsPage() {
                       <Switch 
                         checked={notifications.reputationAlerts}
                         onCheckedChange={(checked) => setNotifications({ ...notifications, reputationAlerts: checked })}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <h4 className="mb-2 font-medium">Platform activity (OnlyFans & Fansly)</h4>
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    Choose which in-app notifications you get when something happens on your connected platforms—like using OnlyFans or Fansly directly.
+                  </p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Every new message</p>
+                        <p className="text-sm text-muted-foreground">Notify me for each new DM received</p>
+                      </div>
+                      <Switch
+                        checked={platformNotifPrefs.notify_new_message}
+                        onCheckedChange={async (checked) => {
+                          setPlatformNotifPrefs((p) => ({ ...p, notify_new_message: checked }))
+                          await fetch('/api/user/notification-preferences', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notify_new_message: checked }) })
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Every new subscriber</p>
+                        <p className="text-sm text-muted-foreground">Notify me when someone subscribes</p>
+                      </div>
+                      <Switch
+                        checked={platformNotifPrefs.notify_new_subscriber}
+                        onCheckedChange={async (checked) => {
+                          setPlatformNotifPrefs((p) => ({ ...p, notify_new_subscriber: checked }))
+                          await fetch('/api/user/notification-preferences', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notify_new_subscriber: checked }) })
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">New tips</p>
+                        <p className="text-sm text-muted-foreground">Notify me for tips (e.g. $50+)</p>
+                      </div>
+                      <Switch
+                        checked={platformNotifPrefs.notify_new_tip}
+                        onCheckedChange={async (checked) => {
+                          setPlatformNotifPrefs((p) => ({ ...p, notify_new_tip: checked }))
+                          await fetch('/api/user/notification-preferences', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notify_new_tip: checked }) })
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Subscription expired</p>
+                        <p className="text-sm text-muted-foreground">Notify me when a fan’s subscription lapses</p>
+                      </div>
+                      <Switch
+                        checked={platformNotifPrefs.notify_subscription_expired}
+                        onCheckedChange={async (checked) => {
+                          setPlatformNotifPrefs((p) => ({ ...p, notify_subscription_expired: checked }))
+                          await fetch('/api/user/notification-preferences', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notify_subscription_expired: checked }) })
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Subscription renewed</p>
+                        <p className="text-sm text-muted-foreground">Notify me when a fan renews</p>
+                      </div>
+                      <Switch
+                        checked={platformNotifPrefs.notify_subscription_renewed}
+                        onCheckedChange={async (checked) => {
+                          setPlatformNotifPrefs((p) => ({ ...p, notify_subscription_renewed: checked }))
+                          await fetch('/api/user/notification-preferences', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notify_subscription_renewed: checked }) })
+                        }}
                       />
                     </div>
                   </div>

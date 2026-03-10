@@ -125,25 +125,33 @@ export function FansTable({ fans }: FansTableProps) {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9 border border-border">
-                      <AvatarImage src={fan.avatar_url || undefined} />
+                    <Avatar className="h-9 w-9 shrink-0 border border-border">
+                      <AvatarImage src={fan.avatar_url || undefined} alt="" />
                       <AvatarFallback className="bg-secondary text-secondary-foreground">
-                        {fan.display_name?.[0] || fan.platform_username[0].toUpperCase()}
+                        {(fan.display_name || fan.platform_username || '?')[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-medium">{fan.display_name || fan.platform_username}</p>
-                      <p className="text-xs text-muted-foreground">@{fan.platform_username}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{fan.display_name || fan.platform_username || 'Unknown'}</p>
+                      <p className="text-xs text-muted-foreground truncate">@{fan.platform_username || '—'}</p>
                     </div>
                     {fan.is_favorite && (
-                      <Star className="h-4 w-4 fill-chart-4 text-chart-4" />
+                      <Star className="h-4 w-4 shrink-0 fill-chart-4 text-chart-4" />
                     )}
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={cn('text-xs', platformColors[fan.platform])}>
-                    {fan.platform.toUpperCase()}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    {fan.platform === 'onlyfans' && (
+                      <img src="/onlyfans-logo.png" alt="" className="h-4 w-4 object-contain" />
+                    )}
+                    {fan.platform === 'fansly' && (
+                      <img src="/fansly-logo.png" alt="" className="h-4 w-4 object-contain" />
+                    )}
+                    <Badge variant="outline" className={cn('text-xs', platformColors[fan.platform] || '')}>
+                      {fan.platform === 'onlyfans' ? 'OnlyFans' : fan.platform === 'fansly' ? 'Fansly' : fan.platform.toUpperCase()}
+                    </Badge>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className={cn('text-xs capitalize', tierColors[fan.tier])}>
@@ -154,9 +162,7 @@ export function FansTable({ fans }: FansTableProps) {
                   ${formatCurrency(fan.total_spent)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {fan.last_interaction
-                    ? formatDate(fan.last_interaction)
-                    : 'Never'}
+                  {fan.last_interaction ? formatDate(fan.last_interaction) : '—'}
                 </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>

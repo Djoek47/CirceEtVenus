@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { getPrefsForWebhook } from '@/lib/notification-preferences'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 // Verify webhook signature
 function verifySignature(payload: string, signature: string, secret: string): boolean {
@@ -28,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const event = JSON.parse(rawBody)
-    const supabase = await createClient()
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // OnlyFansAPI webhook events based on their settings
     switch (event.type) {
@@ -131,16 +135,19 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient> e
     onConflict: 'user_id,platform,platform_fan_id'
   })
 
-  await supabase.from('notifications').insert({
-    user_id: connection.user_id,
-    type: 'fan',
-    title: 'New Subscriber',
-    description: `${data.fan.name} just subscribed for $${data.fan.subscriptionPrice}`,
-    link: '/dashboard/fans',
-    read: false,
-    platform: 'onlyfans',
-    avatar_url: data.fan.avatar || undefined,
-  })
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  if (prefs.notify_new_subscriber) {
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'fan',
+      title: 'New Subscriber',
+      description: `${data.fan.name} just subscribed for $${data.fan.subscriptionPrice}`,
+      link: '/dashboard/fans',
+      read: false,
+      platform: 'onlyfans',
+      avatar_url: data.fan.avatar || undefined,
+    })
+  }
 }
 
 // Handle subscription renewal
@@ -193,15 +200,17 @@ async function handleExpiration(supabase: ReturnType<typeof createClient> extend
     .eq('user_id', connection.user_id)
     .eq('platform_fan_id', data.fan.id)
 
-  // Create Circe alert for churn
-  await supabase.from('notifications').insert({
-    user_id: connection.user_id,
-    type: 'protection',
-    title: 'Subscriber Lost',
-    description: `${data.fan.name} (@${data.fan.username}) subscription expired`,
-    link: '/dashboard/fans',
-    read: false,
-  })
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  if (prefs.notify_subscription_expired) {
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'protection',
+      title: 'Subscriber Lost',
+      description: `${data.fan.name} (@${data.fan.username}) subscription expired`,
+      link: '/dashboard/fans',
+      read: false,
+    })
+  }
 }
 
 // Handle new message
@@ -268,16 +277,19 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
   const avatarUrl =
     data.message.fromUser.avatar || (fan?.avatar_url ?? null)
 
-  await supabase.from('notifications').insert({
-    user_id: connection.user_id,
-    type: 'message',
-    title,
-    description: preview,
-    link: `/dashboard/messages?fanId=${encodeURIComponent(data.message.fromUser.id)}`,
-    read: false,
-    platform: 'onlyfans',
-    avatar_url: avatarUrl || undefined,
-  })
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  if (prefs.notify_new_message) {
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'message',
+      title,
+      description: preview,
+      link: `/dashboard/messages?fanId=${encodeURIComponent(data.message.fromUser.id)}`,
+      read: false,
+      platform: 'onlyfans',
+      avatar_url: avatarUrl || undefined,
+    })
+  }
 }
 
 // Handle tip
@@ -304,7 +316,8 @@ async function handleTip(supabase: ReturnType<typeof createClient> extends Promi
     p_amount: data.tip.amount,
   })
 
-  if (data.tip.amount >= 50) {
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  if (prefs.notify_new_tip && data.tip.amount >= 50) {
     const fromUser = data.tip.fromUser as { id: string; username: string; name: string; avatar?: string }
     await supabase.from('notifications').insert({
       user_id: connection.user_id,

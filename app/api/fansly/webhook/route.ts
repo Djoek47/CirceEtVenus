@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getPrefsForWebhook } from '@/lib/notification-preferences'
 
 // Fansly Webhook endpoint
 // Register this URL in your Fansly API Console: https://app.apifansly.com
@@ -92,16 +93,19 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient>, 
       onConflict: 'user_id,platform,platform_fan_id'
     })
 
-  await supabase.from('notifications').insert({
-    user_id: connection.user_id,
-    type: 'fan',
-    title: 'New Subscriber',
-    description: `${subscriber.display_name || subscriber.username} subscribed on Fansly`,
-    link: '/dashboard/fans',
-    read: false,
-    platform: 'fansly',
-    avatar_url: subscriber.avatar || undefined,
-  })
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  if (prefs.notify_new_subscriber) {
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'fan',
+      title: 'New Subscriber',
+      description: `${subscriber.display_name || subscriber.username} subscribed on Fansly`,
+      link: '/dashboard/fans',
+      read: false,
+      platform: 'fansly',
+      avatar_url: subscriber.avatar || undefined,
+    })
+  }
 }
 
 async function handleSubscriptionRenewed(supabase: ReturnType<typeof createClient>, payload: any) {
@@ -138,15 +142,25 @@ async function handleSubscriptionExpired(supabase: ReturnType<typeof createClien
     .eq('platform_user_id', account_id)
     .single()
   
-  if (!connection) return
-  
-  // Mark fan as inactive
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
   await supabase
     .from('fans')
     .update({ is_active: false })
     .eq('user_id', connection.user_id)
     .eq('platform', 'fansly')
     .eq('platform_fan_id', subscriber.id)
+
+  if (prefs.notify_subscription_expired) {
+    const name = subscriber.display_name || subscriber.username || 'A fan'
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'protection',
+      title: 'Subscriber Lost',
+      description: `${name} subscription expired on Fansly`,
+      link: '/dashboard/fans',
+      read: false,
+    })
+  }
 }
 
 async function handleNewMessage(supabase: ReturnType<typeof createClient>, payload: any) {
@@ -207,18 +221,21 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient>, paylo
       })
       .eq('id', conversationId)
 
-    const displayName = sender.display_name || sender.username ? `@${sender.username}` : 'a fan'
-    const preview = (message.text || '').trim().slice(0, 140)
-    await supabase.from('notifications').insert({
-      user_id: connection.user_id,
-      type: 'message',
-      title: `New message from ${displayName}`,
-      description: preview || 'Sent you a new message',
-      link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
-      read: false,
-      platform: 'fansly',
-      avatar_url: sender.avatar || undefined,
-    })
+    const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+    if (prefs.notify_new_message) {
+      const displayName = sender.display_name || sender.username ? `@${sender.username}` : 'a fan'
+      const preview = (message.text || '').trim().slice(0, 140)
+      await supabase.from('notifications').insert({
+        user_id: connection.user_id,
+        type: 'message',
+        title: `New message from ${displayName}`,
+        description: preview || 'Sent you a new message',
+        link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
+        read: false,
+        platform: 'fansly',
+        avatar_url: sender.avatar || undefined,
+      })
+    }
   }
 }
 
@@ -241,7 +258,8 @@ async function handleNewTip(supabase: ReturnType<typeof createClient>, payload: 
     p_amount: tip.amount
   })
 
-  if (tip.amount >= 50) {
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  if (prefs.notify_new_tip && tip.amount >= 50) {
     await supabase.from('notifications').insert({
       user_id: connection.user_id,
       type: 'fan',

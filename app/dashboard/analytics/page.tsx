@@ -4,7 +4,6 @@ import { AnalyticsCharts } from '@/components/analytics/analytics-charts'
 import { PlatformBreakdown } from '@/components/analytics/platform-breakdown'
 import { TopContent } from '@/components/analytics/top-content'
 import { ConnectedPlatforms } from '@/components/dashboard/connected-platforms'
-import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
@@ -12,76 +11,22 @@ export default async function AnalyticsPage() {
 
   if (!user) return null
 
-  // Check if we have analytics data, if not try to sync
-  let { data: analytics } = await supabase
+  // Check for platform connections
+  const { data: connections } = await supabase
+    .from('platform_connections')
+    .select('platform, is_connected, last_sync_at')
+    .eq('user_id', user.id)
+    .eq('is_connected', true)
+
+  const { data: analytics } = await supabase
     .from('analytics_snapshots')
     .select('*')
     .eq('user_id', user.id)
     .order('date', { ascending: false })
     .limit(30)
-
-  // If no analytics data, try to auto-sync from OnlyFans
-  if (!analytics || analytics.length === 0) {
-    try {
-      const api = createOnlyFansAPI()
-      const accountsResult = await api.listAccounts()
-      
-      if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
-        const account = accountsResult.accounts[accountsResult.accounts.length - 1]
-        const userData = (account as any)?.onlyfans_user_data || {}
-        
-        // Ensure connection exists
-        await supabase
-          .from('platform_connections')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('platform', 'onlyfans')
-        
-        await supabase
-          .from('platform_connections')
-          .insert({
-            user_id: user.id,
-            platform: 'onlyfans',
-            platform_username: account.onlyfans_username || 'Connected',
-            is_connected: true,
-            access_token: account.id,
-            last_sync_at: new Date().toISOString(),
-          })
-        
-        // Insert today's analytics snapshot with data from userData
-        const today = new Date().toISOString().split('T')[0]
-        await supabase.from('analytics_snapshots')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('platform', 'onlyfans')
-          .eq('date', today)
-        
-        await supabase.from('analytics_snapshots').insert({
-          user_id: user.id,
-          platform: 'onlyfans',
-          date: today,
-          total_fans: userData.subscribesCount || 0,
-          new_fans: 0,
-          churned_fans: 0,
-          revenue: 0,
-          messages_received: 0,
-          messages_sent: 0,
-        })
-        
-        // Re-fetch analytics
-        const { data: newAnalytics } = await supabase
-          .from('analytics_snapshots')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('date', { ascending: false })
-          .limit(30)
-        
-        analytics = newAnalytics
-      }
-    } catch (e) {
-      // Silent fail
-    }
-  }
+  
+  // Pass connection info to show "connected" state even if no analytics yet
+  const hasConnections = (connections?.length || 0) > 0
 
   const { data: content } = await supabase
     .from('content')
@@ -138,7 +83,7 @@ export default async function AnalyticsPage() {
       </div>
 
       {/* Charts */}
-      <AnalyticsCharts analytics={analytics || []} />
+      <AnalyticsCharts analytics={analytics || []} hasConnections={hasConnections} />
 
       {/* Bottom Grid */}
       <div className="grid gap-6 lg:grid-cols-2">

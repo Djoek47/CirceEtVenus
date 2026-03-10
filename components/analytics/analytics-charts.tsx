@@ -17,9 +17,10 @@ import type { AnalyticsSnapshot } from '@/lib/types'
 
 interface AnalyticsChartsProps {
   analytics: AnalyticsSnapshot[]
+  hasConnections?: boolean
 }
 
-export function AnalyticsCharts({ analytics }: AnalyticsChartsProps) {
+export function AnalyticsCharts({ analytics, hasConnections = false }: AnalyticsChartsProps) {
   // If we have analytics data (even with zeros), show the charts
   // Generate last 14 days if we have any data at all
   let chartData: { date: string; revenue: number; totalFans: number; messages: number; newFans: number }[] = []
@@ -48,8 +49,8 @@ export function AnalyticsCharts({ analytics }: AnalyticsChartsProps) {
     }
   }
 
-  // Only show empty state if truly no data and no synced platforms
-  if (analytics.length === 0) {
+  // Only show empty state if truly no data and no connected platforms
+  if (analytics.length === 0 && !hasConnections) {
     return (
       <Card className="border-border bg-card">
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">

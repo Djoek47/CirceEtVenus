@@ -66,6 +66,78 @@ class FanslyAPI {
     this.accountId = accountId
   }
 
+  // ============ ACCOUNTS ============
+
+  /**
+   * List all connected Fansly accounts for your API key
+   * GET /api/fansly/accounts
+   */
+  async listAccounts(): Promise<{
+    success: boolean
+    count: number
+    accounts: {
+      accountId: string
+      email: string
+      name: string
+      country: string
+      createdAt: string
+    }[]
+  }> {
+    const response = await this.request<{
+      statusCode: number
+      message: string
+      data: {
+        success: boolean
+        count: number
+        accounts: {
+          accountId: string
+          email: string
+          name: string
+          country: string
+          createdAt: string
+        }[]
+      }
+    }>('/api/fansly/accounts')
+
+    return response.data
+  }
+
+  /**
+   * Get profile data for a specific account
+   * GET /api/fansly/{accountId}/profile
+   */
+  async getProfile(accountId: string): Promise<{
+    accountId: string
+    username: string
+    displayName: string
+    avatar: string
+    banner: string
+    bio: string
+    followersCount: number
+    subscribersCount: number
+    postsCount: number
+    likesCount: number
+  }> {
+    const response = await this.request<{
+      statusCode: number
+      message: string
+      data: {
+        accountId: string
+        username: string
+        displayName: string
+        avatar: string
+        banner: string
+        bio: string
+        followersCount: number
+        subscribersCount: number
+        postsCount: number
+        likesCount: number
+      }
+    }>(`/api/fansly/${accountId}/profile`)
+
+    return response.data
+  }
+
   // ============ AUTHENTICATION ============
 
   /**

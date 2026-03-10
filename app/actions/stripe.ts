@@ -4,6 +4,72 @@ import { stripe } from '@/lib/stripe'
 import { PRODUCTS } from '@/lib/products'
 import { createClient } from '@/lib/supabase/server'
 
+type SubscriptionRowUpdate = {
+  stripe_customer_id?: string | null
+  stripe_subscription_id?: string | null
+  plan_id?: string
+  status?: string
+  current_period_start?: string | null
+  current_period_end?: string | null
+  cancel_at_period_end?: boolean | null
+}
+
+function getPlanLimits(planId: string) {
+  switch (planId) {
+    case 'venus-pro':
+      return { ai_credits_limit: 999999, storage_limit_mb: 51200 } // 50GB
+    case 'circe-elite':
+      return { ai_credits_limit: 999999, storage_limit_mb: 999999 } // "unlimited"
+    case 'divine-duo':
+      return { ai_credits_limit: 999999, storage_limit_mb: 999999 } // "unlimited"
+    case 'divine-trial':
+    default:
+      return { ai_credits_limit: 100, storage_limit_mb: 5120 } // 5GB
+  }
+}
+
+async function upsertSubscriptionRow(
+  userId: string,
+  patch: SubscriptionRowUpdate & Partial<ReturnType<typeof getPlanLimits>>,
+) {
+  const supabase = await createClient()
+  await supabase
+    .from('subscriptions')
+    .upsert(
+      {
+        user_id: userId,
+        ...patch,
+        ...(patch.plan_id ? getPlanLimits(patch.plan_id) : {}),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    )
+}
+
+async function findOrCreateStripeCustomer(params: { userId: string; email: string }) {
+  // Prefer an existing customer id stored in DB.
+  const supabase = await createClient()
+  const { data: existing } = await supabase
+    .from('subscriptions')
+    .select('stripe_customer_id')
+    .eq('user_id', params.userId)
+    .maybeSingle()
+
+  if (existing?.stripe_customer_id) return existing.stripe_customer_id
+
+  // Fall back to lookup by email, else create.
+  const customers = await stripe.customers.list({ email: params.email, limit: 1 })
+  const customerId =
+    customers.data[0]?.id ??
+    (await stripe.customers.create({
+      email: params.email,
+      metadata: { userId: params.userId },
+    })).id
+
+  await upsertSubscriptionRow(params.userId, { stripe_customer_id: customerId })
+  return customerId
+}
+
 export async function startCheckoutSession(productId: string) {
   const product = PRODUCTS.find((p) => p.id === productId)
   if (!product) {
@@ -13,10 +79,16 @@ export async function startCheckoutSession(productId: string) {
   // Get current user for metadata
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) {
+    throw new Error('User not authenticated')
+  }
+
+  const customerId = await findOrCreateStripeCustomer({ userId: user.id, email: user.email })
 
   const sessionConfig: Parameters<typeof stripe.checkout.sessions.create>[0] = {
     ui_mode: 'embedded',
     redirect_on_completion: 'never',
+    customer: customerId,
     line_items: [
       {
         price_data: {
@@ -34,8 +106,18 @@ export async function startCheckoutSession(productId: string) {
     mode: product.mode,
     metadata: {
       productId: product.id,
-      userId: user?.id || 'anonymous',
+      userId: user.id,
     },
+    ...(product.mode === 'subscription'
+      ? {
+          subscription_data: {
+            metadata: {
+              productId: product.id,
+              userId: user.id,
+            },
+          },
+        }
+      : {}),
   }
 
   const session = await stripe.checkout.sessions.create(sessionConfig)
@@ -49,19 +131,14 @@ export async function createCustomerPortalSession() {
   if (!user) {
     throw new Error('User not authenticated')
   }
-
-  // Look up Stripe customer by email
-  const customers = await stripe.customers.list({
-    email: user.email,
-    limit: 1,
-  })
-
-  if (customers.data.length === 0) {
-    throw new Error('No Stripe customer found')
+  if (!user.email) {
+    throw new Error('User email missing')
   }
 
+  const customerId = await findOrCreateStripeCustomer({ userId: user.id, email: user.email })
+
   const session = await stripe.billingPortal.sessions.create({
-    customer: customers.data[0].id,
+    customer: customerId,
     return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/settings?tab=billing`,
   })
 
@@ -76,35 +153,21 @@ export async function getSubscriptionStatus() {
     return { status: 'none', plan: null }
   }
 
-  // Look up Stripe customer
-  const customers = await stripe.customers.list({
-    email: user.email,
-    limit: 1,
-  })
+  // Primary source of truth for the app UI is our DB row (kept in sync via webhook).
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('plan_id,status,current_period_end,cancel_at_period_end')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
-  if (customers.data.length === 0) {
-    return { status: 'none', plan: null }
-  }
+  if (!data) return { status: 'none', plan: null }
 
-  // Get active subscriptions
-  const subscriptions = await stripe.subscriptions.list({
-    customer: customers.data[0].id,
-    status: 'active',
-    limit: 1,
-  })
-
-  if (subscriptions.data.length === 0) {
-    return { status: 'none', plan: null }
-  }
-
-  const subscription = subscriptions.data[0]
-  const productId = subscription.metadata?.productId || 'unknown'
-  const product = PRODUCTS.find(p => p.id === productId)
-
+  const product = PRODUCTS.find((p) => p.id === data.plan_id)
   return {
-    status: subscription.status,
-    plan: product?.name || 'Unknown Plan',
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    status: data.status,
+    plan: product?.name || product?.id || null,
+    currentPeriodEnd: data.current_period_end ? new Date(data.current_period_end).toISOString() : undefined,
+    cancelAtPeriodEnd: data.cancel_at_period_end ?? undefined,
+    planId: data.plan_id,
   }
 }

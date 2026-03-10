@@ -20,7 +20,7 @@ interface BillingSectionProps {
 
 interface SubscriptionData {
   id: string
-  plan: string
+  plan_id: string
   status: string
   ai_credits_used: number
   ai_credits_limit: number
@@ -28,12 +28,14 @@ interface SubscriptionData {
   storage_limit_mb: number
   current_period_end: string
   cancel_at_period_end: boolean
+  trial_ends_at?: string | null
 }
 
 export function BillingSection({ userId, userEmail }: BillingSectionProps) {
   const [subscription, setSubscription] = useState<{
     status: string
     plan: string | null
+    planId?: string | null
     currentPeriodEnd?: string
     cancelAtPeriodEnd?: boolean
   } | null>(null)
@@ -55,19 +57,20 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
     if (data) {
       setSubData(data)
     } else {
-      // Create default subscription for new users
-      const periodEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+      // Create default subscription for new users (fallback if trigger didn't run)
+      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
       const { data: newSub } = await supabase
         .from('subscriptions')
         .insert({
           user_id: userId,
-          plan: 'free',
-          status: 'trialing',
+          plan_id: 'divine-trial',
+          status: 'trial',
           ai_credits_used: 0,
           ai_credits_limit: 100,
           storage_used_mb: 0,
           storage_limit_mb: 5000,
-          current_period_end: periodEnd
+          trial_ends_at: trialEnd,
+          current_period_end: trialEnd,
         })
         .select()
         .single()
@@ -104,8 +107,8 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
   }
 
   const currentPlan = subscription?.plan 
-    ? PRODUCTS.find(p => p.name === subscription.plan) 
-    : PRODUCTS[0] // Default to Divine Trial
+    ? PRODUCTS.find(p => p.id === subscription.planId) || PRODUCTS.find(p => p.name === subscription.plan)
+    : PRODUCTS.find(p => p.id === 'divine-trial') || PRODUCTS[0]
 
   // Computed values from subscription data
   const aiCreditsUsed = subData?.ai_credits_used || 0
@@ -155,7 +158,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {subscription?.status === 'active' 
                     ? `Renews ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'soon'}`
-                    : '14-day free trial - 10 days remaining'
+                    : `Trial ends ${subData?.trial_ends_at ? new Date(subData.trial_ends_at).toLocaleDateString() : 'soon'}`
                   }
                 </p>
               </div>

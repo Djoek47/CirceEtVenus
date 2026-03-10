@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { LeakAlert } from '@/lib/types'
@@ -31,6 +31,7 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
   const [selectedAlert, setSelectedAlert] = useState<LeakAlert | null>(null)
   const [proofUploading, setProofUploading] = useState(false)
   const [proofPaths, setProofPaths] = useState<string[]>([])
+  const [isPro, setIsPro] = useState(false)
 
   const severityColors: Record<string, string> = {
     critical: 'bg-destructive/20 text-destructive border-destructive/30',
@@ -38,6 +39,27 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
     medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     low: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   }
+
+  useEffect(() => {
+    const loadSubscription = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('plan_id,plan')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        const planId = (data as any)?.plan_id || (data as any)?.plan
+        if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
+          setIsPro(true)
+        }
+      } catch {
+        // ignore subscription loading errors
+      }
+    }
+    loadSubscription()
+  }, [supabase])
 
   const runScan = async () => {
     setScanLoading(true)
@@ -126,6 +148,11 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
           <Button className="gap-2 bg-circe hover:bg-circe/90" onClick={runScan} disabled={scanLoading}>
             {scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Invoke Scan
+            {isPro && (
+              <Badge variant="secondary" className="ml-1 text-[10px] bg-purple-500/10 text-circe-light border-circe/40">
+                Grok Pro
+              </Badge>
+            )}
           </Button>
         </div>
         <div className="w-full sm:max-w-md">

@@ -2,9 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Bell, ThumbsUp, Minus, ThumbsDown, ExternalLink, Check, RefreshCw, MessageCircle } from 'lucide-react'
+import { Bell, ThumbsUp, Minus, ThumbsDown, ExternalLink, Check, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ReputationMention } from '@/lib/types'
+import { MentionsHeader } from '@/components/dashboard/mentions-header'
 
 export default async function MentionsPage() {
   const supabase = await createClient()
@@ -40,20 +41,7 @@ export default async function MentionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <span className="text-venus">Venus'</span> Watchful Gaze
-          </h2>
-          <p className="text-muted-foreground">
-            The goddess tracks your reputation and sentiment across the realm
-          </p>
-        </div>
-        <Button className="gap-2 bg-venus hover:bg-venus/90 text-background">
-          <RefreshCw className="h-4 w-4" />
-          Refresh Vision
-        </Button>
-      </div>
+      <MentionsHeader />
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

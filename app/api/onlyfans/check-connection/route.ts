@@ -1,36 +1,105 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
-// GET: Check if user has an OnlyFans connection
+// GET: Check if user has OnlyFans accounts connected via the API and sync to our database
+// This is called on app load to detect accounts that completed authentication asynchronously
+// (OnlyFans auth takes ~45 seconds to complete after user signs in)
 export async function GET() {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {
-      return NextResponse.json({ connected: false })
+      return NextResponse.json({ connected: false }, { status: 401 })
     }
 
-    // Check for existing connection
-    const { data: connection } = await supabase
-      .from('platform_connections')
-      .select('platform_user_id, platform_username, is_connected')
-      .eq('user_id', user.id)
-      .eq('platform', 'onlyfans')
-      .eq('is_connected', true)
-      .single()
+    const apiKey = process.env.ONLYFANS_API_KEY
+    if (!apiKey) {
+      // No API key - just check local database
+      const { data: connection } = await supabase
+        .from('platform_connections')
+        .select('platform_user_id, platform_username')
+        .eq('user_id', user.id)
+        .eq('platform', 'onlyfans')
+        .eq('is_connected', true)
+        .single()
 
-    if (connection) {
       return NextResponse.json({
-        connected: true,
-        accountId: connection.platform_user_id,
-        username: connection.platform_username
+        connected: !!connection,
+        accountId: connection?.platform_user_id,
+        username: connection?.platform_username
       })
     }
 
-    return NextResponse.json({ connected: false })
+    const api = createOnlyFansAPI()
+    
+    // Check for accounts connected via OnlyFans API
+    const accountsResult = await api.listAccounts()
+    
+    if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
+      // No accounts on API - check local database as fallback
+      const { data: connection } = await supabase
+        .from('platform_connections')
+        .select('platform_user_id, platform_username')
+        .eq('user_id', user.id)
+        .eq('platform', 'onlyfans')
+        .eq('is_connected', true)
+        .single()
+
+      return NextResponse.json({
+        connected: !!connection,
+        accountId: connection?.platform_user_id,
+        username: connection?.platform_username
+      })
+    }
+
+    // Found account(s) on the OnlyFans API - use the most recent one
+    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+    
+    // Check if we already have this connection saved
+    const { data: existingConnection } = await supabase
+      .from('platform_connections')
+      .select('platform_user_id, platform_username')
+      .eq('user_id', user.id)
+      .eq('platform', 'onlyfans')
+      .single()
+
+    // If already saved with same account ID, just return
+    if (existingConnection && existingConnection.platform_user_id === account.id) {
+      return NextResponse.json({
+        connected: true,
+        accountId: account.id,
+        username: existingConnection.platform_username || account.onlyfans_username
+      })
+    }
+
+    // Save/update the connection to our database (new or different account)
+    await supabase
+      .from('platform_connections')
+      .upsert({
+        user_id: user.id,
+        platform: 'onlyfans',
+        platform_user_id: account.id,
+        platform_username: account.onlyfans_username || 'Connected',
+        is_connected: true,
+        access_token: account.id,
+        last_sync_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,platform'
+      })
+
+    return NextResponse.json({
+      connected: true,
+      accountId: account.id,
+      username: account.onlyfans_username,
+      newlySynced: true
+    })
+
   } catch (error) {
-    console.error('Check connection error:', error)
-    return NextResponse.json({ connected: false })
+    return NextResponse.json({ 
+      connected: false, 
+      error: error instanceof Error ? error.message : 'Check failed' 
+    })
   }
 }

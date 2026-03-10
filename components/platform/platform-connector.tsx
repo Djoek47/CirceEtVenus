@@ -142,8 +142,28 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     setLoading(false)
   }
 
+  // Check OnlyFans API for connected accounts and sync to our database
+  // This handles the ~45 second async auth process
+  const checkAndSyncOnlyFans = async () => {
+    try {
+      const response = await fetch('/api/onlyfans/check-connection')
+      const data = await response.json()
+      
+      if (data.connected && data.newlySynced) {
+        // New account was synced from OnlyFans API - reload connections
+        await loadConnections()
+        setSuccess(`OnlyFans connected as @${data.username || 'user'}!`)
+        setTimeout(() => setSuccess(null), 5000)
+      }
+    } catch {
+      // Silent fail - this is a background check
+    }
+  }
+
   useEffect(() => {
     loadConnections()
+    // Check for OnlyFans accounts that may have been connected asynchronously
+    checkAndSyncOnlyFans()
   }, [])
 
   const isConnected = (platformId: string) =>

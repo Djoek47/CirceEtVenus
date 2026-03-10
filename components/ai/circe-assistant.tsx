@@ -98,7 +98,8 @@ const leakAlerts: LeakAlert[] = [
 export function CirceAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null)
   
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+  const [input, setInput] = useState('')
+  const { messages, sendMessage, status } = useChat({
     api: '/api/ai/circe',
     initialMessages: [
       {
@@ -108,6 +109,15 @@ export function CirceAssistant() {
       }
     ]
   })
+  const isLoading = status === 'streaming' || status === 'submitted'
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || isLoading) return
+    sendMessage({ text })
+    setInput('')
+  }
   
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -175,13 +185,14 @@ export function CirceAssistant() {
               <div className="relative flex-1">
                 <Input 
                   placeholder="Ask Circe or speak..."
-                  value={input ?? ''}
-                  onChange={handleInputChange}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
                   className="border-circe/30 pr-10 focus-visible:ring-circe"
+                  disabled={isLoading}
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2">
                   <VoiceInputButton
-                    onTranscript={(text) => setInput(prev => (prev || '') + (prev ? ' ' : '') + text)}
+                    onTranscript={(text) => setInput(prev => (prev ? prev + ' ' + text : text))}
                     size="sm"
                     variant="ghost"
                   />
@@ -189,7 +200,7 @@ export function CirceAssistant() {
               </div>
               <Button 
                 type="submit"
-                disabled={isLoading || !(input ?? '').trim()}
+                disabled={isLoading || !input.trim()}
                 className="bg-gradient-to-r from-circe to-purple-600 hover:from-circe/90 hover:to-purple-600/90 text-circe-foreground"
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

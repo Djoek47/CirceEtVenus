@@ -101,7 +101,8 @@ export function VenusAssistant() {
   const [mentions, setMentions] = useState<ReputationMentionWithReply[]>([])
   const [niches, setNiches] = useState<string[]>([])
   
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+  const [input, setInput] = useState('')
+  const { messages, sendMessage, status } = useChat({
     api: '/api/ai/venus',
     initialMessages: [
       {
@@ -111,6 +112,15 @@ export function VenusAssistant() {
       }
     ]
   })
+  const isLoading = status === 'streaming' || status === 'submitted'
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || isLoading) return
+    sendMessage({ text })
+    setInput('')
+  }
   
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -229,6 +239,9 @@ export function VenusAssistant() {
               <Sparkles className="h-4 w-4 text-gold" />
               Consult Venus
             </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+              Ask Venus about growth, attraction, new subscribers, content that converts, and your reputation. She helps with profile optimization, what to post next, and strategies to expand your audience.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div ref={scrollRef} className="h-[300px] overflow-y-auto space-y-4 rounded-lg bg-gradient-to-b from-gold/5 to-transparent p-4">
@@ -261,13 +274,14 @@ export function VenusAssistant() {
               <div className="relative flex-1">
                 <Input 
                   placeholder="Ask Venus or speak..."
-                  value={input ?? ''}
-                  onChange={handleInputChange}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
                   className="border-gold/30 pr-10 focus-visible:ring-gold"
+                  disabled={isLoading}
                 />
                 <div className="absolute right-1 top-1/2 -translate-y-1/2">
                   <VoiceInputButton
-                    onTranscript={(text) => setInput(prev => (prev || '') + (prev ? ' ' : '') + text)}
+                    onTranscript={(text) => setInput(prev => (prev ? prev + ' ' + text : text))}
                     size="sm"
                     variant="ghost"
                   />
@@ -275,7 +289,7 @@ export function VenusAssistant() {
               </div>
               <Button 
                 type="submit"
-                disabled={isLoading || !(input ?? '').trim()}
+                disabled={isLoading || !input.trim()}
                 className="bg-gradient-to-r from-gold to-amber-600 hover:from-gold/90 hover:to-amber-600/90 text-white"
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

@@ -89,6 +89,7 @@ export function PlatformConnector() {
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [syncing, setSyncing] = useState<string | null>(null)
+  const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   
@@ -265,18 +266,30 @@ export function PlatformConnector() {
   }
 
   const handleDisconnect = async (platformId: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    setDisconnecting(platformId)
+    setError(null)
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
 
-    await supabase
-      .from('platform_connections')
-      .update({ is_connected: false })
-      .eq('user_id', user.id)
-      .eq('platform', platformId)
+      const { error: dbError } = await supabase
+        .from('platform_connections')
+        .update({ is_connected: false })
+        .eq('user_id', user.id)
+        .eq('platform', platformId)
 
-    await loadConnections()
-    setSuccess(`${platformId} disconnected`)
-    setTimeout(() => setSuccess(null), 3000)
+      if (dbError) throw dbError
+
+      const platformName = PLATFORMS.find(p => p.id === platformId)?.name || platformId
+      setSuccess(`${platformName} disconnected successfully`)
+      await loadConnections()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to disconnect')
+    } finally {
+      setDisconnecting(null)
+    }
   }
 
   if (loading) {
@@ -398,8 +411,14 @@ export function PlatformConnector() {
                         variant="ghost"
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => handleDisconnect(platform.id)}
+                        disabled={disconnecting === platform.id}
+                        title="Disconnect"
                       >
-                        <X className="h-4 w-4" />
+                        {disconnecting === platform.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                   ) : (

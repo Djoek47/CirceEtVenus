@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Link2, Check, ArrowRight, Loader2, X } from 'lucide-react'
+import { Link2, Check, ArrowRight, Loader2, X, Unplug } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -82,6 +82,7 @@ export function PlatformIntegrationWidget() {
   )
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
+  const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   
@@ -254,6 +255,33 @@ export function PlatformIntegrationWidget() {
     }
   }
 
+  const handleDisconnect = async (platformId: string) => {
+    setDisconnecting(platformId)
+    setError(null)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Update the connection to disconnected
+      const { error: dbError } = await supabase
+        .from('platform_connections')
+        .update({ is_connected: false })
+        .eq('user_id', user.id)
+        .eq('platform', platformId)
+
+      if (dbError) throw dbError
+
+      setSuccess(`${platformId.charAt(0).toUpperCase() + platformId.slice(1)} disconnected`)
+      await loadConnections()
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to disconnect')
+    } finally {
+      setDisconnecting(null)
+    }
+  }
+
   const connectedCount = platforms.filter(p => p.connected).length
 
   const getPlatformLogo = (platformId: string) => {
@@ -355,12 +383,28 @@ export function PlatformIntegrationWidget() {
                 </div>
                 
                 {platform.connected ? (
-                  <Badge 
-                    variant="secondary" 
-                    className="bg-green-500/10 text-green-600 border-0 text-xs"
-                  >
-                    Synced
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="secondary" 
+                      className="bg-green-500/10 text-green-600 border-0 text-xs"
+                    >
+                      Synced
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDisconnect(platform.id)}
+                      disabled={disconnecting === platform.id}
+                      title="Disconnect"
+                    >
+                      {disconnecting === platform.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Unplug className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 ) : (
                   <Button 
                     size="sm" 

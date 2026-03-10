@@ -20,32 +20,32 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {
-  // Check if user has any real data (platforms connected and synced)
-  const hasData = stats.totalRevenue > 0 || stats.totalFans > 0 || stats.activeConversations > 0 || stats.scheduledContent > 0
+  // Check if user has any connected platforms - if connected, show actual numbers (even 0)
+  const hasConnectedPlatforms = stats.hasConnectedPlatforms
 
   const cards = [
     {
       title: 'Total Revenue',
-      value: hasData ? `$${formatNumber(stats.totalRevenue)}` : '--',
-      change: hasData ? stats.revenueChange : null,
+      value: hasConnectedPlatforms ? `$${formatNumber(stats.totalRevenue)}` : '--',
+      change: hasConnectedPlatforms ? stats.revenueChange : null,
       icon: DollarSign,
     },
     {
       title: 'Total Fans',
-      value: hasData ? formatNumber(stats.totalFans) : '--',
-      change: hasData ? stats.fansChange : null,
+      value: hasConnectedPlatforms ? formatNumber(stats.totalFans) : '--',
+      change: hasConnectedPlatforms ? stats.fansChange : null,
       icon: Users,
     },
     {
       title: 'Active Conversations',
-      value: hasData ? formatNumber(stats.activeConversations) : '--',
-      change: hasData ? stats.conversationsChange : null,
+      value: hasConnectedPlatforms ? formatNumber(stats.activeConversations) : '--',
+      change: hasConnectedPlatforms ? stats.conversationsChange : null,
       icon: MessageSquare,
     },
     {
       title: 'Scheduled Content',
-      value: hasData ? formatNumber(stats.scheduledContent) : '--',
-      change: hasData ? stats.contentChange : null,
+      value: hasConnectedPlatforms ? formatNumber(stats.scheduledContent) : '--',
+      change: hasConnectedPlatforms ? stats.contentChange : null,
       icon: Calendar,
     },
   ]

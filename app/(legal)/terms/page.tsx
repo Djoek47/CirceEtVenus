@@ -101,7 +101,38 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold">7. Subscription and Payments</h2>
+            <h2 className="text-xl font-semibold">7. Platform Data Access and Usage</h2>
+            <p className="text-muted-foreground">
+              When you connect your third-party platform accounts (such as OnlyFans, Fansly, or other creator platforms)
+              to Circe et Venus, you authorize us to access, retrieve, and store certain data from those platforms to
+              provide our services. This includes but is not limited to:
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-6 text-muted-foreground">
+              <li><strong>Revenue and earnings data</strong> — including transaction history, subscription revenue, tips, and pay-per-view sales</li>
+              <li><strong>Fan and subscriber information</strong> — usernames, subscription status, spending history, and engagement metrics</li>
+              <li><strong>Messaging and conversation data</strong> — message counts, response times, and conversation metadata</li>
+              <li><strong>Content performance metrics</strong> — views, likes, comments, and engagement statistics</li>
+              <li><strong>Account analytics</strong> — growth trends, churn rates, and historical performance data</li>
+            </ul>
+            <p className="mt-4 text-muted-foreground">
+              By connecting your accounts, you confirm that you have the authority to grant this access and that doing so
+              does not violate the terms of service of the connected platforms. We use this data solely to:
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-6 text-muted-foreground">
+              <li>Display unified analytics and dashboards within the Platform</li>
+              <li>Power AI-driven insights and recommendations through Circe and Venus</li>
+              <li>Enable fan management and retention features</li>
+              <li>Generate reports and performance summaries</li>
+            </ul>
+            <p className="mt-4 text-muted-foreground">
+              We implement industry-standard security measures to protect your connected account data. You may disconnect
+              your platform accounts at any time through your account settings. Upon disconnection, we will cease accessing
+              new data, though historical data may be retained in accordance with our data retention policies and applicable law.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold">8. Subscription and Payments</h2>
             <p className="text-muted-foreground">
               Certain features require a paid subscription. Subscription fees are billed in advance on a monthly
               or annual basis. You may cancel your subscription at any time, with access continuing until the
@@ -110,7 +141,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold">8. Termination</h2>
+            <h2 className="text-xl font-semibold">9. Termination</h2>
             <p className="text-muted-foreground">
               We reserve the right to suspend or terminate your account for violations of these Terms. You may
               terminate your account at any time through the settings page. Upon termination, your data will be
@@ -119,7 +150,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold">9. Limitation of Liability</h2>
+            <h2 className="text-xl font-semibold">10. Limitation of Liability</h2>
             <p className="text-muted-foreground">
               To the maximum extent permitted by law, Circe et Venus shall not be liable for any indirect,
               incidental, special, consequential, or punitive damages arising from your use of the Platform.
@@ -128,7 +159,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold">10. Governing Law</h2>
+            <h2 className="text-xl font-semibold">11. Governing Law</h2>
             <p className="text-muted-foreground">
               These Terms shall be governed by and construed in accordance with the laws of the State of Delaware,
               United States, without regard to its conflict of law provisions. Any disputes shall be resolved
@@ -137,7 +168,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold">11. Contact Information</h2>
+            <h2 className="text-xl font-semibold">12. Contact Information</h2>
             <p className="text-muted-foreground">
               For questions about these Terms, please contact us at:
             </p>

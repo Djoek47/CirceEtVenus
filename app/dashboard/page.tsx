@@ -25,6 +25,7 @@ export default async function DashboardPage() {
     { data: leakAlerts },
     { data: mentions },
     { data: analytics },
+    { data: platformConnections },
   ] = await Promise.all([
     supabase.from('fans').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
     supabase.from('content').select('*').eq('user_id', user.id).eq('status', 'scheduled'),
@@ -32,7 +33,11 @@ export default async function DashboardPage() {
     supabase.from('leak_alerts').select('*').eq('user_id', user.id).eq('status', 'detected').limit(5),
     supabase.from('reputation_mentions').select('*').eq('user_id', user.id).eq('is_reviewed', false).limit(5),
     supabase.from('analytics_snapshots').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(30),
+    supabase.from('platform_connections').select('*').eq('user_id', user.id).eq('is_connected', true),
   ])
+
+  // Check if user has any connected platforms
+  const hasConnectedPlatforms = (platformConnections?.length || 0) > 0
 
   // Calculate stats from analytics data - aggregate from both platforms
   const totalRevenue = analytics?.reduce((sum, a) => sum + (a.revenue || 0), 0) || 0
@@ -67,6 +72,7 @@ export default async function DashboardPage() {
     contentChange: 0,
     leakAlerts: leakAlerts?.length || 0,
     mentionsToReview: mentions?.length || 0,
+    hasConnectedPlatforms,
   }
 
   // Get current cosmic data

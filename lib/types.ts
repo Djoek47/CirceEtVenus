@@ -149,6 +149,7 @@ export interface DashboardStats {
   contentChange: number
   leakAlerts: number
   mentionsToReview: number
+  hasConnectedPlatforms: boolean
 }
 
 // Chart Data Types

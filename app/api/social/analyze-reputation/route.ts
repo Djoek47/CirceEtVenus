@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
+import { computeReputationScore } from '@/lib/reputation/score'
 
 // POST: Analyze reputation using AI web search
 export async function POST(request: NextRequest) {
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { platform, username, additionalKeywords, connectedPlatforms } = await request.json()
+    const { platform, username, additionalKeywords, connectedPlatforms, skipScan } = await request.json()
     
     if (!platform || !username) {
       return NextResponse.json({ error: 'Platform and username are required' }, { status: 400 })
@@ -23,6 +24,19 @@ export async function POST(request: NextRequest) {
     const allUsernames = [username, ...(additionalKeywords || [])]
     const uniqueUsernames = [...new Set(allUsernames)]
     
+    // Optionally trigger a fresh scan first (unless explicitly skipped)
+    if (!skipScan) {
+      try {
+        await fetch(new URL('/api/social/scan-reputation', request.url), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      } catch {
+        // ignore scan failure for analysis
+      }
+    }
+
     // Build platform context
     let platformContext = ''
     if (connectedPlatforms && connectedPlatforms.length > 0) {
@@ -32,7 +46,7 @@ export async function POST(request: NextRequest) {
       platformContext = `\nConnected creator platforms: ${platformList}`
     }
 
-    // Use AI to analyze reputation by searching the web
+    // Use AI to analyze reputation based on stored mentions + web search
     const platformName = platform === 'all' 
       ? 'multiple platforms' 
       : platform === 'twitter' 
@@ -40,7 +54,17 @@ export async function POST(request: NextRequest) {
         : platform.charAt(0).toUpperCase() + platform.slice(1)
     
     const searchKeywords = uniqueUsernames.join(', @')
-    
+
+    // Pull recent mentions from DB to inform both scoring and the AI summary
+    const { data: dbMentions } = await supabase
+      .from('reputation_mentions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('detected_at', { ascending: false })
+      .limit(100)
+
+    const score = computeReputationScore((dbMentions || []) as any)
+
     const { text } = await generateText({
       model: gateway('openai/gpt-4o-mini'),
       system: `You are a social media and content creator reputation analyst. Analyze the online reputation of content creators across all platforms including OnlyFans, Fansly, Instagram, TikTok, Twitter/X, and other social media.
@@ -79,7 +103,11 @@ export async function POST(request: NextRequest) {
       - Presence on adult content platforms (OnlyFans, Fansly)
       - Social media influence and reach
       
-      Provide a comprehensive reputation analysis covering all known aliases and platforms.`,
+      Provide a comprehensive reputation analysis covering all known aliases and platforms.
+
+      Here are up to 100 recent mentions we have already collected from the web for this creator:
+      ${JSON.stringify(dbMentions || [], null, 2)}
+      `,
     })
 
     // Parse the AI response
@@ -93,19 +121,17 @@ export async function POST(request: NextRequest) {
         throw new Error('No JSON found in response')
       }
     } catch {
-      // Fallback if parsing fails
+      // Fallback if parsing fails: synthesize analysis from score
       analysis = {
-        overall_score: 70,
-        sentiment: 'neutral',
-        summary: `@${username} on ${platformName} appears to have a moderate online presence. Based on typical engagement patterns for content creators on this platform, they maintain a generally positive but low-profile reputation.`,
-        mentions: [
-          {
-            source: platformName,
-            content: 'Active content creator with regular posting schedule',
-            sentiment: 'positive',
-            date: 'Recent'
-          }
-        ]
+        overall_score: score.overallScore,
+        sentiment: score.sentiment,
+        summary: `@${username} on ${platformName} has an overall ${score.sentiment} reputation based on recent mentions.`,
+        mentions: (dbMentions || []).slice(0, 5).map((m: any) => ({
+          source: m.platform,
+          content: m.content_snippet,
+          sentiment: m.sentiment,
+          date: m.detected_at,
+        })),
       }
     }
 
@@ -121,25 +147,12 @@ export async function POST(request: NextRequest) {
       .eq('platform', platform)
       .eq('username', username)
 
-    // Store the analysis in reputation_mentions
-    if (analysis.mentions && analysis.mentions.length > 0) {
-      const mentionsToInsert = analysis.mentions.map((mention: { source: string; content: string; sentiment: string }) => ({
-        user_id: user.id,
-        platform: mention.source,
-        url: `https://${platform}.com/${username}`,
-        content_snippet: mention.content,
-        sentiment: mention.sentiment,
-        author: `@${username}`,
-        detected_at: new Date().toISOString(),
-        is_reviewed: false,
-      }))
+    // Do NOT synthesize extra mentions into DB anymore; rely on real scanned mentions.
 
-      await supabase
-        .from('reputation_mentions')
-        .insert(mentionsToInsert)
-    }
-
-    return NextResponse.json(analysis)
+    return NextResponse.json({
+      ...analysis,
+      score: score,
+    })
   } catch (error) {
     console.error('Error analyzing reputation:', error)
     return NextResponse.json(

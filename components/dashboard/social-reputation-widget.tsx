@@ -77,11 +77,13 @@ export function SocialReputationWidget() {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('instagram')
   const [error, setError] = useState<string | null>(null)
   const [reputationData, setReputationData] = useState<ReputationAnalysis | null>(null)
+  const [isPro, setIsPro] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
     loadProfiles()
     loadConnectedPlatforms()
+    loadSubscription()
   }, [])
 
   const loadProfiles = async () => {
@@ -116,6 +118,24 @@ export function SocialReputationWidget() {
 
     if (data) {
       setConnectedPlatforms(data as ConnectedPlatform[])
+    }
+  }
+
+  const loadSubscription = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('plan_id,plan')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    const planId = (data as any)?.plan_id || (data as any)?.plan
+    if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
+      setIsPro(true)
+    } else {
+      setIsPro(false)
     }
   }
 
@@ -298,7 +318,7 @@ export function SocialReputationWidget() {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            {(profiles.length > 0 || connectedPlatforms.length > 0) && (
+            {isPro && (profiles.length > 0 || connectedPlatforms.length > 0) && (
               <Button 
                 variant="default" 
                 size="sm"
@@ -311,8 +331,13 @@ export function SocialReputationWidget() {
                 ) : (
                   <Search className="h-4 w-4" />
                 )}
-                Full Scan
+                Full Scan (Pro)
               </Button>
+            )}
+            {!isPro && (profiles.length > 0 || connectedPlatforms.length > 0) && (
+              <Badge variant="outline" className="text-xs">
+                Pro scan available with Venus Pro
+              </Badge>
             )}
             <Button 
               variant="outline" 

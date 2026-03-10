@@ -13,23 +13,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { platform, username } = await request.json()
+    const { platform, username, additionalKeywords, connectedPlatforms } = await request.json()
     
     if (!platform || !username) {
       return NextResponse.json({ error: 'Platform and username are required' }, { status: 400 })
     }
 
+    // Build search keywords from all connected platforms and usernames
+    const allUsernames = [username, ...(additionalKeywords || [])]
+    const uniqueUsernames = [...new Set(allUsernames)]
+    
+    // Build platform context
+    let platformContext = ''
+    if (connectedPlatforms && connectedPlatforms.length > 0) {
+      const platformList = connectedPlatforms.map((p: { platform: string; username: string }) => 
+        `${p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}: @${p.username}`
+      ).join(', ')
+      platformContext = `\nConnected creator platforms: ${platformList}`
+    }
+
     // Use AI to analyze reputation by searching the web
-    const platformName = platform === 'twitter' ? 'X (Twitter)' : platform.charAt(0).toUpperCase() + platform.slice(1)
+    const platformName = platform === 'all' 
+      ? 'multiple platforms' 
+      : platform === 'twitter' 
+        ? 'X (Twitter)' 
+        : platform.charAt(0).toUpperCase() + platform.slice(1)
+    
+    const searchKeywords = uniqueUsernames.join(', @')
     
     const { text } = await generateText({
       model: gateway('openai/gpt-4o-mini'),
-      system: `You are a social media reputation analyst. Analyze the online reputation of content creators and influencers. 
+      system: `You are a social media and content creator reputation analyst. Analyze the online reputation of content creators across all platforms including OnlyFans, Fansly, Instagram, TikTok, Twitter/X, and other social media.
+      
       Provide analysis in JSON format with the following structure:
       {
         "overall_score": number (0-100),
         "sentiment": "positive" | "neutral" | "negative",
-        "summary": "Brief 2-3 sentence summary of their online reputation",
+        "summary": "Brief 2-3 sentence summary of their online reputation across all platforms",
         "mentions": [
           {
             "source": "Platform/Website name",
@@ -37,17 +57,29 @@ export async function POST(request: NextRequest) {
             "sentiment": "positive" | "neutral" | "negative",
             "date": "Approximate date or 'Recent'"
           }
-        ]
+        ],
+        "platforms_analyzed": ["list of platforms checked"],
+        "risk_factors": ["any potential reputation risks"],
+        "positive_factors": ["positive reputation indicators"]
       }
-      Base your analysis on common patterns for content creators. If you don't have specific information, provide a general assessment based on typical patterns for their platform.`,
-      prompt: `Analyze the online reputation of @${username} on ${platformName}. 
-      Consider:
-      - General public perception
-      - Common mentions or discussions about them
-      - Brand safety considerations
-      - Community engagement patterns
       
-      Provide a realistic reputation analysis.`,
+      Consider their presence on adult content platforms (OnlyFans, Fansly) as legitimate business activity.
+      Focus on: public perception, fan engagement, controversy, brand safety, and overall influence.`,
+      prompt: `Analyze the worldwide online reputation for the content creator known as: @${searchKeywords}
+      
+      ${platformContext}
+      
+      Search focus: ${platformName}
+      
+      Consider:
+      - General public perception across all platforms
+      - Fan community sentiment and engagement
+      - Any controversies or notable mentions
+      - Brand safety and partnership potential
+      - Presence on adult content platforms (OnlyFans, Fansly)
+      - Social media influence and reach
+      
+      Provide a comprehensive reputation analysis covering all known aliases and platforms.`,
     })
 
     // Parse the AI response

@@ -43,6 +43,12 @@ interface SocialProfile {
   last_updated: string
 }
 
+interface ConnectedPlatform {
+  platform: string
+  platform_username: string
+  is_connected: boolean
+}
+
 interface ReputationAnalysis {
   overall_score: number
   sentiment: 'positive' | 'neutral' | 'negative'
@@ -63,6 +69,7 @@ const SOCIAL_PLATFORMS = [
 
 export function SocialReputationWidget() {
   const [profiles, setProfiles] = useState<SocialProfile[]>([])
+  const [connectedPlatforms, setConnectedPlatforms] = useState<ConnectedPlatform[]>([])
   const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -74,6 +81,7 @@ export function SocialReputationWidget() {
 
   useEffect(() => {
     loadProfiles()
+    loadConnectedPlatforms()
   }, [])
 
   const loadProfiles = async () => {
@@ -93,6 +101,41 @@ export function SocialReputationWidget() {
       setProfiles(data as SocialProfile[])
     }
     setLoading(false)
+  }
+
+  // Load connected creator platforms (OnlyFans, Fansly) to use their usernames for reputation search
+  const loadConnectedPlatforms = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('platform_connections')
+      .select('platform, platform_username, is_connected')
+      .eq('user_id', user.id)
+      .eq('is_connected', true)
+
+    if (data) {
+      setConnectedPlatforms(data as ConnectedPlatform[])
+    }
+  }
+
+  // Get all usernames for reputation search (from social profiles + connected platforms)
+  const getAllUsernames = (): string[] => {
+    const usernames: string[] = []
+    
+    // Add social profile usernames
+    profiles.forEach(p => {
+      if (p.username) usernames.push(p.username)
+    })
+    
+    // Add connected platform usernames (OnlyFans, Fansly, etc.)
+    connectedPlatforms.forEach(p => {
+      if (p.platform_username && !usernames.includes(p.platform_username)) {
+        usernames.push(p.platform_username)
+      }
+    })
+    
+    return usernames
   }
 
   const handleAddProfile = async () => {
@@ -132,12 +175,62 @@ export function SocialReputationWidget() {
     setError(null)
     
     try {
+      // Include all connected usernames as search keywords
+      const allUsernames = getAllUsernames()
+      
       const response = await fetch('/api/social/analyze-reputation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform: profile.platform,
           username: profile.username,
+          additionalKeywords: allUsernames.filter(u => u !== profile.username),
+          connectedPlatforms: connectedPlatforms.map(p => ({
+            platform: p.platform,
+            username: p.platform_username
+          }))
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      setReputationData(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to analyze reputation')
+    } finally {
+      setAnalyzing(null)
+    }
+  }
+
+  // Analyze reputation across all connected platforms at once
+  const handleFullReputationScan = async () => {
+    setAnalyzing('full')
+    setError(null)
+    
+    try {
+      const allUsernames = getAllUsernames()
+      
+      if (allUsernames.length === 0) {
+        setError('No usernames to analyze. Connect a platform or add a social profile first.')
+        setAnalyzing(null)
+        return
+      }
+      
+      const response = await fetch('/api/social/analyze-reputation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: 'all',
+          username: allUsernames[0],
+          additionalKeywords: allUsernames.slice(1),
+          connectedPlatforms: connectedPlatforms.map(p => ({
+            platform: p.platform,
+            username: p.platform_username
+          }))
         }),
       })
 
@@ -204,19 +297,61 @@ export function SocialReputationWidget() {
               Track your presence and reputation across social platforms
             </CardDescription>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setShowAddForm(!showAddForm)}
-          >
-            {showAddForm ? 'Cancel' : 'Add Profile'}
-          </Button>
+          <div className="flex gap-2">
+            {(profiles.length > 0 || connectedPlatforms.length > 0) && (
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={handleFullReputationScan}
+                disabled={analyzing === 'full'}
+                className="gap-1.5"
+              >
+                {analyzing === 'full' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                Full Scan
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowAddForm(!showAddForm)}
+            >
+              {showAddForm ? 'Cancel' : 'Add Profile'}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
           <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
             {error}
+          </div>
+        )}
+
+        {/* Connected Creator Platforms */}
+        {connectedPlatforms.length > 0 && (
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Connected Creator Accounts (used for reputation search):</p>
+            <div className="flex flex-wrap gap-2">
+              {connectedPlatforms.map((platform) => (
+                <Badge 
+                  key={platform.platform}
+                  variant="secondary"
+                  className="gap-1.5"
+                  style={{ 
+                    backgroundColor: platform.platform === 'onlyfans' ? '#00AFF015' : '#009FFF15',
+                    color: platform.platform === 'onlyfans' ? '#00AFF0' : '#009FFF',
+                    border: `1px solid ${platform.platform === 'onlyfans' ? '#00AFF030' : '#009FFF30'}`
+                  }}
+                >
+                  {platform.platform === 'onlyfans' ? 'OnlyFans' : 'Fansly'}
+                  <span className="font-normal">@{platform.platform_username}</span>
+                </Badge>
+              ))}
+            </div>
           </div>
         )}
 

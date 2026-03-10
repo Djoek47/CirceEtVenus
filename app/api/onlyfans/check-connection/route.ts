@@ -57,6 +57,10 @@ export async function GET() {
     // Found account(s) on the OnlyFans API - use the most recent one
     const account = accountsResult.accounts[accountsResult.accounts.length - 1]
     
+    // Get display name from onlyfans_user_data (this is the actual username, not the API ID)
+    const userData = (account as any)?.onlyfans_user_data || {}
+    const displayName = userData.name || account.onlyfans_username || 'Unknown'
+    
     // Check if we already have this connection saved
     const { data: existingConnection } = await supabase
       .from('platform_connections')
@@ -65,12 +69,20 @@ export async function GET() {
       .eq('platform', 'onlyfans')
       .single()
 
-    // If already saved with same account ID, just return
+    // If already saved with same account ID but wrong username, update it
     if (existingConnection && existingConnection.access_token === account.id) {
+      // Always update the username to the correct display name
+      if (existingConnection.platform_username !== displayName) {
+        await supabase
+          .from('platform_connections')
+          .update({ platform_username: displayName })
+          .eq('user_id', user.id)
+          .eq('platform', 'onlyfans')
+      }
       return NextResponse.json({
         connected: true,
         accountId: account.id,
-        username: existingConnection.platform_username || account.onlyfans_username
+        username: displayName
       })
     }
 
@@ -81,10 +93,6 @@ export async function GET() {
       .delete()
       .eq('user_id', user.id)
       .eq('platform', 'onlyfans')
-    
-    // Get display name from onlyfans_user_data
-    const userData = (account as any)?.onlyfans_user_data || {}
-    const displayName = userData.name || account.onlyfans_username || 'Unknown'
     
     const { error: insertError } = await supabase
       .from('platform_connections')

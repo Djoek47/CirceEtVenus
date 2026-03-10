@@ -11,17 +11,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import Image from 'next/image'
 
 const OnlyFansLogo = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={cn('h-4 w-4', className)} fill="currentColor">
-    <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4a6 6 0 1 1 0 12A6 6 0 0 1 12 6zm0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/>
-  </svg>
+  <Image src="/onlyfans-logo.png" alt="OnlyFans" width={16} height={16} className={cn('h-4 w-4', className)} />
 )
 
 const FanslyLogo = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={cn('h-4 w-4', className)} fill="currentColor">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.59 7.58L10 16.17l-2.59-2.58L6 15l4 4 8-8-1.41-1.42z"/>
-  </svg>
+  <Image src="/fansly-logo.png" alt="Fansly" width={16} height={16} className={cn('h-4 w-4', className)} />
 )
 
 const PLATFORM_META: Record<string, { color: string; label: string; Logo: React.FC<{ className?: string }> }> = {

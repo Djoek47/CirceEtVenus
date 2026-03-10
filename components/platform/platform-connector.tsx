@@ -16,8 +16,16 @@ import {
 } from '@/components/ui/dialog'
 import {
   Loader2, Check, RefreshCw, AlertCircle, ExternalLink, X,
-  Link2, ArrowRight, Mail, Lock, Shield,
+  Link2, ArrowRight, Mail, Lock, Shield, Unplug, Settings2,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { MoreHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -511,27 +519,40 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
                   {connected ? (
                     <div className="flex items-center gap-1.5">
-                      <Button
-                        size="sm"
-                        className="h-8 px-3 text-xs gap-1.5 cursor-default"
-                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', border: 'none' }}
-                        disabled
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                        Connected
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleSync(platform.id)}
-                        disabled={syncing === platform.id}
-                        title="Sync data"
-                      >
-                        {syncing === platform.id
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <RefreshCw className="h-3.5 w-3.5" />}
-                      </Button>
+                      <div className="flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-2.5 py-1.5">
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-xs font-medium text-green-600">Connected</span>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            onClick={() => handleSync(platform.id)}
+                            disabled={syncing === platform.id}
+                            className="gap-2"
+                          >
+                            {syncing === platform.id
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <RefreshCw className="h-4 w-4" />}
+                            Sync data
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleDisconnect(platform.id)}
+                            disabled={disconnecting === platform.id}
+                            className="gap-2 text-destructive focus:text-destructive"
+                          >
+                            {disconnecting === platform.id
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Unplug className="h-4 w-4" />}
+                            Disconnect
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   ) : (
                     <Button
@@ -649,51 +670,55 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
                   </div>
 
                   {connected ? (
-                    <div className="flex flex-col gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        className="w-full cursor-default"
-                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', border: 'none' }}
-                        disabled
-                      >
-                        <Check className="mr-2 h-4 w-4" />
-                        Connected
-                      </Button>
+                    <div className="space-y-3 pt-2">
+                      {/* Connected status bar */}
+                      <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/8 px-3 py-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500">
+                          <Check className="h-3.5 w-3.5 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-green-600">Connected</p>
+                          {connection?.platform_username && (
+                            <p className="text-xs text-muted-foreground truncate">@{connection.platform_username}</p>
+                          )}
+                        </div>
+                      </div>
+                      {/* Actions */}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="flex-1"
+                          className="flex-1 gap-2"
                           onClick={() => handleSync(platform.id)}
                           disabled={syncing === platform.id}
                         >
                           {syncing === platform.id
-                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            : <RefreshCw className="mr-2 h-4 w-4" />}
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <RefreshCw className="h-3.5 w-3.5" />}
                           Sync Data
                         </Button>
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          variant="outline"
+                          className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60"
                           onClick={() => handleDisconnect(platform.id)}
                           disabled={disconnecting === platform.id}
-                          title="Disconnect"
                         >
                           {disconnecting === platform.id
-                            ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <X className="h-4 w-4" />}
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Unplug className="h-3.5 w-3.5" />}
+                          Disconnect
                         </Button>
                       </div>
                     </div>
                   ) : (
                     <Button
                       size="sm"
-                      className="w-full shadow-lg transition-all hover:shadow-xl"
+                      className="w-full shadow-lg transition-all hover:shadow-xl gap-2"
                       style={{ background: `linear-gradient(135deg, ${platform.color}, ${platform.color}CC)` }}
                       onClick={() => handleConnect(platform.id)}
                     >
-                      <ExternalLink className="mr-2 h-4 w-4" />
+                      <ExternalLink className="h-4 w-4" />
                       Connect {platform.name}
                     </Button>
                   )}

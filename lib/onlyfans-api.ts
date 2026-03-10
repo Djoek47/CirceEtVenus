@@ -126,7 +126,11 @@ class OnlyFansAPI {
       }
       
       if (!response.ok) {
-        return { success: false, message: data.message || data.error || 'Authentication failed' }
+        const rawMessage: string = data.message || data.error || ''
+        const message = rawMessage.toLowerCase().includes('already connected')
+          ? 'This account is already under someone\'s spell. If you need to manage multiple accounts through our platform, please contact us at support@circe-venus.com.'
+          : rawMessage || 'Authentication failed'
+        return { success: false, message }
       }
 
       return {

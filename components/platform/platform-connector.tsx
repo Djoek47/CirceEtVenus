@@ -390,18 +390,30 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     setDisconnecting(platformId)
     setError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      // For OnlyFans, call the disconnect API to also remove from the OnlyFans API
+      if (platformId === 'onlyfans') {
+        const response = await fetch('/api/onlyfans/disconnect', { method: 'POST' })
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to disconnect')
+        }
+      } else {
+        // For other platforms, just update the database
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Not authenticated')
 
-      const { error: dbError } = await supabase
-        .from('platform_connections')
-        .update({ is_connected: false })
-        .eq('user_id', user.id)
-        .eq('platform', platformId)
+        const { error: dbError } = await supabase
+          .from('platform_connections')
+          .update({ is_connected: false })
+          .eq('user_id', user.id)
+          .eq('platform', platformId)
 
-      if (dbError) throw dbError
+        if (dbError) throw dbError
+      }
 
       await loadConnections()
+      setSuccess('Platform disconnected successfully')
+      setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to disconnect')
     } finally {

@@ -268,6 +268,33 @@ class OnlyFansAPI {
     }
   }
 
+  /**
+   * Delete/disconnect an account from the API - DELETE /api/accounts/{account_id}
+   * This removes the account from the OnlyFans API so it can be reconnected
+   */
+  async deleteAccount(accountId: string): Promise<{
+    success: boolean
+    message?: string
+  }> {
+    try {
+      const response = await fetch(`${ONLYFANS_API_BASE}/accounts/${accountId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      })
+
+      if (response.ok || response.status === 204) {
+        return { success: true }
+      }
+
+      const data = await response.json().catch(() => ({}))
+      return { success: false, message: data.message || `Failed to delete account: ${response.status}` }
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Failed to delete account' }
+    }
+  }
+
   // ============ API REQUESTS ============
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const finalAccountId = accountId || account_id
     const finalUserId = clientReferenceId || client_reference_id
 
-    console.log('[v0] OnlyFans POST callback:', { finalAccountId, username, finalUserId })
+    
 
     if (!finalAccountId) {
       return NextResponse.json({ error: 'No account ID provided' }, { status: 400 })
@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
       })
 
     if (dbError) {
-      console.error('[v0] Database error:', dbError)
       return NextResponse.json({ error: 'Failed to save connection' }, { status: 500 })
     }
 
@@ -59,7 +58,6 @@ export async function POST(request: NextRequest) {
       username
     })
   } catch (error) {
-    console.error('[v0] OnlyFans POST callback error:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Callback failed' },
       { status: 500 }

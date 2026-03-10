@@ -132,20 +132,75 @@ export function PlatformIntegrationWidget() {
     const params = new URLSearchParams(window.location.search)
     const connected = params.get('connected')
     const errorParam = params.get('error')
+    const accountId = params.get('accountId')
+    const username = params.get('username')
     
-    if (connected === 'onlyfans') {
-      setSuccess('OnlyFans connected successfully!')
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname)
-      // Reload connections
-      loadConnections()
+    if (connected === 'onlyfans' || accountId) {
+      handleOnlyFansCallback(accountId || '', username || '')
     }
     
     if (errorParam) {
       setError(decodeURIComponent(errorParam))
       window.history.replaceState({}, '', window.location.pathname)
     }
+
+    // Listen for postMessage from OnlyFans SDK iframe
+    const handleMessage = async (event: MessageEvent) => {
+      // Check if it's from OnlyFans auth
+      if (event.data?.type === 'onlyfans-auth-success' || 
+          event.data?.accountId ||
+          event.data?.account_id) {
+        const accId = event.data.accountId || event.data.account_id
+        const uname = event.data.username
+        if (accId) {
+          handleOnlyFansCallback(accId, uname)
+        }
+      }
+    }
+    
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
   }, [])
+
+  // Handle OnlyFans callback from various sources
+  const handleOnlyFansCallback = async (accountId: string, username: string) => {
+    setSuccess('OnlyFans connected! Saving...')
+    window.history.replaceState({}, '', window.location.pathname)
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { error: dbError } = await supabase
+      .from('platform_connections')
+      .upsert({
+        user_id: user.id,
+        platform: 'onlyfans',
+        platform_user_id: accountId,
+        platform_username: username || 'Connected',
+        is_connected: true,
+        access_token: accountId,
+        last_sync_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,platform'
+      })
+
+    if (dbError) {
+      setError('Failed to save connection')
+      return
+    }
+
+    await loadConnections()
+    
+    // Auto-sync
+    try {
+      await fetch('/api/onlyfans/sync', { method: 'POST' })
+      setSuccess('OnlyFans synced!')
+      setTimeout(() => window.location.reload(), 1500)
+    } catch {
+      setSuccess('Connected! Click Sync to import data.')
+      setTimeout(() => setSuccess(null), 3000)
+    }
+  }
 
   const handleConnectOnlyFans = async () => {
     setConnecting('onlyfans')
@@ -169,64 +224,64 @@ export function PlatformIntegrationWidget() {
       const { data: { user } } = await supabase.auth.getUser()
       const userId = user?.id
       
+      // Start polling to check for new accounts via API
+      let pollCount = 0
+      const maxPolls = 60 // Poll for up to 2 minutes
+      const pollInterval = setInterval(async () => {
+        pollCount++
+        if (pollCount > maxPolls) {
+          clearInterval(pollInterval)
+          return
+        }
+        
+        try {
+          // Check if account was connected via API callback
+          const checkResponse = await fetch('/api/onlyfans/check-connection')
+          const checkData = await checkResponse.json()
+          
+          if (checkData.connected && checkData.accountId) {
+            clearInterval(pollInterval)
+            handleOnlyFansCallback(checkData.accountId, checkData.username || '')
+            setConnecting(null)
+          }
+        } catch {
+          // Continue polling
+        }
+      }, 2000)
+
       startOnlyFansAuthentication(data.token, {
         onSuccess: async (result: { accountId: string; username?: string }) => {
-          console.log('[v0] OnlyFans onSuccess called:', result)
+          clearInterval(pollInterval)
           
           if (userId) {
-            // Save connection to database
-            const { error: dbError } = await supabase
-              .from('platform_connections')
-              .upsert({
-                user_id: userId,
-                platform: 'onlyfans',
-                platform_user_id: result.accountId,
-                platform_username: result.username || 'Connected',
-                is_connected: true,
-                access_token: result.accountId,
-                last_sync_at: new Date().toISOString(),
-              }, {
-                onConflict: 'user_id,platform'
-              })
-            
-            if (dbError) {
-              console.error('[v0] Database error:', dbError)
-              setError('Failed to save connection')
-              setConnecting(null)
-              return
-            }
-            
-            setSuccess('OnlyFans connected! Syncing your data...')
-            await loadConnections()
-            
-            // Auto-sync data after connecting
-            try {
-              await fetch('/api/onlyfans/sync', { method: 'POST' })
-              setSuccess('OnlyFans synced! Refreshing...')
-              setTimeout(() => window.location.reload(), 1500)
-            } catch {
-              setSuccess('Connected! Click Sync to import your data.')
-              setTimeout(() => setSuccess(null), 3000)
-            }
+            await handleOnlyFansCallback(result.accountId, result.username || '')
           }
           setConnecting(null)
         },
         onError: (err: { message?: string }) => {
-          console.error('[v0] OnlyFans onError:', err)
+          clearInterval(pollInterval)
           setError(err.message || 'Authentication failed')
           setConnecting(null)
         },
         onClose: () => {
-          console.log('[v0] OnlyFans modal closed')
-          // Check if connection was successful by reloading connections
-          loadConnections().then(() => {
-            const isNowConnected = platforms.find(p => p.id === 'onlyfans')?.connected
-            if (isNowConnected) {
-              setSuccess('OnlyFans connected!')
-              setTimeout(() => window.location.reload(), 1500)
+          // Give it a moment then check if connected
+          setTimeout(async () => {
+            clearInterval(pollInterval)
+            
+            // Check via API if connection was made
+            try {
+              const checkResponse = await fetch('/api/onlyfans/check-connection')
+              const checkData = await checkResponse.json()
+              
+              if (checkData.connected && checkData.accountId) {
+                handleOnlyFansCallback(checkData.accountId, checkData.username || '')
+              }
+            } catch {
+              // Silent fail
             }
-          })
-          setConnecting(null)
+            
+            setConnecting(null)
+          }, 500)
         }
       })
     } catch (err) {

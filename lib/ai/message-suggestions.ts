@@ -1,4 +1,3 @@
-import { gateway } from '@ai-sdk/gateway'
 import { generateText } from 'ai'
 
 type Role = 'creator' | 'fan'
@@ -276,7 +275,7 @@ ${conversation}
 ${instruction}`
 
   const { text } = await generateText({
-    model: gateway('openai/gpt-4o-mini'),
+    model: 'openai/gpt-4o-mini',
     temperature: 0.5,
     maxTokens: 800,
     prompt: userPrompt,

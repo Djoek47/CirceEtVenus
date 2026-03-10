@@ -1,35 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ConversationList } from './conversation-list'
+import { ConversationList, type Conversation } from './conversation-list'
 import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Loader2 } from 'lucide-react'
-
-interface OnlyFansConversation {
-  user: {
-    id: string
-    username: string
-    name: string
-    avatar: string
-  }
-  lastMessage: {
-    id: string
-    text: string
-    createdAt: string
-    isRead: boolean
-  }
-  unreadCount: number
-}
 
 interface MessagesLayoutProps {
   userId: string
 }
 
 export function MessagesLayout({ userId }: MessagesLayoutProps) {
-  const [conversations, setConversations] = useState<OnlyFansConversation[]>([])
-  const [selectedConversation, setSelectedConversation] = useState<OnlyFansConversation | null>(null)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,16 +24,43 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
     setError(null)
 
     try {
-      const res = await fetch('/api/onlyfans/conversations')
-      const data = await res.json()
+      // Fetch from OnlyFans
+      const onlyfansRes = await fetch('/api/onlyfans/conversations')
+      const onlyfansData = await onlyfansRes.json()
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to load conversations')
+      const allConversations: Conversation[] = []
+
+      // Add OnlyFans conversations with platform tag
+      if (onlyfansRes.ok && onlyfansData.conversations) {
+        const ofConversations = onlyfansData.conversations.map((conv: any) => ({
+          ...conv,
+          platform: 'onlyfans' as const,
+          chatId: conv.chatId || conv.user?.id,
+        }))
+        allConversations.push(...ofConversations)
       }
 
-      setConversations(data.conversations || [])
-      if (data.conversations?.length > 0 && !selectedConversation) {
-        setSelectedConversation(data.conversations[0])
+      // TODO: Add Fansly conversations when API is available
+      // const fanslyRes = await fetch('/api/fansly/conversations')
+      // if (fanslyRes.ok) {
+      //   const fanslyData = await fanslyRes.json()
+      //   const fanslyConversations = fanslyData.conversations.map((conv: any) => ({
+      //     ...conv,
+      //     platform: 'fansly' as const,
+      //   }))
+      //   allConversations.push(...fanslyConversations)
+      // }
+
+      // Sort by most recent message
+      allConversations.sort((a, b) => {
+        const dateA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0
+        const dateB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0
+        return dateB - dateA
+      })
+
+      setConversations(allConversations)
+      if (allConversations.length > 0 && !selectedConversation) {
+        setSelectedConversation(allConversations[0])
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversations')
@@ -104,7 +115,7 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
           </div>
           <h3 className="text-lg font-medium">No Messages Yet</h3>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Your OnlyFans messages will appear here once fans start messaging you.
+            Your messages will appear here once fans start messaging you.
           </p>
           <Button onClick={() => loadConversations(true)} className="mt-4" variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />

@@ -31,6 +31,8 @@ interface OnlyFansConversation {
     isRead: boolean
   }
   unreadCount: number
+  platform: 'onlyfans' | 'fansly'
+  chatId?: string
 }
 
 interface OnlyFansMedia {
@@ -187,6 +189,20 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
             <div className="flex items-center gap-2">
               <span className="font-medium">
                 {fan.name || fan.username || 'Unknown'}
+              </span>
+              {/* Platform badge */}
+              <span className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                conversation.platform === 'onlyfans' 
+                  ? 'bg-sky-500/10 text-sky-500' 
+                  : 'bg-blue-500/10 text-blue-500'
+              )}>
+                <img 
+                  src={conversation.platform === 'onlyfans' ? '/onlyfans-logo.png' : '/fansly-logo.png'}
+                  alt={conversation.platform}
+                  className="h-3 w-3"
+                />
+                {conversation.platform === 'onlyfans' ? 'OnlyFans' : 'Fansly'}
               </span>
             </div>
             <span className="text-xs text-muted-foreground">@{fan.username}</span>

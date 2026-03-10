@@ -97,22 +97,6 @@ const PLATFORMS: Platform[] = [
     dataTypes: ['Followers', 'Tweets', 'Engagement'],
     icon: <TwitterIcon />,
   },
-  {
-    id: 'chaturbate',
-    name: 'Chaturbate',
-    color: '#F59E0B',
-    description: 'Track tokens and broadcast stats',
-    dataTypes: ['Tokens', 'Followers', 'Tips'],
-    icon: <ManyVidsIcon />,
-  },
-  {
-    id: 'stripchat',
-    name: 'Stripchat',
-    color: '#8B5CF6',
-    description: 'Import earnings and fan interactions',
-    dataTypes: ['Earnings', 'Fans', 'Tips'],
-    icon: <ManyVidsIcon />,
-  },
 ]
 
 interface PlatformConnection {

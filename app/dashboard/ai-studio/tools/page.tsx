@@ -353,7 +353,7 @@ export default function AIToolsPage() {
 
         const { data } = await supabase
           .from('subscriptions')
-          .select('ai_credits_used,ai_credits_limit,plan_id,plan')
+          .select('ai_credits_used,ai_credits_limit,plan_id')
           .eq('user_id', user.id)
           .maybeSingle()
 
@@ -363,8 +363,7 @@ export default function AIToolsPage() {
             limit: data.ai_credits_limit ?? 100,
           })
           const rawPlanId = (data as any).plan_id as string | null | undefined
-          const rawPlanName = (data as any).plan as string | null | undefined
-          const normalizedPlanId = rawPlanId?.toLowerCase() || rawPlanName?.toLowerCase() || null
+          const normalizedPlanId = rawPlanId?.toLowerCase() || null
 
           const isKnownProPlan =
             !!normalizedPlanId &&

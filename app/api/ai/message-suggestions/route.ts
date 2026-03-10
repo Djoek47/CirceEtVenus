@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
       !!normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId)
 
     const xaiKey = process.env.XAI_API_KEY
+    const openaiKey = process.env.OPENAI_API_KEY
 
     const ctx = {
       mode,
@@ -75,9 +76,20 @@ export async function POST(req: NextRequest) {
 
     let result
     if (isPro && xaiKey) {
+      // Pro users with Grok configured → prefer Grok
+      result = await generateMessageSuggestionsWithGrok(xaiKey, ctx)
+    } else if (openaiKey) {
+      // Free or Pro without Grok but OpenAI is configured → use OpenAI
+      result = await generateMessageSuggestionsWithOpenAI(ctx)
+    } else if (xaiKey) {
+      // Fallback: OpenAI not configured but Grok is – use Grok even for non‑Pro
       result = await generateMessageSuggestionsWithGrok(xaiKey, ctx)
     } else {
-      result = await generateMessageSuggestionsWithOpenAI(ctx)
+      // No AI provider keys configured – return a clear error instead of generic 500
+      return NextResponse.json(
+        { error: 'AI provider is not configured on the server' },
+        { status: 503 }
+      )
     }
 
     // Count one AI credit for this suggestion run (best effort)

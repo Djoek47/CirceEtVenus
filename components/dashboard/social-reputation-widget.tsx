@@ -136,11 +136,11 @@ export function SocialReputationWidget() {
 
     const { data } = await supabase
       .from('subscriptions')
-      .select('plan_id,plan')
+      .select('plan_id')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    const planId = (data as any)?.plan_id || (data as any)?.plan
+    const planId = (data as any)?.plan_id
     if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
       setIsPro(true)
     } else {

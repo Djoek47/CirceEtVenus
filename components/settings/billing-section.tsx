@@ -40,6 +40,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
     cancelAtPeriodEnd?: boolean
   } | null>(null)
   const [subData, setSubData] = useState<SubscriptionData | null>(null)
+  const [messagesThisMonth, setMessagesThisMonth] = useState<number>(0)
   const [loadingPortal, setLoadingPortal] = useState(false)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -77,6 +78,21 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
       
       if (newSub) setSubData(newSub)
     }
+
+    // Load message activity for this month from analytics snapshots (populated by OnlyFans sync)
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+
+    const { data: analyticsRows } = await supabase
+      .from('analytics_snapshots')
+      .select('messages_received,messages_sent,date,platform')
+      .eq('user_id', userId)
+      .gte('date', startOfMonth.toISOString().split('T')[0])
+
+    const totalMessages =
+      analyticsRows?.reduce((sum, r: any) => sum + (r.messages_received || 0) + (r.messages_sent || 0), 0) || 0
+    setMessagesThisMonth(totalMessages)
   }, [userId, supabase])
 
   useEffect(() => {
@@ -217,7 +233,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
             <div className="rounded-lg border border-border p-4 text-center">
               <Mail className="mx-auto h-6 w-6 text-primary" />
               <p className="mt-2 font-medium">Messages</p>
-              <p className="text-2xl font-bold">234</p>
+              <p className="text-2xl font-bold">{messagesThisMonth.toLocaleString()}</p>
               <p className="text-sm text-muted-foreground">this month</p>
             </div>
           </div>

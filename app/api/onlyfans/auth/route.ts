@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
           .upsert({
             user_id: user.id,
             platform: 'onlyfans',
-            platform_user_id: result.accountId,
+            
             platform_username: result.username || email.split('@')[0],
             is_connected: true,
             access_token: result.accountId,
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
           .upsert({
             user_id: user.id,
             platform: 'onlyfans',
-            platform_user_id: status.accountId,
+            
             platform_username: status.username || 'Connected',
             is_connected: true,
             access_token: status.accountId,
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
           .upsert({
             user_id: user.id,
             platform: 'onlyfans',
-            platform_user_id: account.id,
+            
             platform_username: account.onlyfans_username || 'Connected',
             is_connected: true,
             access_token: account.id,
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
         .upsert({
           user_id: user.id,
           platform: 'onlyfans',
-          platform_user_id: account.id,
+          
           platform_username: account.onlyfans_username || 'Connected',
           is_connected: true,
           access_token: account.id,

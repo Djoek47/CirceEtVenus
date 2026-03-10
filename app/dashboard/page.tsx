@@ -35,22 +35,25 @@ export default async function DashboardPage() {
           .select('id')
           .eq('user_id', user.id)
           .eq('platform', 'onlyfans')
-          .eq('platform_user_id', account.id)
+          .eq('is_connected', true)
           .single()
         
         if (!existingConn) {
           // Save the connection
-          await supabase
+          const { error: insertError } = await supabase
             .from('platform_connections')
             .upsert({
               user_id: user.id,
               platform: 'onlyfans',
-              platform_user_id: account.id,
-              platform_username: account.onlyfans_username || 'Connected',
+              platform_username: account.onlyfans_username || account.display_name || 'Connected',
               is_connected: true,
-              access_token: account.id,
+              access_token: account.id, // Store account ID here
               last_sync_at: new Date().toISOString(),
             }, { onConflict: 'user_id,platform' })
+          
+          if (insertError) {
+            console.error('[v0] Failed to save OnlyFans connection:', insertError.message)
+          }
         }
       }
     }

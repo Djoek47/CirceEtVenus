@@ -19,7 +19,7 @@ export async function GET() {
       // No API key - just check local database
       const { data: connection } = await supabase
         .from('platform_connections')
-        .select('platform_user_id, platform_username')
+        .select('access_token, platform_username')
         .eq('user_id', user.id)
         .eq('platform', 'onlyfans')
         .eq('is_connected', true)
@@ -27,7 +27,7 @@ export async function GET() {
 
       return NextResponse.json({
         connected: !!connection,
-        accountId: connection?.platform_user_id,
+        accountId: connection?.access_token,
         username: connection?.platform_username
       })
     }
@@ -41,7 +41,7 @@ export async function GET() {
       // No accounts on API - check local database as fallback
       const { data: connection } = await supabase
         .from('platform_connections')
-        .select('platform_user_id, platform_username')
+        .select('access_token, platform_username')
         .eq('user_id', user.id)
         .eq('platform', 'onlyfans')
         .eq('is_connected', true)
@@ -49,7 +49,7 @@ export async function GET() {
 
       return NextResponse.json({
         connected: !!connection,
-        accountId: connection?.platform_user_id,
+        accountId: connection?.access_token,
         username: connection?.platform_username
       })
     }
@@ -60,13 +60,13 @@ export async function GET() {
     // Check if we already have this connection saved
     const { data: existingConnection } = await supabase
       .from('platform_connections')
-      .select('platform_user_id, platform_username')
+      .select('access_token, platform_username')
       .eq('user_id', user.id)
       .eq('platform', 'onlyfans')
       .single()
 
     // If already saved with same account ID, just return
-    if (existingConnection && existingConnection.platform_user_id === account.id) {
+    if (existingConnection && existingConnection.access_token === account.id) {
       return NextResponse.json({
         connected: true,
         accountId: account.id,
@@ -80,7 +80,6 @@ export async function GET() {
       .upsert({
         user_id: user.id,
         platform: 'onlyfans',
-        platform_user_id: account.id,
         platform_username: account.onlyfans_username || 'Connected',
         is_connected: true,
         access_token: account.id,

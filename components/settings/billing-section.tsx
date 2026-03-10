@@ -173,6 +173,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
   }
 
   const isPaidPlan = subscription?.planId && subscription.planId !== 'divine-trial'
+  const hasStripeCustomer = Boolean(subData?.stripe_customer_id)
 
   return (
     <>
@@ -205,16 +206,19 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
+              {/* Always offer a direct Stripe portal link once we have or can create a customer,
+                  so users can manage/cancel even if our local status is lagging behind. */}
+              <Button 
+                onClick={handleManageBilling} 
+                disabled={loadingPortal}
+                variant="outline"
+              >
+                {loadingPortal ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Open Stripe Billing Portal
+              </Button>
+
               {subscription?.status === 'active' || isPaidPlan ? (
                 <>
-                  <Button 
-                    onClick={handleManageBilling} 
-                    disabled={loadingPortal}
-                    variant="outline"
-                  >
-                    {loadingPortal ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Manage Subscription
-                  </Button>
                   <Button
                     onClick={() => openPortalFlow('payment_method_update')}
                     disabled={loadingPortal}
@@ -228,7 +232,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
                       disabled={loadingPortal}
                       variant="destructive"
                     >
-                      Cancel
+                      Cancel Subscription
                     </Button>
                   )}
                 </>
@@ -239,7 +243,14 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
                     buttonText="Upgrade to Venus Pro - $49/mo"
                     buttonClassName="flex-1"
                   />
-                  <Button variant="outline" onClick={() => document.getElementById('pricing-plans')?.scrollIntoView({ behavior: 'smooth' })}>
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      document
+                        .getElementById('pricing-plans')
+                        ?.scrollIntoView({ behavior: 'smooth' })
+                    }
+                  >
                     View All Plans
                   </Button>
                 </>

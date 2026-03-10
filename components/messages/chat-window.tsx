@@ -15,6 +15,7 @@ import {
 import { Send, Paperclip, DollarSign, MoreVertical, User, Loader2, RefreshCw } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { cn } from '@/lib/utils'
+import { stripHtml } from '@/lib/html-utils'
 
 interface OnlyFansConversation {
   user: {
@@ -274,7 +275,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                         ))}
                       </div>
                     )}
-                    {msg.text && <p className="text-sm">{msg.text}</p>}
+                    {msg.text && <p className="text-sm whitespace-pre-wrap">{stripHtml(msg.text)}</p>}
                     {msg.price && !msg.isPaid && (
                       <Badge className="mt-2 bg-chart-4/20 text-chart-4">
                         <DollarSign className="mr-1 h-3 w-3" />

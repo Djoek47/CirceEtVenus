@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Search, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { stripHtmlForPreview } from '@/lib/html-utils'
 
 interface OnlyFansConversation {
   user: {
@@ -121,7 +122,7 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
                   'text-sm truncate mt-0.5',
                   conv.unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground'
                 )}>
-                  {conv.lastMessage?.text || 'Media message'}
+                  {stripHtmlForPreview(conv.lastMessage?.text) || 'Media message'}
                 </p>
               </div>
             </button>

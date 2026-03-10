@@ -52,7 +52,12 @@ export default async function DashboardPage() {
     }
   })
   const totalFans = Array.from(latestByPlatform.values()).reduce((sum, a) => sum + (a.total_fans || 0), 0) || fans?.length || 0
-  const activeConversations = conversations?.length || 0
+  // Prefer synced platform conversation counts (OnlyFans sync stores `messages_sent` as totalConversations).
+  // Fall back to DB conversations table (may be empty if you haven't implemented conversation persistence yet).
+  const activeConversations =
+    (hasConnectedPlatforms
+      ? Array.from(latestByPlatform.values()).reduce((sum, a) => sum + (a.messages_sent || 0), 0)
+      : 0) || conversations?.length || 0
   const scheduledContent = content?.length || 0
   
   // Calculate revenue change (compare last 15 days to previous 15 days)

@@ -93,10 +93,36 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isPolling, setIsPolling] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const isNearBottom = () => {
+    const el = messagesContainerRef.current
+    if (!el) return true
+    const thresholdPx = 120
+    return el.scrollHeight - el.scrollTop - el.clientHeight < thresholdPx
+  }
+
+  const normalizeAndSortMessages = (list: OnlyFansMessage[]) => {
+    const byId = new Map<string, OnlyFansMessage>()
+    for (const m of list) {
+      const key = String(m.id)
+      // Prefer the newest version if duplicates exist (e.g., read flags/media)
+      byId.set(key, m)
+    }
+    return Array.from(byId.values()).sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      if (ta !== tb) return ta - tb // old -> new
+      // Stable tie-breaker
+      return String(a.id).localeCompare(String(b.id))
+    })
   }
 
   // Load messages when conversation changes
@@ -118,7 +144,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
           throw new Error(data.error || 'Failed to load messages')
         }
         
-        setMessages(data.messages || [])
+        setMessages(normalizeAndSortMessages(data.messages || []))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load messages')
       } finally {
@@ -131,8 +157,37 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom()
+    // Only auto-scroll if the user is already near the bottom (prevents jumpiness while reading history)
+    if (isNearBottom()) scrollToBottom()
   }, [messages])
+
+  // Poll for new messages when a conversation is open
+  useEffect(() => {
+    if (!conversation) return
+
+    const poll = async () => {
+      if (!conversation) return
+      setIsPolling(true)
+      try {
+        const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}?limit=50`)
+        const data = await res.json()
+        if (res.ok && data?.messages) {
+          setMessages((prev) => normalizeAndSortMessages([...prev, ...(data.messages || [])]))
+        }
+      } catch {
+        // silent
+      } finally {
+        setIsPolling(false)
+      }
+    }
+
+    // Immediate poll then interval
+    poll()
+    pollIntervalRef.current = setInterval(poll, 6000)
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    }
+  }, [conversation?.user?.id])
 
   const handleSendMessage = async () => {
     if (!message.trim() || !conversation || sending) return
@@ -156,7 +211,9 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       
       // Add the sent message to the list
       if (data.message) {
-        setMessages(prev => [...prev, data.message])
+        setMessages(prev => normalizeAndSortMessages([...prev, data.message]))
+        // After sending, force scroll to bottom
+        setTimeout(() => scrollToBottom(), 0)
       }
       
       // Notify parent to refresh conversation list
@@ -244,7 +301,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       </CardHeader>
 
       {/* Messages Area */}
-      <CardContent className="flex-1 overflow-y-auto p-4">
+      <CardContent ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -261,7 +318,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                 setLoading(true)
                 fetch(`/api/onlyfans/messages/${conversation.user.id}`)
                   .then(res => res.json())
-                  .then(data => setMessages(data.messages || []))
+                  .then(data => setMessages(normalizeAndSortMessages(data.messages || [])))
                   .catch(e => setError(e.message))
                   .finally(() => setLoading(false))
               }}

@@ -45,7 +45,12 @@ export async function GET(
     const result = await api.getMessages(fanId, { limit, before })
 
     return NextResponse.json({
-      messages: result.messages || [],
+      messages: (result.messages || []).sort((a: any, b: any) => {
+        const ta = a?.createdAt ? new Date(a.createdAt).getTime() : 0
+        const tb = b?.createdAt ? new Date(b.createdAt).getTime() : 0
+        if (ta !== tb) return ta - tb
+        return String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
+      }),
     })
   } catch (error) {
     console.error('Failed to fetch messages:', error)

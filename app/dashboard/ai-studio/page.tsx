@@ -116,7 +116,7 @@ export default function AIStudioPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
+          <div>
           <h1 className="text-2xl font-semibold tracking-tight">AI Studio</h1>
           <p className="text-muted-foreground">
             Divine intelligence at your command. Choose your guide.
@@ -266,6 +266,7 @@ export default function AIStudioPage() {
                 <Card 
                   key={tool.id} 
                   className="cursor-pointer border-border transition-all hover:border-primary/50 hover:shadow-md"
+                  onClick={() => setActiveTab('tools')}
                 >
                   <CardContent className="flex items-start gap-3 pt-6">
                     <div className={`rounded-lg p-2 ${tool.bgColor}`}>
@@ -294,7 +295,7 @@ export default function AIStudioPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card 
               className="cursor-pointer border-border transition-all hover:border-primary/50"
-              onClick={() => setActiveTab('caption')}
+              onClick={() => setActiveTab('tools')}
             >
               <CardContent className="flex items-center gap-3 pt-6">
                 <div className="rounded-lg bg-primary/10 p-2">

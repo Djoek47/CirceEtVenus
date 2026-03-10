@@ -28,13 +28,27 @@ export async function POST(request: NextRequest) {
     const api = createFanslyAPI()
     const accountId = connection.platform_user_id
 
-    // Fetch all data from Fansly API
-    const [profile, fans, earnings, followers] = await Promise.all([
-      api.getProfile(accountId),
-      api.getFans(accountId, { status: 'active', limit: 500 }),
-      api.getEarnings(accountId),
-      api.getFollowers(accountId, { limit: 500 }),
-    ])
+    // Fetch all data from Fansly API - wrap in try/catch for each call
+    let profile = { username: '', displayName: '', avatar: '', subscribersCount: 0, followersCount: 0 }
+    let fans = { data: [] as any[], count: 0 }
+    let earnings = { total: 0, subscriptions: 0, tips: 0, messages: 0, period: { start: '', end: '' } }
+    let followers = { data: [], count: 0 }
+
+    try {
+      profile = await api.getProfile(accountId)
+    } catch (e) { console.error('Failed to fetch Fansly profile:', e) }
+
+    try {
+      fans = await api.getFans(accountId, { status: 'active', limit: 500 })
+    } catch (e) { console.error('Failed to fetch Fansly fans:', e) }
+
+    try {
+      earnings = await api.getEarnings(accountId)
+    } catch (e) { console.error('Failed to fetch Fansly earnings:', e) }
+
+    try {
+      followers = await api.getFollowers(accountId)
+    } catch (e) { console.error('Failed to fetch Fansly followers:', e) }
 
     // Store analytics snapshot
     const today = new Date().toISOString().split('T')[0]

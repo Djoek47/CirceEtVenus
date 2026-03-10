@@ -400,13 +400,27 @@ class OnlyFansAPI {
   async createPost(data: {
     text: string
     mediaIds?: string[]
+    mediaFiles?: string[]
     price?: number
-    scheduleAt?: string
-  }): Promise<{ id: string }> {
-    return this.request('/posts', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
+    schedule?: string
+  }): Promise<{ success: boolean; postId?: string; error?: string }> {
+    try {
+      const result = await this.request<{ id: string }>('/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: data.text,
+          mediaIds: data.mediaIds,
+          price: data.price,
+          scheduleAt: data.schedule,
+        }),
+      })
+      return { success: true, postId: result.id }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to create post' 
+      }
+    }
   }
 
   // ============ MEDIA ============

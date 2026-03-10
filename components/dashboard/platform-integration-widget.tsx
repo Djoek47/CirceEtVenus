@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -11,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Link2, Check, ArrowRight, Loader2, X, Unplug, RefreshCw } from 'lucide-react'
+import { Link2, Check, ArrowRight, Loader2, X, RefreshCw, Mail, Lock, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -82,16 +84,18 @@ export function PlatformIntegrationWidget() {
   )
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
-  const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [syncing, setSyncing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   
-  // Fansly account selection dialog state
+  // Fansly login dialog state
   const [fanslyDialogOpen, setFanslyDialogOpen] = useState(false)
-  const [fanslyAccounts, setFanslyAccounts] = useState<any[]>([])
+  const [fanslyEmail, setFanslyEmail] = useState('')
+  const [fanslyPassword, setFanslyPassword] = useState('')
+  const [fansly2FAToken, setFansly2FAToken] = useState<string | null>(null)
+  const [fansly2FACode, setFansly2FACode] = useState('')
+  const [fanslyMaskedEmail, setFanslyMaskedEmail] = useState<string | null>(null)
   const [fanslyLoading, setFanslyLoading] = useState(false)
-  const [selectedFanslyAccount, setSelectedFanslyAccount] = useState<string | null>(null)
   
   const supabase = createClient()
 
@@ -191,72 +195,70 @@ export function PlatformIntegrationWidget() {
     }
   }
 
-  // Fetch available Fansly accounts from the API
-  const fetchFanslyAccounts = async () => {
+  // Open Fansly login dialog
+  const openFanslyDialog = () => {
+    setFanslyEmail('')
+    setFanslyPassword('')
+    setFansly2FAToken(null)
+    setFansly2FACode('')
+    setFanslyMaskedEmail(null)
+    setFanslyDialogOpen(true)
+  }
+
+  // Handle Fansly login
+  const handleFanslyLogin = async () => {
     setFanslyLoading(true)
     setError(null)
 
     try {
-      const response = await fetch('/api/fansly/auth')
+      const response = await fetch('/api/fansly/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: fanslyEmail,
+          password: fanslyPassword,
+          twoFactorToken: fansly2FAToken,
+          twoFactorCode: fansly2FACode || undefined,
+        }),
+      })
+
       const data = await response.json()
 
+      // If 2FA required
+      if (data.requires_2fa) {
+        setFansly2FAToken(data.twoFactorToken)
+        setFanslyMaskedEmail(data.masked_email)
+        setFanslyLoading(false)
+        return
+      }
+
+      // If error
       if (data.error) {
         throw new Error(data.error)
       }
 
-      if (data.accounts && data.accounts.length > 0) {
-        setFanslyAccounts(data.accounts)
-        setFanslyDialogOpen(true)
-      } else {
-        setError('No Fansly accounts found. Please connect an account in your Fansly API dashboard first.')
+      // Success!
+      if (data.success) {
+        setFanslyDialogOpen(false)
+        setFanslyEmail('')
+        setFanslyPassword('')
+        setFansly2FAToken(null)
+        setFansly2FACode('')
+        setSuccess('Fansly connected! Syncing your data...')
+        await loadConnections()
+
+        // Auto-sync data
+        try {
+          await fetch('/api/fansly/sync', { method: 'POST' })
+          setSuccess('Fansly synced! Refreshing...')
+          setTimeout(() => window.location.reload(), 1500)
+        } catch {
+          setSuccess('Connected! Click Sync to import your data.')
+          setTimeout(() => setSuccess(null), 3000)
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch Fansly accounts')
-    } finally {
-      setFanslyLoading(false)
-    }
-  }
-
-  // Link selected Fansly account to user's profile
-  const handleLinkFanslyAccount = async (account: any) => {
-    setFanslyLoading(true)
-    setError(null)
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      // Save the connection to database
-      await supabase
-        .from('platform_connections')
-        .upsert({
-          user_id: user.id,
-          platform: 'fansly',
-          platform_user_id: account.accountId,
-          platform_username: account.username || account.displayName || account.name,
-          is_connected: true,
-          access_token: account.accountId,
-          last_sync_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,platform'
-        })
-
-      setFanslyDialogOpen(false)
-      setSuccess('Fansly connected! Syncing your data...')
-      await loadConnections()
-
-      // Auto-sync data after connecting
-      try {
-        await fetch('/api/fansly/sync', { method: 'POST' })
-        setSuccess('Fansly synced! Refreshing...')
-        // Refresh the page to show updated data
-        setTimeout(() => window.location.reload(), 1500)
-      } catch {
-        setSuccess('Connected! Click Sync to import your data.')
-        setTimeout(() => setSuccess(null), 3000)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to link Fansly account')
+      setError(err instanceof Error ? err.message : 'Failed to connect Fansly')
     } finally {
       setFanslyLoading(false)
     }
@@ -266,36 +268,9 @@ export function PlatformIntegrationWidget() {
     if (platformId === 'onlyfans') {
       handleConnectOnlyFans()
     } else if (platformId === 'fansly') {
-      fetchFanslyAccounts()
+      openFanslyDialog()
     } else {
       setError(`${platformId} integration coming soon`)
-    }
-  }
-
-  const handleDisconnect = async (platformId: string) => {
-    setDisconnecting(platformId)
-    setError(null)
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      // Update the connection to disconnected
-      const { error: dbError } = await supabase
-        .from('platform_connections')
-        .update({ is_connected: false })
-        .eq('user_id', user.id)
-        .eq('platform', platformId)
-
-      if (dbError) throw dbError
-
-      setSuccess(`${platformId.charAt(0).toUpperCase() + platformId.slice(1)} disconnected`)
-      await loadConnections()
-      setTimeout(() => setSuccess(null), 3000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect')
-    } finally {
-      setDisconnecting(null)
     }
   }
 
@@ -424,37 +399,21 @@ export function PlatformIntegrationWidget() {
                 </div>
                 
                 {platform.connected ? (
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 px-3 text-xs gap-1.5"
-                      onClick={() => handleSync(platform.id)}
-                      disabled={syncing === platform.id}
-                      title="Sync data"
-                    >
-                      {syncing === platform.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      )}
-                      Sync
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDisconnect(platform.id)}
-                      disabled={disconnecting === platform.id}
-                      title="Disconnect"
-                    >
-                      {disconnecting === platform.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Unplug className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-3 text-xs gap-1.5 border-green-500/30 text-green-600 hover:bg-green-500/10"
+                    onClick={() => handleSync(platform.id)}
+                    disabled={syncing === platform.id}
+                    title="Sync data"
+                  >
+                    {syncing === platform.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Sync
+                  </Button>
                 ) : (
                   <Button 
                     size="sm" 
@@ -489,7 +448,7 @@ export function PlatformIntegrationWidget() {
         </CardContent>
       </Card>
 
-      {/* Fansly Account Selection Dialog */}
+      {/* Fansly Login Dialog */}
       <Dialog open={fanslyDialogOpen} onOpenChange={setFanslyDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -501,59 +460,92 @@ export function PlatformIntegrationWidget() {
                 <FanslyLogo />
               </div>
               <div>
-                <DialogTitle>Select Fansly Account</DialogTitle>
+                <DialogTitle>Connect Fansly</DialogTitle>
                 <DialogDescription>
-                  Choose which account to connect to your dashboard
+                  {fansly2FAToken 
+                    ? `Enter the code sent to ${fanslyMaskedEmail || 'your email'}`
+                    : 'Sign in with your Fansly credentials'
+                  }
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
           
-          <div className="space-y-3 py-4">
-            {fanslyAccounts.length === 0 ? (
-              <div className="text-center py-6 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                <p className="text-sm">Loading accounts...</p>
-              </div>
-            ) : (
-              fanslyAccounts.map((account) => (
-                <button
-                  key={account.accountId}
-                  onClick={() => handleLinkFanslyAccount(account)}
-                  disabled={fanslyLoading}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-border hover:border-[#009FFF]/50 hover:bg-[#009FFF]/5 transition-all text-left"
-                >
-                  {account.avatar ? (
-                    <img 
-                      src={account.avatar} 
-                      alt={account.displayName || account.name}
-                      className="h-12 w-12 rounded-full object-cover"
+          <div className="space-y-4 py-4">
+            {!fansly2FAToken ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fansly-email" className="text-sm font-medium">
+                    Email
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="fansly-email"
+                      type="email"
+                      placeholder="your@email.com"
+                      value={fanslyEmail}
+                      onChange={(e) => setFanslyEmail(e.target.value)}
+                      className="pl-10"
                     />
-                  ) : (
-                    <div className="h-12 w-12 rounded-full bg-[#009FFF]/10 flex items-center justify-center text-[#009FFF] font-semibold">
-                      {(account.displayName || account.name || 'F').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">
-                      {account.displayName || account.name}
-                    </p>
-                    {account.username && (
-                      <p className="text-xs text-muted-foreground">@{account.username}</p>
-                    )}
-                    {account.subscribersCount !== undefined && (
-                      <p className="text-xs text-muted-foreground">
-                        {account.subscribersCount.toLocaleString()} subscribers
-                      </p>
-                    )}
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </button>
-              ))
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fansly-password" className="text-sm font-medium">
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="fansly-password"
+                      type="password"
+                      placeholder="Enter your password"
+                      value={fanslyPassword}
+                      onChange={(e) => setFanslyPassword(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="fansly-2fa" className="text-sm font-medium">
+                  Verification Code
+                </Label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="fansly-2fa"
+                    type="text"
+                    placeholder="Enter 6-digit code"
+                    value={fansly2FACode}
+                    onChange={(e) => setFansly2FACode(e.target.value)}
+                    className="pl-10 text-center text-lg tracking-widest"
+                    maxLength={6}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Check your email or authenticator app for the code
+                </p>
+              </div>
             )}
 
-            <p className="text-xs text-muted-foreground text-center pt-2">
-              Accounts are managed in your Fansly API dashboard
+            <Button
+              className="w-full"
+              style={{ 
+                background: 'linear-gradient(135deg, #009FFF, #0066CC)',
+              }}
+              onClick={handleFanslyLogin}
+              disabled={fanslyLoading || (!fansly2FAToken && (!fanslyEmail || !fanslyPassword)) || (fansly2FAToken && fansly2FACode.length < 5)}
+            >
+              {fanslyLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              {fansly2FAToken ? 'Verify & Connect' : 'Connect Fansly'}
+            </Button>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Your credentials are securely encrypted and never stored locally
             </p>
           </div>
         </DialogContent>

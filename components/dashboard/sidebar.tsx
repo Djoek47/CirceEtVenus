@@ -18,6 +18,7 @@ import {
   Moon,
   Sun,
   Star,
+  Share2,
   LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -53,6 +54,7 @@ const silverNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Content', href: '/dashboard/content', icon: Calendar },
   { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
+  { name: 'Social', href: '/dashboard/social', icon: Share2 },
 ]
 
 // AI Studio - Rainbow animated

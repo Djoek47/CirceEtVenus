@@ -34,10 +34,17 @@ export default async function DashboardPage() {
     supabase.from('analytics_snapshots').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(30),
   ])
 
-  // Calculate stats from analytics data
+  // Calculate stats from analytics data - aggregate from both platforms
   const totalRevenue = analytics?.reduce((sum, a) => sum + (a.revenue || 0), 0) || 0
-  const latestSnapshot = analytics?.[0]
-  const totalFans = latestSnapshot?.total_fans || fans?.length || 0
+  
+  // Get the latest snapshot for each platform and sum their fans
+  const latestByPlatform = new Map<string, typeof analytics[0]>()
+  analytics?.forEach(a => {
+    if (!latestByPlatform.has(a.platform) || new Date(a.date) > new Date(latestByPlatform.get(a.platform)!.date)) {
+      latestByPlatform.set(a.platform, a)
+    }
+  })
+  const totalFans = Array.from(latestByPlatform.values()).reduce((sum, a) => sum + (a.total_fans || 0), 0) || fans?.length || 0
   const activeConversations = conversations?.length || 0
   const scheduledContent = content?.length || 0
   

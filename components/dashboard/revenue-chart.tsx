@@ -18,14 +18,37 @@ interface RevenueChartProps {
 }
 
 export function RevenueChart({ analytics }: RevenueChartProps) {
-  // Process analytics data for chart - only use real data
-  const chartData = analytics.slice(0, 14).reverse().map((a) => ({
-    date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    revenue: a.revenue || 0,
-    totalFans: a.total_fans || 0,
-  }))
+  // Group analytics by date and platform
+  const dataByDate = new Map<string, { onlyfans: number; fansly: number; total: number }>()
+  
+  analytics.slice(0, 30).forEach((a) => {
+    const date = new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const existing = dataByDate.get(date) || { onlyfans: 0, fansly: 0, total: 0 }
+    
+    if (a.platform === 'onlyfans') {
+      existing.onlyfans += a.revenue || 0
+    } else if (a.platform === 'fansly') {
+      existing.fansly += a.revenue || 0
+    }
+    existing.total += a.revenue || 0
+    
+    dataByDate.set(date, existing)
+  })
+  
+  // Convert to array and reverse for chronological order
+  const chartData = Array.from(dataByDate.entries())
+    .slice(0, 14)
+    .reverse()
+    .map(([date, data]) => ({
+      date,
+      onlyfans: data.onlyfans,
+      fansly: data.fansly,
+      total: data.total,
+    }))
 
-  const hasData = chartData.length > 0 && chartData.some(d => d.revenue > 0)
+  const hasData = chartData.length > 0 && chartData.some(d => d.total > 0)
+  const hasOnlyFans = chartData.some(d => d.onlyfans > 0)
+  const hasFansly = chartData.some(d => d.fansly > 0)
 
   return (
     <Card className="border-border bg-card">
@@ -51,9 +74,15 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.75 0.18 195)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="oklch(0.75 0.18 195)" stopOpacity={0} />
+                {/* OnlyFans gradient - blue */}
+                <linearGradient id="colorOnlyFans" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#00AFF0" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#00AFF0" stopOpacity={0} />
+                </linearGradient>
+                {/* Fansly gradient - teal */}
+                <linearGradient id="colorFansly" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#009FFF" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#009FFF" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.015 260)" />
@@ -78,18 +107,38 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
                   borderRadius: '8px',
                   color: 'oklch(0.95 0 0)'
                 }}
-                formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                formatter={(value: number, name: string) => [
+                  `$${value.toLocaleString()}`, 
+                  name === 'onlyfans' ? 'OnlyFans' : name === 'fansly' ? 'Fansly' : 'Total'
+                ]}
               />
-              <Legend />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="oklch(0.75 0.18 195)"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#colorRevenue)"
-                name="Revenue"
+              <Legend 
+                formatter={(value) => value === 'onlyfans' ? 'OnlyFans' : value === 'fansly' ? 'Fansly' : 'Total'}
               />
+              {hasOnlyFans && (
+                <Area
+                  type="monotone"
+                  dataKey="onlyfans"
+                  stroke="#00AFF0"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorOnlyFans)"
+                  name="onlyfans"
+                  stackId="1"
+                />
+              )}
+              {hasFansly && (
+                <Area
+                  type="monotone"
+                  dataKey="fansly"
+                  stroke="#009FFF"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorFansly)"
+                  name="fansly"
+                  stackId="1"
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>

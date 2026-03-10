@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ConversationList } from './conversation-list'
 import { ChatWindow } from './chat-window'
+import { MassMessageDialog } from './mass-message-dialog'
 import type { Conversation, Fan } from '@/lib/types'
 
 interface ConversationWithFan extends Conversation {
@@ -38,16 +39,30 @@ export function MessagesLayout({ conversations, userId }: MessagesLayoutProps) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
-      {/* Conversation List */}
-      <ConversationList
-        conversations={conversations}
-        selectedId={selectedConversation?.id}
-        onSelect={(conv) => setSelectedConversation(conv)}
-      />
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      {/* Header with Mass Message */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Messages</h2>
+          <p className="text-sm text-muted-foreground">
+            {conversations.length} conversations
+          </p>
+        </div>
+        <MassMessageDialog />
+      </div>
 
-      {/* Chat Window */}
-      <ChatWindow conversation={selectedConversation} userId={userId} />
+      {/* Messages Content */}
+      <div className="flex flex-1 gap-4 min-h-0">
+        {/* Conversation List */}
+        <ConversationList
+          conversations={conversations}
+          selectedId={selectedConversation?.id}
+          onSelect={(conv) => setSelectedConversation(conv)}
+        />
+
+        {/* Chat Window */}
+        <ChatWindow conversation={selectedConversation} userId={userId} />
+      </div>
     </div>
   )
 }

@@ -298,60 +298,196 @@ class FanslyAPI {
 
   /**
    * Get list of fans/subscribers
+   * Based on API docs: GET /api/fansly/{accountId}/subscribers
    */
-  async getFans(params?: {
+  async getFans(accountId: string, params?: {
     status?: 'active' | 'expired' | 'all'
     limit?: number
     offset?: number
   }): Promise<{ 
     data: FanslyFan[]
-    total: number 
+    count: number 
   }> {
-    if (!this.accountId) throw new Error('Account ID not set')
-    
     const query = new URLSearchParams()
-    if (params?.status) query.set('status', params.status)
     if (params?.limit) query.set('limit', params.limit.toString())
     if (params?.offset) query.set('offset', params.offset.toString())
     
-    return this.request(`/api/fansly/${this.accountId}/fans?${query.toString()}`)
+    // Map status to the correct endpoint
+    let endpoint = `/api/fansly/${accountId}/subscribers`
+    if (params?.status === 'active') {
+      endpoint = `/api/fansly/${accountId}/subscribers/active`
+    } else if (params?.status === 'expired') {
+      endpoint = `/api/fansly/${accountId}/subscribers/expired`
+    }
+    
+    try {
+      const response = await this.request<{
+        statusCode: number
+        message: string
+        data: {
+          count?: number
+          subscribers?: FanslyFan[]
+          data?: FanslyFan[]
+        }
+      }>(`${endpoint}?${query.toString()}`)
+      
+      return {
+        data: response.data.subscribers || response.data.data || [],
+        count: response.data.count || 0
+      }
+    } catch {
+      // Return empty if endpoint not available
+      return { data: [], count: 0 }
+    }
   }
 
   /**
-   * Get followers
+   * Get followers count
+   * Based on profile data
    */
-  async getFollowers(params?: {
+  async getFollowers(accountId: string, params?: {
     limit?: number
     offset?: number
   }): Promise<{ 
     data: { id: string; username: string; displayName: string; avatar: string }[]
-    total: number 
+    count: number 
   }> {
-    if (!this.accountId) throw new Error('Account ID not set')
-    
-    const query = new URLSearchParams()
-    if (params?.limit) query.set('limit', params.limit.toString())
-    if (params?.offset) query.set('offset', params.offset.toString())
-    
-    return this.request(`/api/fansly/${this.accountId}/followers?${query.toString()}`)
+    // Use profile endpoint to get followers count
+    try {
+      const profile = await this.getProfile(accountId)
+      return { 
+        data: [], 
+        count: profile.followersCount || 0 
+      }
+    } catch {
+      return { data: [], count: 0 }
+    }
   }
 
   // ============ EARNINGS ============
 
   /**
    * Get earnings summary
+   * Based on API docs: GET /api/fansly/{accountId}/earnings/statistics
    */
-  async getEarnings(params?: {
+  async getEarnings(accountId: string, params?: {
     startDate?: string
     endDate?: string
   }): Promise<FanslyEarnings> {
-    if (!this.accountId) throw new Error('Account ID not set')
-    
     const query = new URLSearchParams()
     if (params?.startDate) query.set('startDate', params.startDate)
     if (params?.endDate) query.set('endDate', params.endDate)
     
-    return this.request(`/api/fansly/${this.accountId}/earnings?${query.toString()}`)
+    try {
+      const response = await this.request<{
+        statusCode: number
+        message: string
+        data: {
+          total?: number
+          subscriptions?: number
+          tips?: number
+          messages?: number
+          period?: { start: string; end: string }
+        }
+      }>(`/api/fansly/${accountId}/earnings/statistics?${query.toString()}`)
+      
+      return {
+        total: response.data.total || 0,
+        subscriptions: response.data.subscriptions || 0,
+        tips: response.data.tips || 0,
+        messages: response.data.messages || 0,
+        period: response.data.period || { start: '', end: '' }
+      }
+    } catch {
+      return {
+        total: 0,
+        subscriptions: 0,
+        tips: 0,
+        messages: 0,
+        period: { start: '', end: '' }
+      }
+    }
+  }
+
+  // ============ POSTS ============
+
+  /**
+   * Create a new post
+   * POST /api/fansly/{accountId}/posts
+   */
+  async createPost(accountId: string, data: {
+    content: string
+    wallIds?: string[]
+    attachments?: any[]
+    scheduledFor?: number
+    expiresAt?: number
+    fypFlags?: number
+  }): Promise<{
+    success: boolean
+    postId?: string
+    message?: string
+  }> {
+    try {
+      const response = await this.request<{
+        statusCode: number
+        message: string
+        data: {
+          data: {
+            success: boolean
+            response: {
+              id: string
+              content: string
+              createdAt: number
+            }
+          }
+        }
+      }>(`/api/fansly/${accountId}/posts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content: data.content,
+          wallIds: data.wallIds || [],
+          fypFlags: data.fypFlags || 0,
+          attachments: data.attachments || [],
+          scheduledFor: data.scheduledFor || 0,
+          expiresAt: data.expiresAt || 0,
+          pinned: 0,
+          pinWallIds: [],
+        }),
+      })
+
+      return {
+        success: response.data?.data?.success || false,
+        postId: response.data?.data?.response?.id,
+        message: response.message
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to create post'
+      }
+    }
+  }
+
+  /**
+   * Get wall IDs for posting (needed for createPost)
+   * GET /api/fansly/{accountId}/walls
+   */
+  async getWalls(accountId: string): Promise<{
+    walls: { id: string; name: string }[]
+  }> {
+    try {
+      const response = await this.request<{
+        statusCode: number
+        message: string
+        data: {
+          walls?: { id: string; name: string }[]
+        }
+      }>(`/api/fansly/${accountId}/walls`)
+
+      return { walls: response.data.walls || [] }
+    } catch {
+      return { walls: [] }
+    }
   }
 
   // ============ MESSAGES ============
@@ -408,16 +544,62 @@ class FanslyAPI {
   /**
    * Send a message
    */
-  async sendMessage(chatId: string, data: {
+  async sendMessage(accountId: string, chatId: string, data: {
     text: string
     mediaIds?: string[]
   }): Promise<{ success: boolean; messageId: string }> {
-    if (!this.accountId) throw new Error('Account ID not set')
-    
-    return this.request(`/api/fansly/${this.accountId}/chats/${chatId}/messages`, {
+    return this.request(`/api/fansly/${accountId}/chats/${chatId}/messages`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  }
+
+  /**
+   * Send mass message to all subscribers
+   * POST /api/fansly/{accountId}/messages/mass
+   */
+  async sendMassMessage(accountId: string, data: {
+    content: string
+    mediaIds?: string[]
+    price?: number
+    subscriberFilter?: 'all' | 'active' | 'expired' | 'renewing'
+  }): Promise<{ 
+    success: boolean
+    sent?: number
+    failed?: number
+    message?: string 
+  }> {
+    try {
+      const response = await this.request<{
+        statusCode: number
+        message: string
+        data: {
+          success: boolean
+          sent?: number
+          failed?: number
+        }
+      }>(`/api/fansly/${accountId}/messages/mass`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content: data.content,
+          mediaIds: data.mediaIds || [],
+          price: data.price || 0,
+          filter: data.subscriberFilter || 'all',
+        }),
+      })
+
+      return {
+        success: response.data.success,
+        sent: response.data.sent,
+        failed: response.data.failed,
+        message: response.message
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to send mass message'
+      }
+    }
   }
 }
 

@@ -33,11 +33,46 @@ const PLATFORMS: Platform[] = [
     dataTypes: ['Subscribers', 'Messages', 'Earnings'],
   },
   {
+    id: 'manyvids',
+    name: 'ManyVids',
+    color: '#E91E63',
+    description: 'Sync your ManyVids sales, fans, and video performance',
+    dataTypes: ['Sales', 'Fans', 'Videos', 'Tips', 'Custom Orders'],
+  },
+  {
     id: 'mym',
     name: 'MYM',
     color: '#FF6B6B',
     description: 'Sync your MYM fans data and interactions',
     dataTypes: ['Fans', 'Messages', 'Revenue'],
+  },
+  {
+    id: 'chaturbate',
+    name: 'Chaturbate',
+    color: '#F59E0B',
+    description: 'Track your Chaturbate tokens, followers, and broadcast stats',
+    dataTypes: ['Tokens', 'Followers', 'Tips', 'Private Shows'],
+  },
+  {
+    id: 'stripchat',
+    name: 'Stripchat',
+    color: '#8B5CF6',
+    description: 'Import your Stripchat earnings and fan interactions',
+    dataTypes: ['Earnings', 'Fans', 'Tips', 'Shows'],
+  },
+  {
+    id: 'loyalfans',
+    name: 'LoyalFans',
+    color: '#EC4899',
+    description: 'Connect your LoyalFans account for subscription tracking',
+    dataTypes: ['Subscribers', 'Messages', 'Earnings', 'PPV'],
+  },
+  {
+    id: 'pornhub',
+    name: 'Pornhub',
+    color: '#FFA500',
+    description: 'Track your Pornhub Modelhub earnings and views',
+    dataTypes: ['Views', 'Earnings', 'Subscribers', 'Videos'],
   },
 ]
 

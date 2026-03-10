@@ -1,6 +1,6 @@
 // Database Types for CREATRIX Platform
 
-export type Platform = 'onlyfans' | 'mym' | 'fansly'
+export type Platform = 'onlyfans' | 'fansly' | 'manyvids' | 'mym' | 'chaturbate' | 'stripchat' | 'loyalfans' | 'pornhub'
 export type FanTier = 'whale' | 'regular' | 'new' | 'inactive'
 export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'archived'
 export type ConversationStatus = 'active' | 'pending' | 'archived'

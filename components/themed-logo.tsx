@@ -23,27 +23,20 @@ export function ThemedLogo({ width = 40, height = 40, className = '', priority =
   // Treat the initial (SSR) render as light mode for stable hydration
   const isLight = !mounted || resolvedTheme === 'light'
 
-  // Gold glow in light mode, purple glow in dark mode
-  const glowClass = isLight
-    ? 'shadow-[0_0_35px_rgba(212,175,55,0.7)]'
-    : 'shadow-[0_0_35px_rgba(128,90,213,0.8)]'
-
-  const wrapperClass = cn(
-    'inline-flex items-center justify-center rounded-full transition-shadow duration-300',
-    glowClass,
-    className,
-  )
-
   return (
-    <div className={wrapperClass}>
-      <Image
-        src="/logo.png"
-        alt="Circe et Venus"
-        width={width}
-        height={height}
-        className="h-auto w-auto rounded-full"
-        priority={priority}
-      />
-    </div>
+    <Image
+      src="/logo.png"
+      alt="Circe et Venus"
+      width={width}
+      height={height}
+      className={cn(
+        'rounded-full transition-shadow duration-300',
+        isLight
+          ? 'shadow-[0_0_35px_rgba(212,175,55,0.7)]'
+          : 'shadow-[0_0_35px_rgba(128,90,213,0.8)]',
+        className,
+      )}
+      priority={priority}
+    />
   )
 }

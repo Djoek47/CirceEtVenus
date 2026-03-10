@@ -340,6 +340,7 @@ export default function AIToolsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [credits, setCredits] = useState<{ used: number; limit: number } | null>(null)
+  const [isPro, setIsPro] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -352,7 +353,7 @@ export default function AIToolsPage() {
 
         const { data } = await supabase
           .from('subscriptions')
-          .select('ai_credits_used,ai_credits_limit')
+          .select('ai_credits_used,ai_credits_limit,plan_id,plan')
           .eq('user_id', user.id)
           .maybeSingle()
 
@@ -361,6 +362,10 @@ export default function AIToolsPage() {
             used: data.ai_credits_used ?? 0,
             limit: data.ai_credits_limit ?? 100,
           })
+          const planId = (data as any).plan_id || (data as any).plan
+          if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
+            setIsPro(true)
+          }
         } else {
           setCredits({ used: 0, limit: 100 })
         }
@@ -387,6 +392,44 @@ export default function AIToolsPage() {
     { id: 'premium', name: 'Premium', count: allTools.filter(t => t.category === 'premium').length },
   ]
 
+  const getToolHref = (toolId: string): string => {
+    switch (toolId) {
+      case 'caption-generator':
+      case 'fantasy-writer':
+      case 'content-ideas':
+      case 'aesthetic-matcher':
+      case 'photo-enhancer':
+      case 'venus-attraction':
+      case 'venus-cupid':
+      case 'venus-garden':
+        return '/dashboard/ai-studio?ai=venus'
+      case 'price-optimizer':
+      case 'viral-predictor':
+      case 'churn-predictor':
+      case 'divine-forecast':
+        return '/dashboard/analytics'
+      case 'cosmic-calendar':
+        return '/dashboard/content'
+      case 'ai-chatter':
+        return '/dashboard/ai-studio?tab=chatter'
+      case 'mood-detector':
+      case 'gift-suggester':
+      case 'whale-whisperer':
+      case 'circe-oracle':
+      case 'circe-transformation':
+      case 'circe-protection-shield':
+        return '/dashboard/ai-studio?ai=circe'
+      case 'leak-scanner':
+      case 'dmca-automator':
+        return '/dashboard/protection'
+      case 'voice-cloning':
+      case 'video-script-ai':
+      case 'competitor-analysis':
+      default:
+        return '/dashboard/ai-studio?tab=tools'
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -411,16 +454,18 @@ export default function AIToolsPage() {
               ? `${credits.limit === 999999 ? '∞' : credits.limit - credits.used} credits left`
               : 'AI Credits'}
           </Badge>
-          <Button
-            size="sm"
-            className="gap-1 bg-gradient-to-r from-circe to-venus"
-            asChild
-          >
-            <Link href="/dashboard/settings?tab=billing#pricing-plans">
-              <Crown className="h-4 w-4" />
-              Upgrade to Pro
-            </Link>
-          </Button>
+          {!isPro && (
+            <Button
+              size="sm"
+              className="gap-1 bg-gradient-to-r from-circe to-venus"
+              asChild
+            >
+              <Link href="/dashboard/settings?tab=billing#pricing-plans">
+                <Crown className="h-4 w-4" />
+                Upgrade to Pro
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -478,8 +523,10 @@ export default function AIToolsPage() {
                     ? 'border-gold/30 hover:border-gold/50' 
                     : 'border-border hover:border-primary/50'
                 }`}
+                asChild={isPro && !tool.isPro}
               >
-                {tool.isPro && (
+                <Link href={isPro || !tool.isPro ? getToolHref(tool.id) : '/dashboard/settings?tab=billing#pricing-plans'}>
+                {tool.isPro && !isPro && (
                   <div className="absolute right-2 top-2">
                     <Lock className="h-4 w-4 text-gold" />
                   </div>
@@ -519,7 +566,7 @@ export default function AIToolsPage() {
                 </CardContent>
                 <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="absolute bottom-0 left-0 right-0 translate-y-full p-4 transition-transform group-hover:translate-y-0">
-                  {tool.isPro ? (
+                  {tool.isPro && !isPro ? (
                     <Button
                       size="sm"
                       className="w-full bg-gradient-to-r from-circe to-venus hover:opacity-90"
@@ -531,11 +578,14 @@ export default function AIToolsPage() {
                       </Link>
                     </Button>
                   ) : (
-                    <Button size="sm" className="w-full" variant="secondary">
+                    <Button size="sm" className="w-full" variant="secondary" asChild>
+                      <Link href={getToolHref(tool.id)}>
                       Use Tool
+                      </Link>
                     </Button>
                   )}
                 </div>
+                </Link>
               </Card>
             ))}
           </div>
@@ -553,28 +603,32 @@ export default function AIToolsPage() {
       </Tabs>
 
       {/* Pro Upsell */}
-      <Card className="border-gold/30 bg-gradient-to-r from-circe/5 via-gold/5 to-venus/5">
-        <CardContent className="flex flex-col items-center gap-4 py-8 text-center sm:flex-row sm:text-left">
-          <div className="flex -space-x-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-circe/20 ring-2 ring-background">
-              <Moon className="h-6 w-6 text-circe-light" />
+      {!isPro && (
+        <Card className="border-gold/30 bg-gradient-to-r from-circe/5 via-gold/5 to-venus/5">
+          <CardContent className="flex flex-col items-center gap-4 py-8 text-center sm:flex-row sm:text-left">
+            <div className="flex -space-x-2">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-circe/20 ring-2 ring-background">
+                <Moon className="h-6 w-6 text-circe-light" />
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-venus/20 ring-2 ring-background">
+                <Sun className="h-6 w-6 text-venus" />
+              </div>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-venus/20 ring-2 ring-background">
-              <Sun className="h-6 w-6 text-venus" />
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold">Unlock Divine Powers</h3>
+              <p className="text-muted-foreground">
+                Upgrade to Pro to access exclusive Circe and Venus tools, unlimited credits, and priority support.
+              </p>
             </div>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold">Unlock Divine Powers</h3>
-            <p className="text-muted-foreground">
-              Upgrade to Pro to access exclusive Circe and Venus tools, unlimited credits, and priority support.
-            </p>
-          </div>
-          <Button className="gap-2 bg-gradient-to-r from-circe to-venus">
-            <Crown className="h-4 w-4" />
-            Upgrade Now
-          </Button>
-        </CardContent>
-      </Card>
+            <Button className="gap-2 bg-gradient-to-r from-circe to-venus" asChild>
+              <Link href="/dashboard/settings?tab=billing#pricing-plans">
+                <Crown className="h-4 w-4" />
+                Upgrade Now
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

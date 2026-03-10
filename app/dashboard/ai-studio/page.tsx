@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +17,7 @@ import { VenusAssistant } from '@/components/ai/venus-assistant'
 import { CosmicCalendar } from '@/components/content/cosmic-calendar'
 import { AIToolsSelector } from '@/components/ai/ai-tools-selector'
 import { AIChatterWorkspace } from '@/components/ai/ai-chatter-workspace'
+import { createClient } from '@/lib/supabase/client'
 
 export default function AIStudioPage() {
   const searchParams = useSearchParams()
@@ -36,6 +37,31 @@ export default function AIStudioPage() {
   })()
 
   const [activeTab, setActiveTab] = useState(initialTab)
+  const [isPro, setIsPro] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+    const loadSubscription = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('plan_id,plan')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        const planId = (data as any)?.plan_id || (data as any)?.plan
+        if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
+          setIsPro(true)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadSubscription()
+  }, [])
 
   const aiTools = [
     {
@@ -116,7 +142,7 @@ export default function AIStudioPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-          <div>
+        <div>
           <h1 className="text-2xl font-semibold tracking-tight">AI Studio</h1>
           <p className="text-muted-foreground">
             Divine intelligence at your command. Choose your guide.
@@ -349,43 +375,45 @@ export default function AIStudioPage() {
           </div>
 
           {/* Premium Features */}
-          <Card className="border-primary/30 bg-gradient-to-r from-primary/5 via-transparent to-venus/5">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  <CardTitle>Premium AI Features</CardTitle>
-                </div>
-                <Button size="sm" asChild>
-                  <Link href="/dashboard/settings?tab=billing#pricing-plans">
-                    Upgrade to Pro
-                  </Link>
-                </Button>
-              </div>
-              <CardDescription>
-                Unlock advanced AI capabilities with a Pro subscription
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-3">
-                {premiumFeatures.map((feature) => (
-                  <div 
-                    key={feature.name}
-                    className="relative overflow-hidden rounded-lg border border-border bg-card/50 p-4"
-                  >
-                    <div className="absolute right-2 top-2">
-                      <Lock className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <feature.icon className="h-8 w-8 text-primary/50" />
-                    <h3 className="mt-3 font-medium">{feature.name}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {feature.description}
-                    </p>
+          {!isPro && (
+            <Card className="border-primary/30 bg-gradient-to-r from-primary/5 via-transparent to-venus/5">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    <CardTitle>Premium AI Features</CardTitle>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  <Button size="sm" asChild>
+                    <Link href="/dashboard/settings?tab=billing#pricing-plans">
+                      Upgrade to Pro
+                    </Link>
+                  </Button>
+                </div>
+                <CardDescription>
+                  Unlock advanced AI capabilities with a Pro subscription
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {premiumFeatures.map((feature) => (
+                    <div 
+                      key={feature.name}
+                      className="relative overflow-hidden rounded-lg border border-border bg-card/50 p-4"
+                    >
+                      <div className="absolute right-2 top-2">
+                        <Lock className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <feature.icon className="h-8 w-8 text-primary/50" />
+                      <h3 className="mt-3 font-medium">{feature.name}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {feature.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Cosmic Calendar Preview */}
           <Card className="border-primary/30">

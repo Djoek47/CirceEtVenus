@@ -73,7 +73,7 @@ export default async function DashboardPage() {
           user_id: user.id,
           platform: 'onlyfans',
           date: today,
-          total_fans: userData.subscribesCount || 0,
+          total_fans: userData.subscribersCount || 0,
           new_fans: 0,
           churned_fans: 0,
           revenue: 0,

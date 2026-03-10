@@ -113,9 +113,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract data from userData if API calls returned empty
-    if (stats.fans.total === 0 && userData.subscribesCount) {
-      stats.fans.total = userData.subscribesCount || 0
-      stats.fans.active = userData.subscribesCount || 0
+    // subscribersCount = fans who subscribe to you (what we want)
+    // subscribesCount = accounts you subscribe to (not what we want)
+    if (stats.fans.total === 0 && userData.subscribersCount !== undefined) {
+      stats.fans.total = userData.subscribersCount || 0
+      stats.fans.active = userData.subscribersCount || 0
     }
     if (stats.content.posts === 0 && userData.postsCount) {
       stats.content.posts = userData.postsCount || 0

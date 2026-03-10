@@ -137,9 +137,12 @@ export async function createCustomerPortalSession() {
 
   const customerId = await findOrCreateStripeCustomer({ userId: user.id, email: user.email })
 
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL || 'https://circe-venus.vercel.app'
+
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/settings?tab=billing`,
+    return_url: `${appUrl}/dashboard/settings?tab=billing`,
   })
 
   return session.url
@@ -160,7 +163,9 @@ export async function createCustomerPortalSessionForFlow(flow: 'payment_method_u
     .eq('user_id', user.id)
     .maybeSingle()
 
-  const return_url = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/settings?tab=billing`
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL || 'https://circe-venus.vercel.app'
+  const return_url = `${appUrl}/dashboard/settings?tab=billing`
 
   // If we don't have a subscription id yet, fall back to the generic portal (user can still manage methods/invoices).
   const subscriptionId = subRow?.stripe_subscription_id || undefined

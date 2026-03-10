@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Checkout } from '@/components/stripe/checkout'
 import { PRODUCTS } from '@/lib/products'
-import { getSubscriptionStatus, createCustomerPortalSession } from '@/app/actions/stripe'
+import { getSubscriptionStatus, createCustomerPortalSession, createCustomerPortalSessionForFlow } from '@/app/actions/stripe'
 import { createClient } from '@/lib/supabase/client'
 import { 
   CreditCard, Zap, Database, Mail, Check, Loader2, Crown, Shield, Star, Sparkles, Calendar, AlertTriangle
@@ -122,6 +122,25 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
     }
   }
 
+  const openPortalFlow = async (flow: 'payment_method_update' | 'subscription_cancel' | 'subscription_update') => {
+    setLoadingPortal(true)
+    try {
+      const url = await createCustomerPortalSessionForFlow(flow)
+      window.location.href = url
+    } catch (error) {
+      console.error('Failed to create portal session:', error)
+      // Fallback to generic portal
+      try {
+        const url = await createCustomerPortalSession()
+        window.location.href = url
+      } catch {
+        // ignore
+      }
+    } finally {
+      setLoadingPortal(false)
+    }
+  }
+
   const currentPlan = subscription?.plan 
     ? PRODUCTS.find(p => p.id === subscription.planId) || PRODUCTS.find(p => p.name === subscription.plan)
     : PRODUCTS.find(p => p.id === 'divine-trial') || PRODUCTS[0]
@@ -185,14 +204,32 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
               {subscription?.status === 'active' ? (
-                <Button 
-                  onClick={handleManageBilling} 
-                  disabled={loadingPortal}
-                  variant="outline"
-                >
-                  {loadingPortal ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Manage Subscription
-                </Button>
+                <>
+                  <Button 
+                    onClick={handleManageBilling} 
+                    disabled={loadingPortal}
+                    variant="outline"
+                  >
+                    {loadingPortal ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Manage Subscription
+                  </Button>
+                  <Button
+                    onClick={() => openPortalFlow('payment_method_update')}
+                    disabled={loadingPortal}
+                    variant="outline"
+                  >
+                    Update Payment Method
+                  </Button>
+                  {!subData?.cancel_at_period_end && (
+                    <Button
+                      onClick={() => openPortalFlow('subscription_cancel')}
+                      disabled={loadingPortal}
+                      variant="destructive"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </>
               ) : (
                 <>
                   <Checkout 
@@ -249,7 +286,7 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
                   You&apos;ll lose access to Pro features after this date.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={handleManageBilling} disabled={loadingPortal}>
+              <Button variant="outline" size="sm" onClick={() => openPortalFlow('subscription_update')} disabled={loadingPortal}>
                 Resume
               </Button>
             </div>

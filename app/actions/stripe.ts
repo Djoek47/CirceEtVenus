@@ -145,6 +145,42 @@ export async function createCustomerPortalSession() {
   return session.url
 }
 
+export async function createCustomerPortalSessionForFlow(flow: 'payment_method_update' | 'subscription_cancel' | 'subscription_update') {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) throw new Error('User not authenticated')
+  if (!user.email) throw new Error('User email missing')
+
+  const customerId = await findOrCreateStripeCustomer({ userId: user.id, email: user.email })
+
+  const { data: subRow } = await supabase
+    .from('subscriptions')
+    .select('stripe_subscription_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const return_url = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/settings?tab=billing`
+
+  // If we don't have a subscription id yet, fall back to the generic portal (user can still manage methods/invoices).
+  const subscriptionId = subRow?.stripe_subscription_id || undefined
+
+  const flow_data =
+    flow === 'payment_method_update'
+      ? { type: 'payment_method_update' as const }
+      : flow === 'subscription_cancel'
+        ? (subscriptionId ? { type: 'subscription_cancel' as const, subscription: subscriptionId } : undefined)
+        : (subscriptionId ? { type: 'subscription_update' as const, subscription: subscriptionId } : undefined)
+
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url,
+    ...(flow_data ? { flow_data } : {}),
+  })
+
+  return session.url
+}
+
 export async function getSubscriptionStatus() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

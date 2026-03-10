@@ -19,13 +19,29 @@ export function MessagesLayout({ conversations, userId }: MessagesLayoutProps) {
     conversations[0] || null
   )
 
-  const displayConversations = conversations.length > 0 ? conversations : generateSampleConversations()
+  if (conversations.length === 0) {
+    return (
+      <div className="flex h-[calc(100vh-8rem)] items-center justify-center">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-4 rounded-full bg-muted p-4">
+            <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium">No Messages Yet</h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Connect your platforms to import your conversations and start chatting with fans.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4">
       {/* Conversation List */}
       <ConversationList
-        conversations={displayConversations}
+        conversations={conversations}
         selectedId={selectedConversation?.id}
         onSelect={(conv) => setSelectedConversation(conv)}
       />
@@ -34,96 +50,4 @@ export function MessagesLayout({ conversations, userId }: MessagesLayoutProps) {
       <ChatWindow conversation={selectedConversation} userId={userId} />
     </div>
   )
-}
-
-function generateSampleConversations(): ConversationWithFan[] {
-  return [
-    {
-      id: '1',
-      user_id: '',
-      fan_id: '1',
-      platform: 'onlyfans',
-      status: 'active',
-      last_message_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-      unread_count: 2,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      fan: {
-        id: '1',
-        user_id: '',
-        platform: 'onlyfans',
-        platform_username: 'superfan123',
-        display_name: 'Super Fan',
-        avatar_url: null,
-        tier: 'whale',
-        total_spent: 2500,
-        subscription_start: null,
-        last_interaction: null,
-        notes: null,
-        tags: [],
-        is_favorite: true,
-        is_blocked: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    },
-    {
-      id: '2',
-      user_id: '',
-      fan_id: '2',
-      platform: 'fansly',
-      status: 'active',
-      last_message_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      unread_count: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      fan: {
-        id: '2',
-        user_id: '',
-        platform: 'fansly',
-        platform_username: 'loyalfan',
-        display_name: 'Loyal Supporter',
-        avatar_url: null,
-        tier: 'regular',
-        total_spent: 450,
-        subscription_start: null,
-        last_interaction: null,
-        notes: null,
-        tags: [],
-        is_favorite: false,
-        is_blocked: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    },
-    {
-      id: '3',
-      user_id: '',
-      fan_id: '3',
-      platform: 'mym',
-      status: 'pending',
-      last_message_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      unread_count: 1,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      fan: {
-        id: '3',
-        user_id: '',
-        platform: 'mym',
-        platform_username: 'newbie99',
-        display_name: 'New Subscriber',
-        avatar_url: null,
-        tier: 'new',
-        total_spent: 25,
-        subscription_start: null,
-        last_interaction: null,
-        notes: null,
-        tags: [],
-        is_favorite: false,
-        is_blocked: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    },
-  ]
 }

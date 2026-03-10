@@ -2,46 +2,27 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   Link2, 
-  Check, 
   Loader2, 
-  Upload, 
-  Key, 
+  RefreshCw, 
+  Check, 
   AlertCircle,
-  RefreshCw,
-  Trash2,
-  FileJson,
-  Download
+  ExternalLink,
+  Unlink
 } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 
-interface PlatformConnection {
-  id: string
-  platform: string
-  platform_username: string
-  is_connected: boolean
-  last_sync_at: string | null
+// OnlyFans Logo SVG Component
+function OnlyFansIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm0-14c-3.314 0-6 2.686-6 6s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2z"/>
+    </svg>
+  )
 }
 
 interface Platform {
@@ -52,13 +33,6 @@ interface Platform {
   dataTypes: string[]
   icon?: React.ReactNode
 }
-
-// OnlyFans Logo SVG Component
-const OnlyFansIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-    <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm0-14c-3.314 0-6 2.686-6 6s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2z"/>
-  </svg>
-)
 
 const PLATFORMS: Platform[] = [
   {
@@ -72,46 +46,47 @@ const PLATFORMS: Platform[] = [
   {
     id: 'fansly',
     name: 'Fansly',
-    color: '#009FFF',
-    description: 'Sync your Fansly data including followers and transactions',
-    dataTypes: ['Followers', 'Messages', 'Subscriptions', 'Tips'],
+    color: '#1DA1F2',
+    description: 'Sync your Fansly subscribers and content analytics',
+    dataTypes: ['Subscribers', 'Messages', 'Earnings'],
   },
   {
     id: 'mym',
     name: 'MYM',
-    color: '#FF4D67',
-    description: 'Import your MYM account data and analytics',
-    dataTypes: ['Fans', 'Messages', 'Revenue', 'Media Stats'],
+    color: '#FF69B4',
+    description: 'Import your MYM fans and engagement data',
+    dataTypes: ['Fans', 'Messages', 'Revenue'],
   },
 ]
 
+interface PlatformConnection {
+  id: string
+  platform: string
+  platform_username: string | null
+  is_connected: boolean
+  last_sync_at: string | null
+}
+
 export function PlatformConnector() {
   const [connections, setConnections] = useState<PlatformConnection[]>([])
-  const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [syncing, setSyncing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
   const supabase = createClient()
 
   const loadConnections = useCallback(async () => {
-    setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) return
 
-    const { data, error: fetchError } = await supabase
+    const { data } = await supabase
       .from('platform_connections')
       .select('*')
       .eq('user_id', user.id)
 
-    if (fetchError) {
-      console.error('Error loading connections:', fetchError)
-    } else {
-      setConnections(data || [])
-    }
+    setConnections(data || [])
     setLoading(false)
   }, [supabase])
 
@@ -127,249 +102,94 @@ export function PlatformConnector() {
     return connections.find(c => c.platform === platformId)
   }
 
-  const handleOAuthConnect = async (platformId: string) => {
+  const handleConnect = async (platformId: string) => {
     setConnecting(platformId)
     setError(null)
-    
-    try {
-      // Get client session token from our API
-      const response = await fetch(`/api/${platformId}/auth`)
-      const data = await response.json()
-      
-      if (data.error) {
-        throw new Error(data.error)
-      }
-      
-      if (data.token) {
-        // Use the @onlyfansapi/auth package for embedded auth
-        const { startOnlyFansAuthentication } = await import('@onlyfansapi/auth')
-        
-        startOnlyFansAuthentication(data.token, {
-          onSuccess: async (authData) => {
-            // Store the connection in database
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) {
-              await supabase
-                .from('platform_connections')
-                .upsert({
-                  user_id: user.id,
-                  platform: 'onlyfans',
-                  platform_user_id: authData.accountId,
-                  platform_username: authData.username || 'Connected',
-                  is_connected: true,
-                  access_token: authData.accountId,
-                  last_sync_at: new Date().toISOString(),
-                }, {
-                  onConflict: 'user_id,platform'
-                })
-              
-              setSuccess(`Successfully connected OnlyFans account: @${authData.username}`)
-              await loadConnections()
-              setTimeout(() => setSuccess(null), 3000)
-            }
-            setConnecting(null)
-          },
-          onError: (authError) => {
-            setError(authError.message || 'Authentication failed')
-            setConnecting(null)
-          }
-        })
-      } else {
-        throw new Error('No authentication token received')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start connection')
-      setConnecting(null)
-    }
-  }
-
-  const handleConnect = async (platformId: string, username: string) => {
-    setConnecting(platformId)
-    setError(null)
-    
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setError('You must be logged in to connect platforms')
-      setConnecting(null)
-      return
-    }
 
     try {
-      const existing = connections.find(c => c.platform === platformId)
-      
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from('platform_connections')
-          .update({
-            platform_username: username,
-            is_connected: true,
-            last_sync_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id)
+      if (platformId === 'onlyfans') {
+        // Open OnlyFans API connect page
+        window.open('https://app.onlyfansapi.com/connect', '_blank', 'width=600,height=700')
+        setSuccess('Complete authentication in the popup window, then click Sync to import your data.')
         
-        if (updateError) throw updateError
-      } else {
-        const { error: insertError } = await supabase
-          .from('platform_connections')
-          .insert({
+        // Create a pending connection record
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase.from('platform_connections').upsert({
             user_id: user.id,
             platform: platformId,
-            platform_username: username,
-            is_connected: true,
-            last_sync_at: new Date().toISOString(),
-          })
-        
-        if (insertError) throw insertError
+            is_connected: false,
+            platform_username: 'Pending...',
+          }, { onConflict: 'user_id,platform' })
+          await loadConnections()
+        }
+      } else {
+        setError(`${PLATFORMS.find(p => p.id === platformId)?.name} integration coming soon!`)
       }
-
-      await generateSampleData(user.id, platformId)
-      
-      setSuccess(`Successfully connected to ${PLATFORMS.find(p => p.id === platformId)?.name}!`)
-      await loadConnections()
-      setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
-      console.error('Error connecting platform:', err)
-      setError('Failed to connect platform. Please try again.')
-    }
-    
-    setConnecting(null)
-  }
-
-  const handleDisconnect = async (platformId: string) => {
-    const connection = getConnection(platformId)
-    if (!connection) return
-
-    try {
-      const { error: disconnectError } = await supabase
-        .from('platform_connections')
-        .update({ is_connected: false })
-        .eq('id', connection.id)
-
-      if (disconnectError) throw disconnectError
-      
-      await loadConnections()
-      setSuccess('Platform disconnected')
-      setTimeout(() => setSuccess(null), 3000)
-    } catch (err) {
-      console.error('Error disconnecting:', err)
-      setError('Failed to disconnect platform')
+      setError(err instanceof Error ? err.message : 'Failed to connect')
+    } finally {
+      setConnecting(null)
     }
   }
 
   const handleSync = async (platformId: string) => {
     setSyncing(platformId)
     setError(null)
-    
+
     try {
-      if (platformId === 'onlyfans') {
-        const response = await fetch('/api/onlyfans/sync', { method: 'POST' })
-        const data = await response.json()
-        
-        if (data.error) {
-          throw new Error(data.error)
-        }
-        
-        setSuccess(`Synced ${data.synced?.fans || 0} fans and $${(data.synced?.revenue || 0).toLocaleString()} in earnings!`)
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        const connection = getConnection(platformId)
-        if (connection) {
-          await supabase
-            .from('platform_connections')
-            .update({ last_sync_at: new Date().toISOString() })
-            .eq('id', connection.id)
-        }
-        
-        setSuccess(`${PLATFORMS.find(p => p.id === platformId)?.name} data synced successfully!`)
+      const response = await fetch('/api/onlyfans/sync', { method: 'POST' })
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error)
       }
-      
+
+      // Update connection status
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('platform_connections').upsert({
+          user_id: user.id,
+          platform: platformId,
+          is_connected: true,
+          last_sync_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,platform' })
+      }
+
       await loadConnections()
-      setTimeout(() => setSuccess(null), 3000)
+      
+      const syncedInfo = []
+      if (data.synced?.fans) syncedInfo.push(`${data.synced.fans} fans`)
+      if (data.synced?.revenue) syncedInfo.push(`$${data.synced.revenue.toLocaleString()} revenue`)
+      if (data.synced?.messages) syncedInfo.push(`${data.synced.messages} messages`)
+      
+      setSuccess(`Synced: ${syncedInfo.join(', ') || 'Data imported successfully'}`)
+      setTimeout(() => setSuccess(null), 5000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sync data. Please try again.')
+      setError(err instanceof Error ? err.message : 'Sync failed. Make sure you completed authentication.')
     } finally {
       setSyncing(null)
     }
   }
 
-  const generateSampleData = async (userId: string, platform: string) => {
-    const today = new Date()
-    const snapshots = []
-
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today)
-      date.setDate(date.getDate() - i)
-      
-      const baseRevenue = platform === 'onlyfans' ? 300 : platform === 'fansly' ? 150 : 80
-      const baseFans = platform === 'onlyfans' ? 50 : platform === 'fansly' ? 30 : 15
-      
-      snapshots.push({
-        user_id: userId,
-        platform: platform,
-        date: date.toISOString().split('T')[0],
-        revenue: Math.floor(baseRevenue + Math.random() * 200 - 50),
-        total_fans: Math.floor(800 + baseFans * (30 - i) + Math.random() * 20),
-        new_fans: Math.floor(baseFans / 5 + Math.random() * 10),
-        churned_fans: Math.floor(Math.random() * 5),
-        messages_received: Math.floor(50 + Math.random() * 100),
-        messages_sent: Math.floor(40 + Math.random() * 80),
-        avg_response_time_minutes: Math.floor(15 + Math.random() * 30),
-      })
-    }
+  const handleDisconnect = async (platformId: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
     await supabase
-      .from('analytics_snapshots')
+      .from('platform_connections')
       .delete()
-      .eq('user_id', userId)
-      .eq('platform', platform)
+      .eq('user_id', user.id)
+      .eq('platform', platformId)
 
-    const { error: insertError } = await supabase
-      .from('analytics_snapshots')
-      .insert(snapshots)
-
-    if (insertError) {
-      console.error('Error inserting analytics data:', insertError)
-      throw insertError
-    }
-
-    await generateSampleFans(userId, platform)
-  }
-
-  const generateSampleFans = async (userId: string, platform: string) => {
-    const fanNames = [
-      'DiamondKing', 'GoldenStar', 'LuxuryLover', 'PremiumFan', 'EliteSupporter',
-      'RoyalPatron', 'VIPMember', 'TopTipper', 'LoyalFollower', 'SuperFan'
-    ]
-
-    const fans = fanNames.slice(0, 5 + Math.floor(Math.random() * 5)).map((name, i) => ({
-      user_id: userId,
-      platform: platform,
-      platform_fan_id: `${platform}_${Date.now()}_${i}`,
-      username: name.toLowerCase() + Math.floor(Math.random() * 1000),
-      display_name: name,
-      subscription_status: Math.random() > 0.2 ? 'active' : 'expired',
-      subscription_tier: ['free', 'basic', 'premium', 'vip'][Math.floor(Math.random() * 4)],
-      total_spent: Math.floor(Math.random() * 500) + 10,
-      first_subscribed_at: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
-      last_interaction_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-    }))
-
-    const { data: existingFans } = await supabase
-      .from('fans')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('platform', platform)
-      .limit(1)
-
-    if (!existingFans || existingFans.length === 0) {
-      await supabase.from('fans').insert(fans)
-    }
+    await loadConnections()
+    setSuccess('Platform disconnected')
+    setTimeout(() => setSuccess(null), 3000)
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center p-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
@@ -383,7 +203,7 @@ export function PlatformConnector() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      
+
       {success && (
         <Alert className="border-green-500/50 bg-green-500/10">
           <Check className="h-4 w-4 text-green-500" />
@@ -395,20 +215,20 @@ export function PlatformConnector() {
         {PLATFORMS.map((platform) => {
           const connected = isConnected(platform.id)
           const connection = getConnection(platform.id)
-          
+
           return (
-            <Card 
-              key={platform.id} 
+            <Card
+              key={platform.id}
               className={`border-2 transition-colors ${
-                connected 
-                  ? 'border-green-500/50 bg-green-500/5' 
+                connected
+                  ? 'border-green-500/50 bg-green-500/5'
                   : 'border-border hover:border-primary/50'
               }`}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div 
+                    <div
                       className="flex h-10 w-10 items-center justify-center rounded-lg"
                       style={{ backgroundColor: `${platform.color}20`, color: platform.color }}
                     >
@@ -428,18 +248,18 @@ export function PlatformConnector() {
                     </div>
                   </div>
                   {connected && (
-                    <Badge variant="outline" className="gap-1 border-green-500/50 text-green-500">
-                      <Check className="h-3 w-3" />
+                    <Badge variant="outline" className="border-green-500/50 text-green-500">
+                      <Check className="mr-1 h-3 w-3" />
                       Connected
                     </Badge>
                   )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
+                <CardDescription className="text-sm">
                   {platform.description}
-                </p>
-                
+                </CardDescription>
+
                 <div className="flex flex-wrap gap-1">
                   {platform.dataTypes.map((type) => (
                     <Badge key={type} variant="secondary" className="text-xs">
@@ -449,298 +269,55 @@ export function PlatformConnector() {
                 </div>
 
                 {connected ? (
-                  <div className="space-y-2">
-                    {connection?.last_sync_at && (
-                      <p className="text-xs text-muted-foreground">
-                        Last synced: {new Date(connection.last_sync_at).toLocaleString()}
-                      </p>
-                    )}
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => handleSync(platform.id)}
-                        disabled={syncing === platform.id}
-                      >
-                        {syncing === platform.id ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        Sync
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleDisconnect(platform.id)}
-                        className="text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  platform.id === 'onlyfans' ? (
-                    <Button 
-                      className="w-full"
-                      onClick={() => handleOAuthConnect(platform.id)}
-                      disabled={connecting === platform.id}
-                      style={{ backgroundColor: platform.color }}
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => handleSync(platform.id)}
+                      disabled={syncing === platform.id}
                     >
-                      {connecting === platform.id ? (
+                      {syncing === platform.id ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
-                        <Link2 className="mr-2 h-4 w-4" />
+                        <RefreshCw className="mr-2 h-4 w-4" />
                       )}
-                      Connect with OnlyFans
+                      Sync Now
                     </Button>
-                  ) : (
-                    <ConnectDialog 
-                      platform={platform}
-                      onConnect={(username) => handleConnect(platform.id, username)}
-                      connecting={connecting === platform.id}
-                    />
-                  )
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDisconnect(platform.id)}
+                      className="text-destructive hover:bg-destructive/10"
+                    >
+                      <Unlink className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    className="w-full"
+                    onClick={() => handleConnect(platform.id)}
+                    disabled={connecting === platform.id}
+                    style={{ backgroundColor: platform.color }}
+                  >
+                    {connecting === platform.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                    )}
+                    Connect {platform.name}
+                  </Button>
+                )}
+
+                {connection?.last_sync_at && (
+                  <p className="text-xs text-muted-foreground">
+                    Last synced: {new Date(connection.last_sync_at).toLocaleString()}
+                  </p>
                 )}
               </CardContent>
             </Card>
           )
         })}
       </div>
-
-      {/* API Access Management */}
-      <Card className="border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5" />
-            API Access Management
-          </CardTitle>
-          <CardDescription>
-            Manage API keys for advanced platform integrations
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {PLATFORMS.filter(p => isConnected(p.id)).length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-4">
-              Connect a platform above to enable API access
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {PLATFORMS.filter(p => isConnected(p.id)).map((platform) => {
-                const connection = getConnection(platform.id)
-                return (
-                  <div 
-                    key={platform.id}
-                    className="flex items-center justify-between rounded-lg border border-border p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="flex h-8 w-8 items-center justify-center rounded-lg"
-                        style={{ backgroundColor: `${platform.color}20` }}
-                      >
-                        <span 
-                          className="text-xs font-bold"
-                          style={{ color: platform.color }}
-                        >
-                          {platform.name.substring(0, 2).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{platform.name} API</p>
-                        <p className="text-xs text-muted-foreground">
-                          {connection?.platform_username ? `@${connection.platform_username}` : 'Connected'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="gap-1 text-xs">
-                        <Check className="h-3 w-3 text-green-500" />
-                        Active
-                      </Badge>
-                      <Button variant="outline" size="sm">
-                        <Key className="mr-2 h-3 w-3" />
-                        View Key
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Data Import Section */}
-      <Card className="border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Manual Data Import
-          </CardTitle>
-          <CardDescription>
-            Import your data manually using exported files from your platforms
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="json">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="json">JSON Import</TabsTrigger>
-              <TabsTrigger value="csv">CSV Import</TabsTrigger>
-            </TabsList>
-            <TabsContent value="json" className="space-y-4">
-              <div className="rounded-lg border-2 border-dashed border-border p-8 text-center">
-                <FileJson className="mx-auto h-10 w-10 text-muted-foreground" />
-                <p className="mt-2 font-medium">Drop JSON file here</p>
-                <p className="text-sm text-muted-foreground">
-                  Or click to browse files
-                </p>
-                <Input 
-                  type="file" 
-                  accept=".json"
-                  className="mt-4 cursor-pointer"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      setSuccess('File uploaded! Processing...')
-                      setTimeout(() => setSuccess('Data imported successfully!'), 2000)
-                    }
-                  }}
-                />
-              </div>
-            </TabsContent>
-            <TabsContent value="csv" className="space-y-4">
-              <div className="rounded-lg border-2 border-dashed border-border p-8 text-center">
-                <Download className="mx-auto h-10 w-10 text-muted-foreground" />
-                <p className="mt-2 font-medium">Drop CSV file here</p>
-                <p className="text-sm text-muted-foreground">
-                  Export from OnlyFans/Fansly dashboard
-                </p>
-                <Input 
-                  type="file" 
-                  accept=".csv"
-                  className="mt-4 cursor-pointer"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      setSuccess('CSV uploaded! Processing...')
-                      setTimeout(() => setSuccess('Data imported successfully!'), 2000)
-                    }
-                  }}
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
     </div>
-  )
-}
-
-function ConnectDialog({ 
-  platform, 
-  onConnect, 
-  connecting 
-}: { 
-  platform: Platform
-  onConnect: (username: string) => void
-  connecting: boolean
-}) {
-  const [username, setUsername] = useState('')
-  const [open, setOpen] = useState(false)
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (username.trim()) {
-      onConnect(username.trim())
-      setOpen(false)
-      setUsername('')
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button 
-          className="w-full"
-          style={{ 
-            backgroundColor: platform.color,
-            color: 'white'
-          }}
-        >
-          <Link2 className="mr-2 h-4 w-4" />
-          Connect {platform.name}
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <div 
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ backgroundColor: `${platform.color}20` }}
-            >
-              <span 
-                className="text-xs font-bold"
-                style={{ color: platform.color }}
-              >
-                {platform.name.substring(0, 2).toUpperCase()}
-              </span>
-            </div>
-            Connect to {platform.name}
-          </DialogTitle>
-          <DialogDescription>
-            Enter your {platform.name} username to connect your account and import your data.
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="your_username"
-                className="pl-8"
-                required
-              />
-            </div>
-          </div>
-
-          <Alert>
-            <Key className="h-4 w-4" />
-            <AlertDescription>
-              We use secure OAuth authentication. Your password is never stored.
-            </AlertDescription>
-          </Alert>
-
-          <div className="flex gap-2">
-            <Button 
-              type="button" 
-              variant="outline" 
-              className="flex-1"
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              className="flex-1"
-              disabled={connecting || !username.trim()}
-              style={{ backgroundColor: platform.color }}
-            >
-              {connecting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="mr-2 h-4 w-4" />
-              )}
-              Connect
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }

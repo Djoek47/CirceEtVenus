@@ -40,12 +40,26 @@ const platformColors = {
 }
 
 export function ContentList({ content }: ContentListProps) {
-  const displayContent = content.length > 0 ? content : generateSampleContent()
-
   const getContentIcon = (c: Content) => {
     if (c.media_urls.length === 0) return FileText
     if (c.media_urls.some(url => url.includes('video'))) return Video
     return Image
+  }
+
+  if (content.length === 0) {
+    return (
+      <Card className="border-border bg-card">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 rounded-full bg-muted p-4">
+            <Image className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-medium">No Content Yet</h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Connect your platforms and sync to import your content, or create new content to get started.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -63,7 +77,7 @@ export function ContentList({ content }: ContentListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayContent.map((c) => {
+            {content.map((c) => {
               const ContentIcon = getContentIcon(c)
               return (
                 <TableRow key={c.id} className="border-border">
@@ -163,70 +177,4 @@ export function ContentList({ content }: ContentListProps) {
       </CardContent>
     </Card>
   )
-}
-
-function generateSampleContent(): Content[] {
-  const today = new Date()
-  return [
-    {
-      id: '1',
-      user_id: '',
-      title: 'Morning photoshoot',
-      description: 'Beach sunset photos from last week',
-      media_urls: ['/images/photo1.jpg'],
-      platforms: ['onlyfans', 'fansly'],
-      status: 'scheduled',
-      scheduled_at: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 10, 0).toISOString(),
-      published_at: null,
-      performance_metrics: { views: 0, likes: 0, comments: 0, shares: 0, revenue: 0 },
-      tags: ['photo', 'beach'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      user_id: '',
-      title: 'Exclusive BTS video',
-      description: 'Behind the scenes of photoshoot',
-      media_urls: ['/videos/bts.mp4'],
-      platforms: ['onlyfans'],
-      status: 'published',
-      scheduled_at: null,
-      published_at: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 2).toISOString(),
-      performance_metrics: { views: 1250, likes: 89, comments: 23, shares: 5, revenue: 450 },
-      tags: ['video', 'exclusive'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      user_id: '',
-      title: 'Weekly update post',
-      description: 'Catching up with fans this week',
-      media_urls: [],
-      platforms: ['onlyfans', 'mym', 'fansly'],
-      status: 'draft',
-      scheduled_at: null,
-      published_at: null,
-      performance_metrics: { views: 0, likes: 0, comments: 0, shares: 0, revenue: 0 },
-      tags: ['text', 'update'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '4',
-      user_id: '',
-      title: 'PPV Special Content',
-      description: 'Premium content drop for subscribers',
-      media_urls: ['/images/special.jpg', '/videos/special.mp4'],
-      platforms: ['onlyfans'],
-      status: 'scheduled',
-      scheduled_at: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 5, 18, 0).toISOString(),
-      published_at: null,
-      performance_metrics: { views: 0, likes: 0, comments: 0, shares: 0, revenue: 0 },
-      tags: ['ppv', 'premium'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]
 }

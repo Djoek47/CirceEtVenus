@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -12,9 +12,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Send, Paperclip, DollarSign, MoreVertical, Star, Ban, User, Mic } from 'lucide-react'
+import { Send, Paperclip, DollarSign, MoreVertical, Star, Ban, User, Loader2 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import type { Conversation, Fan, Message } from '@/lib/types'
 
 interface ConversationWithFan extends Conversation {
@@ -35,12 +36,39 @@ const tierColors = {
 
 export function ChatWindow({ conversation }: ChatWindowProps) {
   const [message, setMessage] = useState('')
-  const [messages] = useState<Message[]>(generateSampleMessages())
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(false)
+  const supabase = createClient()
+
+  // Load messages when conversation changes
+  useEffect(() => {
+    if (!conversation) {
+      setMessages([])
+      return
+    }
+
+    const loadMessages = async () => {
+      setLoading(true)
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversation.id)
+        .order('sent_at', { ascending: true })
+      
+      setMessages(data || [])
+      setLoading(false)
+    }
+
+    loadMessages()
+  }, [conversation, supabase])
 
   if (!conversation) {
     return (
       <Card className="flex flex-1 items-center justify-center border-border bg-card">
-        <div className="text-center text-muted-foreground">
+        <div className="flex flex-col items-center text-center text-muted-foreground">
+          <svg className="mb-4 h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
           <p>Select a conversation to start messaging</p>
         </div>
       </Card>
@@ -107,6 +135,16 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
       {/* Messages Area */}
       <CardContent className="flex-1 overflow-y-auto p-4">
+        {loading ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <p className="text-sm text-muted-foreground">No messages yet</p>
+            <p className="text-xs text-muted-foreground">Start the conversation!</p>
+          </div>
+        ) : (
         <div className="space-y-4">
           {messages.map((msg) => (
             <div
@@ -148,6 +186,7 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
             </div>
           ))}
         </div>
+        )}
       </CardContent>
 
       {/* Message Input */}
@@ -186,65 +225,4 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
       </div>
     </Card>
   )
-}
-
-function generateSampleMessages(): Message[] {
-  const now = Date.now()
-  return [
-    {
-      id: '1',
-      conversation_id: '1',
-      sender_type: 'fan',
-      content: 'Hey! Love your content! When is the next exclusive dropping?',
-      media_urls: [],
-      is_ppv: false,
-      ppv_price: null,
-      is_read: true,
-      sent_at: new Date(now - 1000 * 60 * 30).toISOString(),
-    },
-    {
-      id: '2',
-      conversation_id: '1',
-      sender_type: 'creator',
-      content: 'Thank you so much! I have something special coming this weekend. Stay tuned!',
-      media_urls: [],
-      is_ppv: false,
-      ppv_price: null,
-      is_read: true,
-      sent_at: new Date(now - 1000 * 60 * 25).toISOString(),
-    },
-    {
-      id: '3',
-      conversation_id: '1',
-      sender_type: 'fan',
-      content: 'Can I get a sneak peek? Would love to see what you are working on!',
-      media_urls: [],
-      is_ppv: false,
-      ppv_price: null,
-      is_read: true,
-      sent_at: new Date(now - 1000 * 60 * 20).toISOString(),
-    },
-    {
-      id: '4',
-      conversation_id: '1',
-      sender_type: 'creator',
-      content: 'Sure thing! Here is an exclusive preview just for you...',
-      media_urls: ['/images/preview.jpg'],
-      is_ppv: true,
-      ppv_price: 15,
-      is_read: true,
-      sent_at: new Date(now - 1000 * 60 * 15).toISOString(),
-    },
-    {
-      id: '5',
-      conversation_id: '1',
-      sender_type: 'fan',
-      content: 'Amazing! Just purchased. You are the best!',
-      media_urls: [],
-      is_ppv: false,
-      ppv_price: null,
-      is_read: false,
-      sent_at: new Date(now - 1000 * 60 * 5).toISOString(),
-    },
-  ]
 }

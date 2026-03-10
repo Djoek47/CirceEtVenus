@@ -18,7 +18,7 @@ export default async function MentionsPage() {
     .eq('user_id', user.id)
     .order('detected_at', { ascending: false })
 
-  const allMentions = mentions || generateSampleMentions()
+  const allMentions = mentions || []
   const unreviewed = allMentions.filter(m => !m.is_reviewed)
   const reviewed = allMentions.filter(m => m.is_reviewed)
 
@@ -208,64 +208,4 @@ export default async function MentionsPage() {
       )}
     </div>
   )
-}
-
-function generateSampleMentions(): ReputationMention[] {
-  return [
-    {
-      id: '1',
-      user_id: '',
-      platform: 'Twitter',
-      url: 'https://twitter.com/user/status/123',
-      content_snippet: 'Just subscribed to this amazing creator! Their content is absolutely worth it. Highly recommend!',
-      sentiment: 'positive',
-      author: '@happyfan',
-      detected_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      is_reviewed: false,
-    },
-    {
-      id: '2',
-      user_id: '',
-      platform: 'Reddit',
-      url: 'https://reddit.com/r/community/comments/abc',
-      content_snippet: 'Has anyone else noticed the content quality has improved recently? Thinking about resubscribing.',
-      sentiment: 'neutral',
-      author: 'u/curious_user',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      is_reviewed: false,
-    },
-    {
-      id: '3',
-      user_id: '',
-      platform: 'Forum',
-      url: 'https://forum.example/thread/123',
-      content_snippet: 'The subscription price is too high for what you get. Not worth the money in my opinion.',
-      sentiment: 'negative',
-      author: 'unhappy_subscriber',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-      is_reviewed: false,
-    },
-    {
-      id: '4',
-      user_id: '',
-      platform: 'Twitter',
-      url: 'https://twitter.com/user/status/456',
-      content_snippet: 'Been following this creator for 2 years now. Always consistent quality. Five stars!',
-      sentiment: 'positive',
-      author: '@loyalfollower',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-      is_reviewed: true,
-    },
-    {
-      id: '5',
-      user_id: '',
-      platform: 'Blog',
-      url: 'https://blog.example/review',
-      content_snippet: 'A fair and balanced review of this creator. Some pros and cons to consider before subscribing.',
-      sentiment: 'neutral',
-      author: 'review_blogger',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-      is_reviewed: true,
-    },
-  ]
 }

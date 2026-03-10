@@ -18,7 +18,7 @@ export default async function ProtectionPage() {
     .eq('user_id', user.id)
     .order('detected_at', { ascending: false })
 
-  const alerts = leakAlerts || generateSampleAlerts()
+  const alerts = leakAlerts || []
   const activeAlerts = alerts.filter(a => a.status === 'detected' || a.status === 'reviewing')
   const resolvedAlerts = alerts.filter(a => a.status === 'resolved' || a.status === 'false_positive')
 
@@ -192,57 +192,4 @@ export default async function ProtectionPage() {
       </Card>
     </div>
   )
-}
-
-function generateSampleAlerts(): LeakAlert[] {
-  return [
-    {
-      id: '1',
-      user_id: '',
-      source_url: 'https://piracy-site.example/uploads/content123',
-      source_platform: 'File Sharing Site',
-      matched_content_id: null,
-      severity: 'critical',
-      status: 'detected',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      resolved_at: null,
-      notes: null,
-    },
-    {
-      id: '2',
-      user_id: '',
-      source_url: 'https://forum.example/thread/leaked-content',
-      source_platform: 'Forum',
-      matched_content_id: null,
-      severity: 'high',
-      status: 'reviewing',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-      resolved_at: null,
-      notes: null,
-    },
-    {
-      id: '3',
-      user_id: '',
-      source_url: 'https://social.example/post/12345',
-      source_platform: 'Social Media',
-      matched_content_id: null,
-      severity: 'medium',
-      status: 'resolved',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-      resolved_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-      notes: 'DMCA sent and content removed',
-    },
-    {
-      id: '4',
-      user_id: '',
-      source_url: 'https://blog.example/post/similar-content',
-      source_platform: 'Blog',
-      matched_content_id: null,
-      severity: 'low',
-      status: 'false_positive',
-      detected_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-      resolved_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
-      notes: 'Not actual leaked content',
-    },
-  ]
 }

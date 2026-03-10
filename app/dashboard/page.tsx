@@ -27,7 +27,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from('fans').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
     supabase.from('content').select('*').eq('user_id', user.id).eq('status', 'scheduled'),
-    supabase.from('conversations').select('*').eq('user_id', user.id).eq('status', 'active'),
+    supabase.from('conversations').select('*').eq('user_id', user.id),
     supabase.from('leak_alerts').select('*').eq('user_id', user.id).eq('status', 'detected').limit(5),
     supabase.from('reputation_mentions').select('*').eq('user_id', user.id).eq('is_reviewed', false).limit(5),
     supabase.from('analytics_snapshots').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(30),

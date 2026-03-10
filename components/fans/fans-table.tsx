@@ -62,8 +62,6 @@ const platformColors = {
 export function FansTable({ fans }: FansTableProps) {
   const [selectedFans, setSelectedFans] = useState<string[]>([])
 
-  const displayFans = fans.length > 0 ? fans : generateSampleFans()
-
   const toggleFan = (fanId: string) => {
     setSelectedFans(prev =>
       prev.includes(fanId)
@@ -74,7 +72,25 @@ export function FansTable({ fans }: FansTableProps) {
 
   const toggleAll = () => {
     setSelectedFans(prev =>
-      prev.length === displayFans.length ? [] : displayFans.map(f => f.id)
+      prev.length === fans.length ? [] : fans.map(f => f.id)
+    )
+  }
+
+  if (fans.length === 0) {
+    return (
+      <Card className="border-border bg-card">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 rounded-full bg-muted p-4">
+            <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium">No Fans Yet</h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Connect your platforms in Settings to import your fans and start managing your community.
+          </p>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -86,7 +102,7 @@ export function FansTable({ fans }: FansTableProps) {
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="w-12">
                 <Checkbox
-                  checked={selectedFans.length === displayFans.length && displayFans.length > 0}
+                  checked={selectedFans.length === fans.length && fans.length > 0}
                   onCheckedChange={toggleAll}
                 />
               </TableHead>
@@ -99,7 +115,7 @@ export function FansTable({ fans }: FansTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayFans.map((fan) => (
+            {fans.map((fan) => (
               <TableRow key={fan.id} className="border-border">
                 <TableCell>
                   <Checkbox
@@ -179,99 +195,4 @@ export function FansTable({ fans }: FansTableProps) {
       </CardContent>
     </Card>
   )
-}
-
-function generateSampleFans(): Fan[] {
-  return [
-    {
-      id: '1',
-      user_id: '',
-      platform: 'onlyfans',
-      platform_username: 'superfan123',
-      display_name: 'Super Fan',
-      avatar_url: null,
-      tier: 'whale',
-      total_spent: 2500,
-      subscription_start: '2024-01-15',
-      last_interaction: '2024-03-07',
-      notes: 'VIP supporter',
-      tags: ['vip', 'high-spender'],
-      is_favorite: true,
-      is_blocked: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      user_id: '',
-      platform: 'fansly',
-      platform_username: 'loyalfan',
-      display_name: 'Loyal Supporter',
-      avatar_url: null,
-      tier: 'regular',
-      total_spent: 450,
-      subscription_start: '2024-02-01',
-      last_interaction: '2024-03-05',
-      notes: null,
-      tags: [],
-      is_favorite: false,
-      is_blocked: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      user_id: '',
-      platform: 'mym',
-      platform_username: 'newbie99',
-      display_name: 'New Subscriber',
-      avatar_url: null,
-      tier: 'new',
-      total_spent: 25,
-      subscription_start: '2024-03-01',
-      last_interaction: '2024-03-06',
-      notes: null,
-      tags: ['new'],
-      is_favorite: false,
-      is_blocked: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '4',
-      user_id: '',
-      platform: 'onlyfans',
-      platform_username: 'bigtimer',
-      display_name: 'Big Spender',
-      avatar_url: null,
-      tier: 'whale',
-      total_spent: 5200,
-      subscription_start: '2023-06-15',
-      last_interaction: '2024-03-07',
-      notes: 'Requests custom content frequently',
-      tags: ['custom', 'whale'],
-      is_favorite: true,
-      is_blocked: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '5',
-      user_id: '',
-      platform: 'fansly',
-      platform_username: 'quietfan',
-      display_name: null,
-      avatar_url: null,
-      tier: 'inactive',
-      total_spent: 150,
-      subscription_start: '2023-12-01',
-      last_interaction: '2024-01-15',
-      notes: null,
-      tags: [],
-      is_favorite: false,
-      is_blocked: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]
 }

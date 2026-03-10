@@ -28,8 +28,27 @@ const sentimentColors = {
 }
 
 export function AlertsWidget({ leakAlerts, mentions }: AlertsWidgetProps) {
-  const displayLeaks = leakAlerts.length > 0 ? leakAlerts : generateSampleLeaks()
-  const displayMentions = mentions.length > 0 ? mentions : generateSampleMentions()
+  const hasAnyData = leakAlerts.length > 0 || mentions.length > 0
+
+  if (!hasAnyData) {
+    return (
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <CardTitle>Alerts & Monitoring</CardTitle>
+          <CardDescription>Stay on top of important updates</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="mb-4 rounded-full bg-muted p-4">
+            <Shield className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-medium">No Alerts Yet</h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Connect your platforms to start monitoring for leaks and mentions.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="border-border bg-card">
@@ -43,25 +62,25 @@ export function AlertsWidget({ leakAlerts, mentions }: AlertsWidgetProps) {
             <TabsTrigger value="leaks" className="flex-1 gap-2">
               <Shield className="h-4 w-4" />
               Leaks
-              {displayLeaks.length > 0 && (
+              {leakAlerts.length > 0 && (
                 <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
-                  {displayLeaks.length}
+                  {leakAlerts.length}
                 </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="mentions" className="flex-1 gap-2">
               <Bell className="h-4 w-4" />
               Mentions
-              {displayMentions.length > 0 && (
+              {mentions.length > 0 && (
                 <Badge className="ml-1 h-5 bg-primary px-1.5 text-xs">
-                  {displayMentions.length}
+                  {mentions.length}
                 </Badge>
               )}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="leaks" className="space-y-3">
-            {displayLeaks.slice(0, 3).map((alert) => (
+            {leakAlerts.slice(0, 3).map((alert) => (
               <div
                 key={alert.id}
                 className="flex items-start justify-between rounded-lg border border-border bg-secondary/30 p-3"
@@ -88,7 +107,7 @@ export function AlertsWidget({ leakAlerts, mentions }: AlertsWidgetProps) {
           </TabsContent>
 
           <TabsContent value="mentions" className="space-y-3">
-            {displayMentions.slice(0, 3).map((mention) => (
+            {mentions.slice(0, 3).map((mention) => (
               <div
                 key={mention.id}
                 className="flex items-start justify-between rounded-lg border border-border bg-secondary/30 p-3"
@@ -126,60 +145,4 @@ function truncateUrl(url: string): string {
   } catch {
     return url.slice(0, 40) + '...'
   }
-}
-
-function generateSampleLeaks(): LeakAlert[] {
-  return [
-    {
-      id: '1',
-      user_id: '',
-      source_url: 'https://example-site.com/leaked-content/123',
-      source_platform: 'Forum',
-      matched_content_id: null,
-      severity: 'high',
-      status: 'detected',
-      detected_at: new Date().toISOString(),
-      resolved_at: null,
-      notes: null,
-    },
-    {
-      id: '2',
-      user_id: '',
-      source_url: 'https://piracy-site.net/uploads/456',
-      source_platform: 'File Host',
-      matched_content_id: null,
-      severity: 'critical',
-      status: 'detected',
-      detected_at: new Date().toISOString(),
-      resolved_at: null,
-      notes: null,
-    },
-  ]
-}
-
-function generateSampleMentions(): ReputationMention[] {
-  return [
-    {
-      id: '1',
-      user_id: '',
-      platform: 'Twitter',
-      url: 'https://twitter.com/user/status/123',
-      content_snippet: 'Just subscribed to this amazing creator! Highly recommend checking them out.',
-      sentiment: 'positive',
-      author: '@happyfan',
-      detected_at: new Date().toISOString(),
-      is_reviewed: false,
-    },
-    {
-      id: '2',
-      user_id: '',
-      platform: 'Reddit',
-      url: 'https://reddit.com/r/community/comments/abc',
-      content_snippet: 'Has anyone else noticed the content quality has improved recently?',
-      sentiment: 'neutral',
-      author: 'u/curious_user',
-      detected_at: new Date().toISOString(),
-      is_reviewed: false,
-    },
-  ]
 }

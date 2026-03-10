@@ -20,29 +20,32 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ stats }: StatsCardsProps) {
+  // Check if user has any real data (platforms connected and synced)
+  const hasData = stats.totalRevenue > 0 || stats.totalFans > 0 || stats.activeConversations > 0 || stats.scheduledContent > 0
+
   const cards = [
     {
       title: 'Total Revenue',
-      value: `$${formatNumber(stats.totalRevenue)}`,
-      change: stats.revenueChange,
+      value: hasData ? `$${formatNumber(stats.totalRevenue)}` : '--',
+      change: hasData ? stats.revenueChange : null,
       icon: DollarSign,
     },
     {
       title: 'Total Fans',
-      value: formatNumber(stats.totalFans),
-      change: stats.fansChange,
+      value: hasData ? formatNumber(stats.totalFans) : '--',
+      change: hasData ? stats.fansChange : null,
       icon: Users,
     },
     {
       title: 'Active Conversations',
-      value: formatNumber(stats.activeConversations),
-      change: stats.conversationsChange,
+      value: hasData ? formatNumber(stats.activeConversations) : '--',
+      change: hasData ? stats.conversationsChange : null,
       icon: MessageSquare,
     },
     {
       title: 'Scheduled Content',
-      value: formatNumber(stats.scheduledContent),
-      change: stats.contentChange,
+      value: hasData ? formatNumber(stats.scheduledContent) : '--',
+      change: hasData ? stats.contentChange : null,
       icon: Calendar,
     },
   ]
@@ -61,23 +64,29 @@ export function StatsCards({ stats }: StatsCardsProps) {
                 <card.icon className="h-5 w-5 text-primary" />
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-1 text-sm">
-              {card.change >= 0 ? (
-                <TrendingUp className="h-4 w-4 text-success" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-destructive" />
-              )}
-              <span
-                className={cn(
-                  'font-medium',
-                  card.change >= 0 ? 'text-success' : 'text-destructive'
+            {card.change !== null ? (
+              <div className="mt-4 flex items-center gap-1 text-sm">
+                {card.change >= 0 ? (
+                  <TrendingUp className="h-4 w-4 text-success" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-destructive" />
                 )}
-              >
-                {card.change >= 0 ? '+' : ''}
-                {card.change}%
-              </span>
-              <span className="text-muted-foreground">vs last month</span>
-            </div>
+                <span
+                  className={cn(
+                    'font-medium',
+                    card.change >= 0 ? 'text-success' : 'text-destructive'
+                  )}
+                >
+                  {card.change >= 0 ? '+' : ''}
+                  {card.change}%
+                </span>
+                <span className="text-muted-foreground">vs last month</span>
+              </div>
+            ) : (
+              <div className="mt-4 text-xs text-muted-foreground">
+                Connect platforms to track
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}

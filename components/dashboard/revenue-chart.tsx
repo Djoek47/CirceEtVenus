@@ -18,14 +18,14 @@ interface RevenueChartProps {
 }
 
 export function RevenueChart({ analytics }: RevenueChartProps) {
-  // Process analytics data for chart
-  const chartData = analytics.length > 0 
-    ? analytics.slice(0, 14).reverse().map((a) => ({
-        date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        revenue: a.revenue || 0,
-        totalFans: a.total_fans || 0,
-      }))
-    : generateSampleData()
+  // Process analytics data for chart - only use real data
+  const chartData = analytics.slice(0, 14).reverse().map((a) => ({
+    date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    revenue: a.revenue || 0,
+    totalFans: a.total_fans || 0,
+  }))
+
+  const hasData = chartData.length > 0 && chartData.some(d => d.revenue > 0)
 
   return (
     <Card className="border-border bg-card">
@@ -34,7 +34,20 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
         <CardDescription>Your earnings across all platforms</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        {!hasData ? (
+          <div className="flex h-[300px] flex-col items-center justify-center text-center">
+            <div className="mb-4 rounded-full bg-muted p-4">
+              <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium">No Revenue Data Yet</h3>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              Connect your platforms to start tracking your earnings and see your revenue chart.
+            </p>
+          </div>
+        ) : (
+          <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
@@ -80,22 +93,8 @@ export function RevenueChart({ analytics }: RevenueChartProps) {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   )
-}
-
-function generateSampleData() {
-  const data = []
-  const today = new Date()
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    data.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      revenue: Math.floor(Math.random() * 500) + 200,
-      totalFans: Math.floor(Math.random() * 50) + 100,
-    })
-  }
-  return data
 }

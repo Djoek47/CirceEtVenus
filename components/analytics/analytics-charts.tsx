@@ -20,15 +20,33 @@ interface AnalyticsChartsProps {
 }
 
 export function AnalyticsCharts({ analytics }: AnalyticsChartsProps) {
-  const chartData = analytics.length > 0 
-    ? analytics.slice(0, 14).reverse().map((a) => ({
-        date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        revenue: a.revenue || 0,
-        totalFans: a.total_fans || 0,
-        messages: a.messages_received || 0,
-        newFans: a.new_fans || 0,
-      }))
-    : generateSampleData()
+  const chartData = analytics.slice(0, 14).reverse().map((a) => ({
+    date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    revenue: a.revenue || 0,
+    totalFans: a.total_fans || 0,
+    messages: a.messages_received || 0,
+    newFans: a.new_fans || 0,
+  }))
+
+  const hasData = chartData.length > 0 && chartData.some(d => d.revenue > 0 || d.totalFans > 0)
+
+  if (!hasData) {
+    return (
+      <Card className="border-border bg-card">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 rounded-full bg-muted p-4">
+            <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium">No Analytics Data Yet</h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            Connect your platforms and sync data to see your analytics charts here.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Tabs defaultValue="revenue" className="w-full">
@@ -139,21 +157,4 @@ export function AnalyticsCharts({ analytics }: AnalyticsChartsProps) {
       </TabsContent>
     </Tabs>
   )
-}
-
-function generateSampleData() {
-  const data = []
-  const today = new Date()
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    data.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      revenue: Math.floor(Math.random() * 500) + 200,
-      totalFans: Math.floor(Math.random() * 20) + 980,
-      messages: Math.floor(Math.random() * 100) + 50,
-      newFans: Math.floor(Math.random() * 30) + 5,
-    })
-  }
-  return data
 }

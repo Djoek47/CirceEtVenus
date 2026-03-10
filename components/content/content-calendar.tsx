@@ -21,8 +21,6 @@ const statusColors = {
 
 export function ContentCalendar({ content }: ContentCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
-  
-  const displayContent = content.length > 0 ? content : generateSampleContent()
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -49,7 +47,7 @@ export function ContentCalendar({ content }: ContentCalendarProps) {
   }
 
   const getContentForDay = (day: number) => {
-    return displayContent.filter((c) => {
+    return content.filter((c) => {
       if (!c.scheduled_at) return false
       const contentDate = new Date(c.scheduled_at)
       return (
@@ -168,70 +166,4 @@ export function ContentCalendar({ content }: ContentCalendarProps) {
       </CardContent>
     </Card>
   )
-}
-
-function generateSampleContent(): Content[] {
-  const today = new Date()
-  return [
-    {
-      id: '1',
-      user_id: '',
-      title: 'Morning photoshoot',
-      description: 'Beach sunset photos',
-      media_urls: ['/images/photo1.jpg'],
-      platforms: ['onlyfans', 'fansly'],
-      status: 'scheduled',
-      scheduled_at: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 10, 0).toISOString(),
-      published_at: null,
-      performance_metrics: { views: 0, likes: 0, comments: 0, shares: 0, revenue: 0 },
-      tags: ['photo', 'beach'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      user_id: '',
-      title: 'Exclusive video',
-      description: 'Behind the scenes',
-      media_urls: ['/videos/bts.mp4'],
-      platforms: ['onlyfans'],
-      status: 'scheduled',
-      scheduled_at: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2, 14, 0).toISOString(),
-      published_at: null,
-      performance_metrics: { views: 0, likes: 0, comments: 0, shares: 0, revenue: 0 },
-      tags: ['video', 'exclusive'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      user_id: '',
-      title: 'Weekly update post',
-      description: 'Catching up with fans',
-      media_urls: [],
-      platforms: ['onlyfans', 'mym', 'fansly'],
-      status: 'draft',
-      scheduled_at: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3, 12, 0).toISOString(),
-      published_at: null,
-      performance_metrics: { views: 0, likes: 0, comments: 0, shares: 0, revenue: 0 },
-      tags: ['text', 'update'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '4',
-      user_id: '',
-      title: 'PPV Special',
-      description: 'Premium content drop',
-      media_urls: ['/images/special.jpg', '/videos/special.mp4'],
-      platforms: ['onlyfans'],
-      status: 'scheduled',
-      scheduled_at: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 5, 18, 0).toISOString(),
-      published_at: null,
-      performance_metrics: { views: 0, likes: 0, comments: 0, shares: 0, revenue: 0 },
-      tags: ['ppv', 'premium'],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ]
 }

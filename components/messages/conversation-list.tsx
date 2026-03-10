@@ -52,6 +52,12 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-y-auto p-2">
+        {conversations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <p className="text-sm text-muted-foreground">No conversations yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Connect platforms to sync messages</p>
+          </div>
+        ) : (
         <div className="space-y-1">
           {conversations.map((conv) => (
             <button
@@ -106,6 +112,7 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
             </button>
           ))}
         </div>
+        )}
       </CardContent>
     </Card>
   )

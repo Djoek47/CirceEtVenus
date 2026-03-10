@@ -75,18 +75,27 @@ export async function GET() {
     }
 
     // Save/update the connection to our database (new or different account)
+    // First delete any existing connection for this user+platform, then insert new one
     await supabase
       .from('platform_connections')
-      .upsert({
+      .delete()
+      .eq('user_id', user.id)
+      .eq('platform', 'onlyfans')
+    
+    const { error: insertError } = await supabase
+      .from('platform_connections')
+      .insert({
         user_id: user.id,
         platform: 'onlyfans',
         platform_username: account.onlyfans_username || 'Connected',
         is_connected: true,
         access_token: account.id,
         last_sync_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,platform'
       })
+    
+    if (insertError) {
+      console.error('Failed to save connection:', insertError)
+    }
 
     return NextResponse.json({
       connected: true,

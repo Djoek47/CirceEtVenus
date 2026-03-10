@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const accountData = accountsResult.accounts?.find(a => a.id === connection.access_token)
     const userData = (accountData as any)?.onlyfans_user_data || {}
 
-    console.log('[v0] Sync - Account data found:', !!accountData, 'userData keys:', Object.keys(userData).slice(0, 10))
+
 
     // Try to fetch detailed data, fall back to userData from listAccounts
     let stats = { fans: { total: 0, active: 0, expired: 0, new: 0 }, earnings: { today: 0, thisWeek: 0, thisMonth: 0, total: 0 }, content: { posts: 0, photos: 0, videos: 0 } }
@@ -58,13 +58,8 @@ export async function POST(request: NextRequest) {
       if (convoRes) conversationsData = convoRes
       if (chartRes) chartData = chartRes
       
-      console.log('[v0] Sync - API data fetched:', { 
-        hasStats: !!statsRes, 
-        hasEarnings: !!earningsRes, 
-        fansCount: fansRes?.fans?.length || 0 
-      })
-    } catch (e) {
-      console.log('[v0] Sync - API fetch failed, using userData:', e)
+    } catch {
+      // API fetch failed, will use userData fallback
     }
 
     // Extract data from userData if API calls returned empty
@@ -79,38 +74,54 @@ export async function POST(request: NextRequest) {
     }
 
     // Store today's analytics snapshot
+    // Delete existing entry for today first, then insert (no unique constraint for upsert)
     const today = new Date().toISOString().split('T')[0]
-    await supabase.from('analytics_snapshots').upsert({
+    await supabase.from('analytics_snapshots')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('platform', 'onlyfans')
+      .eq('date', today)
+    
+    const { error: snapshotError } = await supabase.from('analytics_snapshots').insert({
       user_id: user.id,
       platform: 'onlyfans',
       date: today,
       total_fans: stats.fans.total,
-      new_fans: stats.fans.new,
-      churned_fans: stats.fans.expired,
-      revenue: stats.earnings?.today || earningsData.total,
-      messages_received: conversationsData.conversations.reduce((sum, c) => sum + c.unreadCount, 0),
+      new_fans: stats.fans.new || 0,
+      churned_fans: stats.fans.expired || 0,
+      revenue: stats.earnings?.today || earningsData.total || 0,
+      messages_received: conversationsData.conversations?.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0) || 0,
       messages_sent: 0,
-    }, {
-      onConflict: 'user_id,platform,date'
     })
+    
 
-    // Store historical chart data (last 30 days)
+
+    // Store historical chart data (last 30 days) - skip if no data
     if (chartData.data && chartData.data.length > 0) {
-      const chartSnapshots = chartData.data.map((point) => ({
-        user_id: user.id,
-        platform: 'onlyfans',
-        date: point.date,
-        revenue: point.amount,
-        total_fans: stats.fans.total, // Use current total for historical records
-        new_fans: 0,
-        churned_fans: 0,
-        messages_received: 0,
-        messages_sent: 0,
-      }))
+      // Delete existing chart data for this platform first
+      await supabase.from('analytics_snapshots')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('platform', 'onlyfans')
+        .neq('date', today) // Don't delete today's data we just inserted
+      
+      const chartSnapshots = chartData.data
+        .filter((point: any) => point.date !== today) // Skip today since we already inserted it
+        .map((point: any) => ({
+          user_id: user.id,
+          platform: 'onlyfans',
+          date: point.date,
+          revenue: point.amount || 0,
+          total_fans: stats.fans.total,
+          new_fans: 0,
+          churned_fans: 0,
+          messages_received: 0,
+          messages_sent: 0,
+        }))
 
-      await supabase.from('analytics_snapshots').upsert(chartSnapshots, {
-        onConflict: 'user_id,platform,date'
-      })
+      if (chartSnapshots.length > 0) {
+        await supabase.from('analytics_snapshots').insert(chartSnapshots)
+      }
     }
 
     // Sync fans

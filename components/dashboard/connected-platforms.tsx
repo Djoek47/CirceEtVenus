@@ -85,8 +85,8 @@ export function ConnectedPlatforms() {
       try {
         const res = await fetch('/api/onlyfans/check-connection')
         const data = await res.json()
-        if (data.newlySynced) {
-          // New account was saved - trigger a sync to pull data
+        if (data.connected) {
+          // Account found - trigger a sync to ensure data is up to date
           await fetch('/api/onlyfans/sync', { method: 'POST' })
         }
       } catch {

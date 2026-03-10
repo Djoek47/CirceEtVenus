@@ -21,6 +21,7 @@ function formatCurrency(amount: number): string {
 
 interface RecentFansProps {
   fans: Fan[]
+  totalFans?: number
 }
 
 const tierColors = {
@@ -36,8 +37,10 @@ const platformColors = {
   fansly: 'bg-[#009FFF]/20 text-[#009FFF]',
 }
 
-export function RecentFans({ fans }: RecentFansProps) {
-  const hasFans = fans.length > 0
+export function RecentFans({ fans, totalFans }: RecentFansProps) {
+  const hasImportedFans = fans.length > 0
+  const hasAnyFans =
+    hasImportedFans || (typeof totalFans === 'number' && totalFans > 0)
 
   return (
     <Card className="border-border bg-card">
@@ -53,16 +56,32 @@ export function RecentFans({ fans }: RecentFansProps) {
         </Link>
       </CardHeader>
       <CardContent>
-        {!hasFans ? (
+        {!hasAnyFans ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="mb-4 rounded-full bg-muted p-4">
               <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium">No Fans Yet</h3>
+            <h3 className="text-lg font-medium">No Fans Detected Yet</h3>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              Connect your platforms to see your fans here.
+              Connect and sync your creator platforms to import your fans into Creatix.
+            </p>
+          </div>
+        ) : !hasImportedFans && typeof totalFans === 'number' ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="mb-4 rounded-full bg-muted p-4">
+              <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium">Fans Detected, Syncing Details</h3>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              We see approximately{' '}
+              <span className="font-semibold">
+                {formatCurrency(totalFans)}
+              </span>{' '}
+              fans from your connected platforms. Detailed fan profiles are still syncing — they&apos;ll appear here after your next sync.
             </p>
           </div>
         ) : (

@@ -205,7 +205,7 @@ export default async function DashboardPage() {
       </div>
       
       {/* Recent Fans */}
-      <RecentFans fans={fans || []} />
+      <RecentFans fans={fans || []} totalFans={totalFans} />
 
       {/* Social Media Reputation */}
       <SocialReputationWidget />

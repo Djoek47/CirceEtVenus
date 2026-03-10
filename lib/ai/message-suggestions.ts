@@ -1,4 +1,5 @@
 import { generateText } from 'ai'
+import { gateway } from '@ai-sdk/gateway'
 
 type Role = 'creator' | 'fan'
 type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
@@ -275,7 +276,8 @@ ${conversation}
 ${instruction}`
 
   const { text } = await generateText({
-    model: 'openai/gpt-4o-mini',
+    // Use Vercel AI Gateway model alias (this is what you had working before)
+    model: gateway('openai/gpt-4o-mini'),
     temperature: 0.5,
     maxTokens: 800,
     prompt: userPrompt,

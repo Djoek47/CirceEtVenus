@@ -601,7 +601,22 @@ export default function SettingsPage() {
                           </p>
                         </div>
                       </div>
-                      <Button variant={social.connected ? 'outline' : 'default'} size="sm">
+                      <Button 
+                        variant={social.connected ? 'outline' : 'default'} 
+                        size="sm"
+                        onClick={() => {
+                          if (social.connected) {
+                            // Disconnect
+                            fetch(`/api/${social.key}/disconnect`, { method: 'POST' })
+                              .then(() => {
+                                setIntegrations(prev => ({ ...prev, [social.key]: false }))
+                              })
+                          } else {
+                            // Redirect to OAuth
+                            window.location.href = `/api/${social.key}/auth`
+                          }
+                        }}
+                      >
                         {social.connected ? 'Disconnect' : 'Connect'}
                       </Button>
                     </div>

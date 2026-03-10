@@ -115,30 +115,6 @@ const PLATFORMS: Platform[] = [
     description: 'Sync sales, fans, and video performance',
     dataTypes: ['Sales', 'Fans', 'Videos', 'Tips'],
   },
-  {
-    id: 'twitter',
-    name: 'X (Twitter)',
-    color: '#000000',
-    gradient: 'from-[#000000] to-[#333333]',
-    description: 'Connect your X account for social promotion and audience insights',
-    dataTypes: ['Followers', 'Engagement', 'Posts', 'Analytics'],
-  },
-  {
-    id: 'instagram',
-    name: 'Instagram',
-    color: '#E4405F',
-    gradient: 'from-[#833AB4] via-[#E4405F] to-[#FCAF45]',
-    description: 'Import your Instagram followers and engagement metrics',
-    dataTypes: ['Followers', 'Posts', 'Stories', 'Insights'],
-  },
-  {
-    id: 'tiktok',
-    name: 'TikTok',
-    color: '#000000',
-    gradient: 'from-[#00F2EA] via-[#FF0050] to-[#000000]',
-    description: 'Sync your TikTok analytics and follower data',
-    dataTypes: ['Followers', 'Videos', 'Views', 'Engagement'],
-  },
 ]
 
 function getPlatformLogo(platformId: string) {
@@ -146,9 +122,6 @@ function getPlatformLogo(platformId: string) {
     case 'onlyfans': return <OnlyFansLogo />
     case 'fansly': return <FanslyLogo />
     case 'manyvids': return <ManyVidsLogo />
-    case 'twitter': return <XLogo />
-    case 'instagram': return <InstagramLogo />
-    case 'tiktok': return <TikTokLogo />
     default: return null
   }
 }
@@ -415,18 +388,6 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     setError(null)
     if (platformId === 'onlyfans') openOnlyfansDialog()
     else if (platformId === 'fansly') openFanslyDialog()
-    else if (platformId === 'twitter') {
-      // Start X OAuth flow
-      window.location.href = '/api/twitter/auth'
-    }
-    else if (platformId === 'instagram') {
-      // Start Instagram OAuth flow
-      window.location.href = '/api/instagram/auth'
-    }
-    else if (platformId === 'tiktok') {
-      // Start TikTok OAuth flow
-      window.location.href = '/api/tiktok/auth'
-    }
     else setError(`${platformId} integration coming soon`)
   }
 

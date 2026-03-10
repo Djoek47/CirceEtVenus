@@ -93,6 +93,35 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: status.message || 'Authentication failed' }, { status: 400 })
       }
 
+      // If still pending, also check listAccounts as fallback
+      // The account might already be connected but polling missed it
+      const accountsResult = await api.listAccounts()
+      if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
+        // Use the most recent account
+        const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+        
+        // Save connection
+        await supabase
+          .from('platform_connections')
+          .upsert({
+            user_id: user.id,
+            platform: 'onlyfans',
+            platform_user_id: account.id,
+            platform_username: account.onlyfans_username || 'Connected',
+            is_connected: true,
+            access_token: account.id,
+            last_sync_at: new Date().toISOString(),
+          }, {
+            onConflict: 'user_id,platform'
+          })
+
+        return NextResponse.json({ 
+          success: true, 
+          accountId: account.id,
+          username: account.onlyfans_username
+        })
+      }
+
       return NextResponse.json({ 
         status: 'pending',
         attemptId,

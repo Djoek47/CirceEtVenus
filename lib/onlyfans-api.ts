@@ -159,23 +159,31 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
+      console.log('[v0] OnlyFans pollAuthenticationStatus response:', JSON.stringify(data))
 
+      // Check for 2FA requirement
       if (data.twoFactorPending) {
         return { status: '2fa_required', message: 'Please enter your 2FA code' }
       }
 
-      if (data.accountId || data.account_id) {
+      // API returns account object with id field on success (per docs)
+      const accountId = data.account?.id || data.accountId || data.account_id || data.id
+      const username = data.account?.onlyfans_username || data.username || data.onlyfans_username
+      
+      if (accountId) {
         return {
           status: 'success',
-          accountId: data.accountId || data.account_id,
-          username: data.username,
+          accountId: accountId,
+          username: username,
         }
       }
 
+      // Check for explicit error states
       if (data.error || data.failed) {
         return { status: 'failed', message: data.message || data.error }
       }
 
+      // Still processing
       return { status: 'pending', message: data.message || 'Processing...' }
     } catch (error) {
       return { status: 'failed', message: error instanceof Error ? error.message : 'Poll failed' }
@@ -202,18 +210,61 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
+      console.log('[v0] OnlyFans submit2FA response:', JSON.stringify(data))
 
-      if (data.accountId || data.account_id) {
+      // API returns account object with id field on success (per docs)
+      const accountId = data.account?.id || data.accountId || data.account_id || data.id
+      const username = data.account?.onlyfans_username || data.username || data.onlyfans_username
+
+      if (accountId) {
         return {
           success: true,
-          accountId: data.accountId || data.account_id,
-          username: data.username,
+          accountId: accountId,
+          username: username,
         }
       }
 
       return { success: false, message: data.message || data.error || '2FA verification failed' }
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : '2FA submission failed' }
+    }
+  }
+
+  /**
+   * List all connected accounts - GET /api/accounts
+   * Useful to check if authentication succeeded even if polling missed it
+   */
+  async listAccounts(): Promise<{
+    success: boolean
+    accounts?: Array<{
+      id: string
+      onlyfans_id?: string
+      onlyfans_username?: string
+      onlyfans_email?: string
+    }>
+    message?: string
+  }> {
+    try {
+      const response = await fetch(`${ONLYFANS_API_BASE}/accounts`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      })
+
+      const data = await response.json()
+      console.log('[v0] OnlyFans listAccounts response:', JSON.stringify(data))
+
+      if (Array.isArray(data)) {
+        return { success: true, accounts: data }
+      }
+      
+      if (data.accounts && Array.isArray(data.accounts)) {
+        return { success: true, accounts: data.accounts }
+      }
+
+      return { success: false, message: data.message || 'No accounts found' }
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Failed to list accounts' }
     }
   }
 

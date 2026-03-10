@@ -23,6 +23,9 @@ import {
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { useChat } from '@ai-sdk/react'
+import { createClient } from '@/lib/supabase/client'
+import { cn } from '@/lib/utils'
+import { NICHE_LABELS, NicheKey } from '@/lib/niches'
 
 interface GrowthSuggestion {
   id: string
@@ -33,16 +36,35 @@ interface GrowthSuggestion {
   category: string
 }
 
-interface Mention {
-  id: string
-  platform: string
-  content: string
+interface ReputationAnalysis {
+  overall_score: number
   sentiment: 'positive' | 'neutral' | 'negative'
-  reach: number
-  timestamp: string
+  summary: string
+  mentions: Array<{
+    source: string
+    content: string
+    sentiment: 'positive' | 'neutral' | 'negative'
+    date: string
+  }>
+  score?: {
+    overallScore: number
+    sentiment: 'positive' | 'neutral' | 'negative'
+    positiveCount: number
+    neutralCount: number
+    negativeCount: number
+  }
 }
 
-// Sample data
+type ReputationMentionWithReply = {
+  id: string
+  platform: string
+  content_preview: string
+  sentiment: 'positive' | 'neutral' | 'negative'
+  detected_at: string
+  ai_suggested_reply?: string | null
+}
+
+// Sample data for growth tab
 const growthSuggestions: GrowthSuggestion[] = [
   {
     id: '1',
@@ -70,35 +92,14 @@ const growthSuggestions: GrowthSuggestion[] = [
   },
 ]
 
-const recentMentions: Mention[] = [
-  {
-    id: '1',
-    platform: 'Twitter',
-    content: '"Just subscribed and the content quality is amazing! Best decision I made this month"',
-    sentiment: 'positive',
-    reach: 1247,
-    timestamp: '2 hours ago'
-  },
-  {
-    id: '2',
-    platform: 'Reddit',
-    content: 'Has anyone tried their PPV? Is it worth the price?',
-    sentiment: 'neutral',
-    reach: 892,
-    timestamp: '5 hours ago'
-  },
-  {
-    id: '3',
-    platform: 'Twitter',
-    content: '"Response time could be better but content makes up for it"',
-    sentiment: 'neutral',
-    reach: 456,
-    timestamp: '1 day ago'
-  },
-]
-
 export function VenusAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const supabase = createClient()
+  const [repLoading, setRepLoading] = useState(false)
+  const [repError, setRepError] = useState<string | null>(null)
+  const [reputation, setReputation] = useState<ReputationAnalysis | null>(null)
+  const [mentions, setMentions] = useState<ReputationMentionWithReply[]>([])
+  const [niches, setNiches] = useState<string[]>([])
   
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
     api: '/api/ai/venus',
@@ -117,6 +118,88 @@ export function VenusAssistant() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive':
+        return 'text-green-500 bg-green-500/10'
+      case 'negative':
+        return 'text-red-500 bg-red-500/10'
+      default:
+        return 'text-yellow-500 bg-yellow-500/10'
+    }
+  }
+
+  const loadDefaultReputation = async () => {
+    setRepLoading(true)
+    setRepError(null)
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        setRepLoading(false)
+        return
+      }
+
+      const { data: profiles } = await supabase
+        .from('social_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .limit(1)
+
+      const primary = profiles?.[0] as any
+      if (!primary) {
+        setRepLoading(false)
+        return
+      }
+
+      const { data: platformRows } = await supabase
+        .from('platform_connections')
+        .select('platform,niches')
+        .eq('user_id', user.id)
+        .eq('is_connected', true)
+
+      const tags =
+        platformRows
+          ?.flatMap((p: any) => p.niches || [])
+          .filter((v: any, i: number, arr: any[]) => typeof v === 'string' && arr.indexOf(v) === i) || []
+      setNiches(tags)
+
+      const body = {
+        platform: primary.platform,
+        username: primary.username,
+        additionalKeywords: [],
+        connectedPlatforms: [],
+      }
+
+      const res = await fetch('/api/social/analyze-reputation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to analyze reputation')
+      }
+      setReputation(data)
+
+      const mentionsRes = await fetch('/api/social/mentions?limit=20')
+      const mentionsJson = await mentionsRes.json()
+      if (mentionsRes.ok && !mentionsJson.error) {
+        setMentions((mentionsJson.mentions || []) as ReputationMentionWithReply[])
+      }
+    } catch (err) {
+      setRepError(err instanceof Error ? err.message : 'Failed to load reputation')
+    } finally {
+      setRepLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadDefaultReputation()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -303,21 +386,86 @@ export function VenusAssistant() {
         <TabsContent value="reputation" className="space-y-4">
           <Card className="border-gold/20">
             <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2 text-gold">
-                <MessageCircle className="h-4 w-4 text-gold" />
-                Recent Mentions
-              </CardTitle>
-              <CardDescription>
-                Venus tracks your reputation across the digital realm
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm flex items-center gap-2 text-gold">
+                    <MessageCircle className="h-4 w-4 text-gold" />
+                    Recent Mentions
+                  </CardTitle>
+                  <CardDescription>
+                    Venus tracks your reputation across the digital realm
+                  </CardDescription>
+                </div>
+                {niches.length > 0 && (
+                  <div className="flex flex-wrap gap-1 max-w-xs justify-end">
+                    {niches.map((niche) => (
+                      <Badge key={niche} variant="outline" className="text-[10px]">
+                        {NICHE_LABELS[niche as NicheKey] || niche}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {recentMentions.map((mention) => (
-                  <div key={mention.id} className="flex items-start justify-between rounded-lg border border-gold/20 p-4 bg-gradient-to-r from-gold/5 to-transparent">
+              {repError && (
+                <div className="mb-3 rounded-lg bg-destructive/10 p-2 text-xs text-destructive">
+                  {repError}
+                </div>
+              )}
+              {repLoading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Venus is reading your reputation...
+                </div>
+              )}
+
+              {reputation && (
+                <div className="mb-4 rounded-lg border border-gold/30 bg-gold/5 p-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        'rounded-full px-3 py-1 text-xs font-medium',
+                        getSentimentColor(reputation.sentiment)
+                      )}
+                    >
+                      Overall: {reputation.sentiment}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      Score: {reputation.overall_score}/100
+                    </span>
+                  </div>
+                  {reputation.score && (
+                    <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <ThumbsUp className="h-3 w-3 text-green-500" />
+                        Positive: {reputation.score.positiveCount}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Minus className="h-3 w-3 text-yellow-500" />
+                        Neutral: {reputation.score.neutralCount}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <ThumbsDown className="h-3 w-3 text-red-500" />
+                        Negative: {reputation.score.negativeCount}
+                      </span>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">{reputation.summary}</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {mentions.slice(0, 6).map((mention) => (
+                  <div
+                    key={mention.id}
+                    className="flex items-start justify-between rounded-lg border border-gold/20 p-4 bg-gradient-to-r from-gold/5 to-transparent"
+                  >
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs border-gold/30">{mention.platform}</Badge>
+                        <Badge variant="outline" className="text-xs border-gold/30">
+                          {mention.platform}
+                        </Badge>
                         <div className="flex items-center gap-1">
                           {mention.sentiment === 'positive' ? (
                             <ThumbsUp className="h-3 w-3 text-gold" />
@@ -326,28 +474,48 @@ export function VenusAssistant() {
                           ) : (
                             <Minus className="h-3 w-3 text-muted-foreground" />
                           )}
-                          <span className={`text-xs ${
-                            mention.sentiment === 'positive' ? 'text-gold' :
-                            mention.sentiment === 'negative' ? 'text-destructive' :
-                            'text-muted-foreground'
-                          }`}>
+                          <span
+                            className={`text-xs ${
+                              mention.sentiment === 'positive'
+                                ? 'text-gold'
+                                : mention.sentiment === 'negative'
+                                  ? 'text-destructive'
+                                  : 'text-muted-foreground'
+                            }`}
+                          >
                             {mention.sentiment}
                           </span>
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {mention.content}
+                        {mention.content_preview}
                       </p>
-                      <div className="flex gap-4 text-xs text-muted-foreground">
-                        <span>Reach: {mention.reach.toLocaleString()}</span>
-                        <span>{mention.timestamp}</span>
-                      </div>
+                      {mention.ai_suggested_reply && (
+                        <div className="mt-1 rounded-md border border-gold/40 bg-gold/10 p-2 text-[11px] space-y-1">
+                          <div className="flex items-center gap-1 font-medium text-gold">
+                            <MessageCircle className="h-3 w-3" />
+                            Suggested reply from Venus
+                          </div>
+                          <p className="text-gold-foreground whitespace-pre-wrap">
+                            {mention.ai_suggested_reply}
+                          </p>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">
+                        Detected {new Date(mention.detected_at).toLocaleDateString()}
+                      </p>
                     </div>
                     <Button size="sm" variant="ghost" className="text-gold hover:bg-gold/10">
                       Respond
                     </Button>
                   </div>
                 ))}
+                {mentions.length === 0 && !repLoading && (
+                  <p className="text-xs text-muted-foreground">
+                    No mentions found yet. Connect platforms and run a scan from your dashboard to
+                    let Venus watch over your name.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

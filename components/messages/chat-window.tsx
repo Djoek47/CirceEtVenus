@@ -12,10 +12,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Send, Paperclip, DollarSign, MoreVertical, User, Loader2, RefreshCw } from 'lucide-react'
+import {
+  Send,
+  Paperclip,
+  DollarSign,
+  MoreVertical,
+  User,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  Moon,
+  Sun,
+} from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { cn } from '@/lib/utils'
 import { stripHtml } from '@/lib/html-utils'
+import type { NormalizedChatMessage } from '@/lib/ai/message-suggestions'
+import { createClient } from '@/lib/supabase/client'
+import { isBoundaryNiche, NICHE_LABELS } from '@/lib/niches'
 
 // Proxy OnlyFans CDN images through our server to avoid CORS/403 issues
 function proxyImageUrl(url: string | null | undefined): string | undefined {
@@ -94,9 +108,21 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPolling, setIsPolling] = useState(false)
+  const [suggestionsLoading, setSuggestionsLoading] = useState<'scan' | 'circe' | 'venus' | null>(null)
+  const [scanInsights, setScanInsights] = useState<{
+    insights: string[]
+    riskFlags: string[]
+    suggestedAngles: string[]
+  } | null>(null)
+  const [circeSuggestions, setCirceSuggestions] = useState<string[] | null>(null)
+  const [venusSuggestions, setVenusSuggestions] = useState<string[] | null>(null)
+  const [activePanel, setActivePanel] = useState<'circe' | 'venus' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const supabase = createClient()
+  const [niches, setNiches] = useState<string[]>([])
+  const [boundaries, setBoundaries] = useState<string[]>([])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -123,6 +149,96 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       // Stable tie-breaker
       return String(a.id).localeCompare(String(b.id))
     })
+  }
+
+  // Load creator niches/boundaries for the active platform
+  useEffect(() => {
+    const loadNiches = async () => {
+      if (!conversation) {
+        setNiches([])
+        setBoundaries([])
+        return
+      }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase
+          .from('platform_connections')
+          .select('platform,niches')
+          .eq('user_id', user.id)
+          .eq('platform', conversation.platform)
+          .eq('is_connected', true)
+          .maybeSingle()
+        const tags = ((data as any)?.niches || []) as string[]
+        setNiches(tags)
+        setBoundaries(tags.filter((n) => isBoundaryNiche(n)))
+      } catch {
+        // ignore niche loading errors
+      }
+    }
+    loadNiches()
+  }, [conversation?.platform, supabase, conversation])
+
+  const buildNormalizedMessages = (): NormalizedChatMessage[] => {
+    return messages.slice(-30).map((m) => ({
+      from: m.fromUser.id === conversation?.user.id ? 'fan' : 'creator',
+      text: stripHtml(m.text || ''),
+      createdAt: m.createdAt,
+    }))
+  }
+
+  const callSuggestionApi = async (mode: 'scan' | 'circe' | 'venus') => {
+    if (!conversation) return
+    setError(null)
+    setSuggestionsLoading(mode)
+
+    try {
+      const body = {
+        mode,
+        platform: conversation.platform,
+        fan: {
+          id: conversation.user.id,
+          username: conversation.user.username,
+          name: conversation.user.name,
+        },
+        messages: buildNormalizedMessages(),
+        niches,
+        boundaries,
+      }
+
+      const res = await fetch('/api/ai/message-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to generate suggestions')
+      }
+
+      if (mode === 'scan') {
+        setScanInsights(
+          data.insights || {
+            insights: [],
+            riskFlags: [],
+            suggestedAngles: [],
+          }
+        )
+      } else if (mode === 'circe') {
+        const texts = (data.suggestions || []).map((s: any) => String(s.text || '')).filter(Boolean)
+        setCirceSuggestions(texts.length ? texts : null)
+        setActivePanel('circe')
+      } else if (mode === 'venus') {
+        const texts = (data.suggestions || []).map((s: any) => String(s.text || '')).filter(Boolean)
+        setVenusSuggestions(texts.length ? texts : null)
+        setActivePanel('venus')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate suggestions')
+    } finally {
+      setSuggestionsLoading(null)
+    }
   }
 
   // Load messages when conversation changes
@@ -455,11 +571,122 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         )}
       </CardContent>
 
-      {/* Message Input */}
-      <div className="border-t border-border p-4">
+      {/* Message Input + AI helpers */}
+      <div className="border-t border-border p-4 space-y-3">
         {error && (
-          <p className="text-xs text-destructive mb-2">{error}</p>
+          <p className="text-xs text-destructive mb-1">{error}</p>
         )}
+
+        {scanInsights && (
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-xs space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1 font-medium text-primary">
+                <Sparkles className="h-3 w-3" />
+                Thread scan insights
+              </div>
+              <button
+                type="button"
+                className="text-[10px] text-primary/70 hover:underline"
+                onClick={() => setScanInsights(null)}
+              >
+                Clear
+              </button>
+            </div>
+            {scanInsights.insights?.length > 0 && (
+              <ul className="list-disc pl-4">
+                {scanInsights.insights.slice(0, 3).map((i, idx) => (
+                  <li key={idx}>{i}</li>
+                ))}
+              </ul>
+            )}
+            {scanInsights.riskFlags?.length > 0 && (
+              <p className="text-destructive/80">
+                Risks: {scanInsights.riskFlags.slice(0, 3).join('; ')}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 text-xs"
+            disabled={suggestionsLoading === 'scan' || messages.length === 0}
+            onClick={() => callSuggestionApi('scan')}
+          >
+            {suggestionsLoading === 'scan' ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Sparkles className="h-3 w-3" />
+            )}
+            Scan Thread
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 text-xs border-circe/40 text-circe-light"
+            disabled={suggestionsLoading === 'circe' || messages.length === 0}
+            onClick={() => callSuggestionApi('circe')}
+          >
+            {suggestionsLoading === 'circe' ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Moon className="h-3 w-3" />
+            )}
+            Circe Reply
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 text-xs border-gold/50 text-gold"
+            disabled={suggestionsLoading === 'venus' || messages.length === 0}
+            onClick={() => callSuggestionApi('venus')}
+          >
+            {suggestionsLoading === 'venus' ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Sun className="h-3 w-3" />
+            )}
+            Venus Reply
+          </Button>
+        </div>
+
+        {(circeSuggestions && activePanel === 'circe') || (venusSuggestions && activePanel === 'venus') ? (
+          <div className="rounded-md border border-border bg-secondary/40 p-2 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium">
+                {activePanel === 'circe' ? 'Circe spell suggestions' : 'Venus charm suggestions'}
+              </span>
+              <button
+                type="button"
+                className="text-[10px] text-muted-foreground hover:underline"
+                onClick={() => setActivePanel(null)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="space-y-1">
+              {(activePanel === 'circe' ? circeSuggestions : venusSuggestions)?.slice(0, 3).map((text, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className="w-full rounded border border-border bg-background px-2 py-1 text-left text-xs hover:border-primary hover:bg-primary/5"
+                  onClick={() => {
+                    setMessage(text)
+                    setActivePanel(null)
+                  }}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Tap to insert, then edit before sending. Generated by {activePanel === 'circe' ? 'Circe' : 'Venus'}.
+            </p>
+          </div>
+        ) : null}
+
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="flex-shrink-0">
             <Paperclip className="h-5 w-5" />

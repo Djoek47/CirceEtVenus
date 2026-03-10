@@ -47,6 +47,7 @@ interface ConnectedPlatform {
   platform: string
   platform_username: string
   is_connected: boolean
+  niches?: string[] | null
 }
 
 interface ReputationAnalysis {
@@ -59,6 +60,13 @@ interface ReputationAnalysis {
     sentiment: 'positive' | 'neutral' | 'negative'
     date: string
   }>
+  score?: {
+    overallScore: number
+    sentiment: 'positive' | 'neutral' | 'negative'
+    positiveCount: number
+    neutralCount: number
+    negativeCount: number
+  }
 }
 
 const SOCIAL_PLATFORMS = [
@@ -78,6 +86,7 @@ export function SocialReputationWidget() {
   const [error, setError] = useState<string | null>(null)
   const [reputationData, setReputationData] = useState<ReputationAnalysis | null>(null)
   const [isPro, setIsPro] = useState(false)
+  const [lastScanSummary, setLastScanSummary] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -112,7 +121,7 @@ export function SocialReputationWidget() {
 
     const { data } = await supabase
       .from('platform_connections')
-      .select('platform, platform_username, is_connected')
+      .select('platform, platform_username, is_connected, niches')
       .eq('user_id', user.id)
       .eq('is_connected', true)
 
@@ -185,6 +194,45 @@ export function SocialReputationWidget() {
       setShowAddForm(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add profile')
+    } finally {
+      setAnalyzing(null)
+    }
+  }
+
+  const handleScanReputation = async () => {
+    setAnalyzing('scan')
+    setError(null)
+    setLastScanSummary(null)
+
+    try {
+      const allUsernames = getAllUsernames()
+
+      if (allUsernames.length === 0) {
+        setError('No usernames to scan. Connect a platform or add a social profile first.')
+        setAnalyzing(null)
+        return
+      }
+
+      const response = await fetch('/api/social/scan-reputation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // Give Pro users a slightly higher per-query limit
+          limitPerQuery: isPro ? 10 : 4,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Failed to scan reputation')
+      }
+
+      setLastScanSummary(
+        `Scan complete: ${data.inserted} new mentions, ${data.skipped} already known${data.enriched ? `, ${data.enriched} enriched by Venus` : ''}.`
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to scan reputation')
     } finally {
       setAnalyzing(null)
     }
@@ -318,21 +366,39 @@ export function SocialReputationWidget() {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            {isPro && (profiles.length > 0 || connectedPlatforms.length > 0) && (
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={handleFullReputationScan}
-                disabled={analyzing === 'full'}
-                className="gap-1.5"
-              >
-                {analyzing === 'full' ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="h-4 w-4" />
+            {(profiles.length > 0 || connectedPlatforms.length > 0) && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleScanReputation}
+                  disabled={analyzing === 'scan'}
+                  className="gap-1.5"
+                >
+                  {analyzing === 'scan' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  Scan Web
+                </Button>
+                {isPro && (
+                  <Button 
+                    variant="default" 
+                    size="sm"
+                    onClick={handleFullReputationScan}
+                    disabled={analyzing === 'full'}
+                    className="gap-1.5"
+                  >
+                    {analyzing === 'full' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
+                    Full Scan (Pro)
+                  </Button>
                 )}
-                Full Scan (Pro)
-              </Button>
+              </>
             )}
             {!isPro && (profiles.length > 0 || connectedPlatforms.length > 0) && (
               <Badge variant="outline" className="text-xs">
@@ -356,25 +422,45 @@ export function SocialReputationWidget() {
           </div>
         )}
 
+        {lastScanSummary && (
+          <div className="rounded-lg bg-primary/5 p-3 text-xs text-primary">
+            {lastScanSummary}
+          </div>
+        )}
+
         {/* Connected Creator Platforms */}
         {connectedPlatforms.length > 0 && (
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Connected Creator Accounts (used for reputation search):</p>
-            <div className="flex flex-wrap gap-2">
+            <p className="text-xs font-medium text-muted-foreground mb-2">
+              Connected Creator Accounts (used for reputation search):
+            </p>
+            <div className="flex flex-col gap-2">
               {connectedPlatforms.map((platform) => (
-                <Badge 
-                  key={platform.platform}
-                  variant="secondary"
-                  className="gap-1.5"
-                  style={{ 
-                    backgroundColor: platform.platform === 'onlyfans' ? '#00AFF015' : '#009FFF15',
-                    color: platform.platform === 'onlyfans' ? '#00AFF0' : '#009FFF',
-                    border: `1px solid ${platform.platform === 'onlyfans' ? '#00AFF030' : '#009FFF30'}`
-                  }}
-                >
-                  {platform.platform === 'onlyfans' ? 'OnlyFans' : 'Fansly'}
-                  <span className="font-normal">@{platform.platform_username}</span>
-                </Badge>
+                <div key={platform.platform} className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className="gap-1.5"
+                    style={{
+                      backgroundColor: platform.platform === 'onlyfans' ? '#00AFF015' : '#009FFF15',
+                      color: platform.platform === 'onlyfans' ? '#00AFF0' : '#009FFF',
+                      border: `1px solid ${
+                        platform.platform === 'onlyfans' ? '#00AFF030' : '#009FFF30'
+                      }`,
+                    }}
+                  >
+                    {platform.platform === 'onlyfans' ? 'OnlyFans' : 'Fansly'}
+                    <span className="font-normal">@{platform.platform_username}</span>
+                  </Badge>
+                  {platform.niches && platform.niches.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {platform.niches.map((niche) => (
+                        <Badge key={niche} variant="outline" className="text-[10px]">
+                          {niche}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -580,8 +666,26 @@ export function SocialReputationWidget() {
                 )}>
                   Overall: {reputationData.sentiment}
                 </div>
-                <span className="text-sm">Score: {reputationData.overall_score}/100</span>
+                <span className="text-sm">
+                  Score: {reputationData.overall_score}/100
+                </span>
               </div>
+              {reputationData.score && (
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <ThumbsUp className="h-3 w-3 text-green-500" />
+                    Positive: {reputationData.score.positiveCount}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Minus className="h-3 w-3 text-yellow-500" />
+                    Neutral: {reputationData.score.neutralCount}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <ThumbsDown className="h-3 w-3 text-red-500" />
+                    Negative: {reputationData.score.negativeCount}
+                  </span>
+                </div>
+              )}
               <p className="text-sm text-muted-foreground">{reputationData.summary}</p>
               
               {reputationData.mentions.length > 0 && (

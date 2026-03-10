@@ -65,6 +65,22 @@ export async function POST(request: NextRequest) {
 
     const score = computeReputationScore((dbMentions || []) as any)
 
+    // Optionally include niche/boundary context from platform_connections
+    const { data: platformRows } = await supabase
+      .from('platform_connections')
+      .select('platform,niches')
+      .eq('user_id', user.id)
+      .eq('is_connected', true)
+
+    const niches =
+      platformRows
+        ?.flatMap((p: any) => p.niches || [])
+        .filter((v: any, i: number, arr: any[]) => typeof v === 'string' && arr.indexOf(v) === i) || []
+
+    const nicheContext = niches.length
+      ? `Creator niches: ${niches.join(', ')}. Treat these as consensual adult branding, but still follow all safety rules.\n`
+      : ''
+
     const { text } = await generateText({
       model: gateway('openai/gpt-4o-mini'),
       system: `You are a social media and content creator reputation analyst. Analyze the online reputation of content creators across all platforms including OnlyFans, Fansly, Instagram, TikTok, Twitter/X, and other social media.
@@ -88,9 +104,11 @@ export async function POST(request: NextRequest) {
       }
       
       Consider their presence on adult content platforms (OnlyFans, Fansly) as legitimate business activity.
+      Some creators serve specific niches (e.g. domination, foot fetish, findom, sfw_only, no_sex). When such niches are provided, interpret \"rough\" or \"kinky\" language in that consensual context, but never normalize illegal or non-consensual behavior.
       Focus on: public perception, fan engagement, controversy, brand safety, and overall influence.`,
       prompt: `Analyze the worldwide online reputation for the content creator known as: @${searchKeywords}
       
+      ${nicheContext}
       ${platformContext}
       
       Search focus: ${platformName}

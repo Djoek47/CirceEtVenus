@@ -28,6 +28,7 @@ import {
 import { MoreHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { NICHE_LABELS, NicheKey, BOUNDARY_NICHES } from '@/lib/niches'
 
 interface PlatformConnection {
   id: string
@@ -37,6 +38,7 @@ interface PlatformConnection {
   platform_username: string | null
   is_connected: boolean
   last_sync_at: string | null
+  niches?: string[] | null
 }
 
 interface Platform {
@@ -207,6 +209,34 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   const getConnection = (platformId: string) =>
     connections.find(c => c.platform === platformId)
+
+  const toggleNiche = async (platformId: string, niche: NicheKey) => {
+    const connection = getConnection(platformId)
+    if (!connection) return
+    const current = connection.niches || []
+    const has = current.includes(niche)
+    const next = has ? current.filter((n) => n !== niche) : [...current, niche]
+
+    // Optimistic update
+    setConnections((prev) =>
+      prev.map((c) =>
+        c.id === connection.id
+          ? { ...c, niches: next }
+          : c
+      )
+    )
+
+    try {
+      await fetch('/api/platforms/update-niches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: platformId, niches: next }),
+      })
+    } catch {
+      // Fallback: reload connections if update fails
+      loadConnections()
+    }
+  }
 
   // ── OnlyFans ──────────────────────────────────────────────────────────────
 
@@ -700,6 +730,42 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
                           )}
                         </div>
                       </div>
+
+                      {/* Niche & boundaries editor for creator platforms */}
+                      {(platform.id === 'onlyfans' || platform.id === 'fansly') && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Content niche & boundaries
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(Object.keys(NICHE_LABELS) as NicheKey[]).map((key) => {
+                              const active = (connection?.niches || []).includes(key)
+                              const isBoundary = BOUNDARY_NICHES.includes(key)
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => toggleNiche(platform.id, key)}
+                                  className={cn(
+                                    'rounded-full border px-2.5 py-0.5 text-[11px] transition-colors',
+                                    active
+                                      ? isBoundary
+                                        ? 'border-amber-500 bg-amber-500/10 text-amber-600'
+                                        : 'border-primary bg-primary/10 text-primary'
+                                      : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-primary'
+                                  )}
+                                >
+                                  {NICHE_LABELS[key]}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            These tags help Circe & Venus tailor replies and respect your boundaries.
+                          </p>
+                        </div>
+                      )}
+
                       {/* Actions */}
                       <div className="flex gap-2">
                         <Button

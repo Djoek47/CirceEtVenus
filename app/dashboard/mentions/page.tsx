@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Bell, ThumbsUp, Minus, ThumbsDown, ExternalLink, Check, RefreshCw } from 'lucide-react'
+import { Bell, ThumbsUp, Minus, ThumbsDown, ExternalLink, Check, RefreshCw, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ReputationMention } from '@/lib/types'
 
@@ -18,7 +18,7 @@ export default async function MentionsPage() {
     .eq('user_id', user.id)
     .order('detected_at', { ascending: false })
 
-  const allMentions = mentions || []
+  const allMentions = (mentions || []) as ReputationMention[]
   const unreviewed = allMentions.filter(m => !m.is_reviewed)
   const reviewed = allMentions.filter(m => m.is_reviewed)
 
@@ -110,7 +110,7 @@ export default async function MentionsPage() {
             <Bell className="h-5 w-5 text-primary" />
             New Mentions
           </CardTitle>
-          <CardDescription>Recent mentions requiring your review</CardDescription>
+            <CardDescription>Recent mentions requiring your review</CardDescription>
         </CardHeader>
         <CardContent>
           {unreviewed.length === 0 ? (
@@ -143,7 +143,18 @@ export default async function MentionsPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm">{mention.content_snippet}</p>
+                      <p className="text-sm">{mention.content_preview}</p>
+                      {mention.ai_suggested_reply && (
+                        <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs space-y-1">
+                          <div className="flex items-center gap-1 font-medium text-primary">
+                            <MessageCircle className="h-3 w-3" />
+                            Suggested reply from Venus
+                          </div>
+                          <p className="text-muted-foreground whitespace-pre-wrap">
+                            {mention.ai_suggested_reply}
+                          </p>
+                        </div>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Detected {new Date(mention.detected_at).toLocaleDateString()}
                       </p>

@@ -112,13 +112,20 @@ export interface LeakAlert {
 export interface ReputationMention {
   id: string
   user_id: string
+  // Source platform/host where the mention was found (e.g. twitter, reddit)
   platform: string
-  url: string
-  content_snippet: string
+  // Canonical URL for the mention
+  source_url: string
+  title?: string | null
+  content_preview: string
   sentiment: MentionSentiment
   author: string | null
   detected_at: string
   is_reviewed: boolean
+  // Optional AI enrichment fields (filled by Grok for Pro users)
+  ai_category?: string | null
+  ai_rationale?: string | null
+  ai_suggested_reply?: string | null
 }
 
 export interface AnalyticsSnapshot {

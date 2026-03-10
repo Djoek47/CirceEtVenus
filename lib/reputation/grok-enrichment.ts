@@ -11,14 +11,33 @@ export type ReputationGrokEnrichment = {
 export async function enrichReputationWithGrok(opts: {
   apiKey: string
   items: Array<{ id?: string; url: string; platform?: string; content: string }>
+  niches?: string[]
 }): Promise<ReputationGrokEnrichment[]> {
-  const { apiKey, items } = opts
+  const { apiKey, items, niches } = opts
   if (items.length === 0) return []
 
   const system =
     'You are Venus, goddess of attraction, analyzing online mentions of a creator. Return only JSON; no extra text.'
 
-  const prompt = `For each mention, classify:\n- sentiment: positive | neutral | negative\n- category: short tag like \"praise\", \"criticism\", \"question\", \"nsfw review\", etc.\n- rationale: short explanation\n- suggestedReply: a short, in-character reply that improves reputation and engagement.\n\nReturn JSON array like:\n[\n  { \"id\": \"...\", \"url\": \"...\", \"platform\": \"twitter\", \"sentiment\": \"positive\", \"category\": \"praise\", \"rationale\": \"...\", \"suggestedReply\": \"...\" }\n]\n\nMentions:\n${JSON.stringify(items, null, 2)}`
+  const nicheContext = niches && niches.length
+    ? `Creator niches/tone: ${niches.join(', ')}.\nTreat these as normal for the brand, but still follow all safety rules.`
+    : 'Creator niches/tone: generic adult creator. Follow safety rules.'
+
+  const prompt = `For each mention, classify:
+- sentiment: positive | neutral | negative
+- category: short tag like \"praise\", \"criticism\", \"question\", \"nsfw review\", etc.
+- rationale: short explanation
+- suggestedReply: a short, in-character reply that improves reputation and engagement, matching the creator's niche and boundaries.
+
+${nicheContext}
+
+Return JSON array like:
+[
+  { "id": "...", "url": "...", "platform": "twitter", "sentiment": "positive", "category": "praise", "rationale": "...", "suggestedReply": "..." }
+]
+
+Mentions:
+${JSON.stringify(items, null, 2)}`
 
   const res = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',

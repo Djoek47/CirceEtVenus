@@ -2,6 +2,7 @@
  * OnlyFans API Client
  * Integrates with OnlyFansAPI.com for secure access to OnlyFans data
  * Documentation: https://docs.onlyfansapi.com
+ * Base URL: https://app.onlyfansapi.com/api
  */
 
 const ONLYFANS_API_BASE = 'https://app.onlyfansapi.com/api'

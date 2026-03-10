@@ -28,7 +28,10 @@ export const metadata: Metadata = {
   generator: 'v0.app',
   keywords: ['creator management', 'OnlyFans', 'MYM', 'Fansly', 'content creator', 'fan management', 'AI assistant', 'astrology', 'Circe', 'Venus'],
   icons: {
-    icon: '/favicon.png',
+    icon: [
+      { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
+      { url: '/icon-dark-32x32.png', media: '(prefers-color-scheme: dark)' },
+    ],
     apple: '/apple-touch-icon.png',
   },
 }

@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ThemedLogoProps {
   width?: number
@@ -19,30 +20,30 @@ export function ThemedLogo({ width = 40, height = 40, className = '', priority =
     setMounted(true)
   }, [])
 
-  // During SSR and hydration, show dark logo by default
-  if (!mounted) {
-    return (
+  // Treat the initial (SSR) render as light mode for stable hydration
+  const isLight = !mounted || resolvedTheme === 'light'
+
+  // Gold glow in light mode, purple glow in dark mode
+  const glowClass = isLight
+    ? 'shadow-[0_0_35px_rgba(212,175,55,0.7)]'
+    : 'shadow-[0_0_35px_rgba(128,90,213,0.8)]'
+
+  const wrapperClass = cn(
+    'inline-flex items-center justify-center rounded-full transition-shadow duration-300',
+    glowClass,
+    className,
+  )
+
+  return (
+    <div className={wrapperClass}>
       <Image
         src="/logo.png"
         alt="Circe et Venus"
         width={width}
         height={height}
-        className={className}
+        className="h-auto w-auto rounded-full"
         priority={priority}
       />
-    )
-  }
-
-  const logoSrc = resolvedTheme === 'light' ? '/logo-light.png' : '/logo.png'
-
-  return (
-    <Image
-      src={logoSrc}
-      alt="Circe et Venus"
-      width={width}
-      height={height}
-      className={className}
-      priority={priority}
-    />
+    </div>
   )
 }

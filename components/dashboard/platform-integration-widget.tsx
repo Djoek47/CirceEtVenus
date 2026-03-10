@@ -127,6 +127,24 @@ export function PlatformIntegrationWidget() {
 
   useEffect(() => {
     loadConnections()
+    
+    // Check URL params for callback results
+    const params = new URLSearchParams(window.location.search)
+    const connected = params.get('connected')
+    const errorParam = params.get('error')
+    
+    if (connected === 'onlyfans') {
+      setSuccess('OnlyFans connected successfully!')
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname)
+      // Reload connections
+      loadConnections()
+    }
+    
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam))
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   const handleConnectOnlyFans = async () => {
@@ -147,14 +165,20 @@ export function PlatformIntegrationWidget() {
 
       const { startOnlyFansAuthentication } = await import('@onlyfansapi/auth')
       
+      // Store user ID for the callback
+      const { data: { user } } = await supabase.auth.getUser()
+      const userId = user?.id
+      
       startOnlyFansAuthentication(data.token, {
         onSuccess: async (result: { accountId: string; username?: string }) => {
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            await supabase
+          console.log('[v0] OnlyFans onSuccess called:', result)
+          
+          if (userId) {
+            // Save connection to database
+            const { error: dbError } = await supabase
               .from('platform_connections')
               .upsert({
-                user_id: user.id,
+                user_id: userId,
                 platform: 'onlyfans',
                 platform_user_id: result.accountId,
                 platform_username: result.username || 'Connected',
@@ -165,6 +189,13 @@ export function PlatformIntegrationWidget() {
                 onConflict: 'user_id,platform'
               })
             
+            if (dbError) {
+              console.error('[v0] Database error:', dbError)
+              setError('Failed to save connection')
+              setConnecting(null)
+              return
+            }
+            
             setSuccess('OnlyFans connected! Syncing your data...')
             await loadConnections()
             
@@ -172,7 +203,6 @@ export function PlatformIntegrationWidget() {
             try {
               await fetch('/api/onlyfans/sync', { method: 'POST' })
               setSuccess('OnlyFans synced! Refreshing...')
-              // Refresh the page to show updated data
               setTimeout(() => window.location.reload(), 1500)
             } catch {
               setSuccess('Connected! Click Sync to import your data.')
@@ -182,14 +212,25 @@ export function PlatformIntegrationWidget() {
           setConnecting(null)
         },
         onError: (err: { message?: string }) => {
+          console.error('[v0] OnlyFans onError:', err)
           setError(err.message || 'Authentication failed')
           setConnecting(null)
         },
         onClose: () => {
+          console.log('[v0] OnlyFans modal closed')
+          // Check if connection was successful by reloading connections
+          loadConnections().then(() => {
+            const isNowConnected = platforms.find(p => p.id === 'onlyfans')?.connected
+            if (isNowConnected) {
+              setSuccess('OnlyFans connected!')
+              setTimeout(() => window.location.reload(), 1500)
+            }
+          })
           setConnecting(null)
         }
       })
     } catch (err) {
+      console.error('[v0] OnlyFans connection error:', err)
       setError(err instanceof Error ? err.message : 'Failed to connect')
       setConnecting(null)
     }

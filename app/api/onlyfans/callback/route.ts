@@ -2,6 +2,71 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
+// POST: Handle callback from @onlyfansapi/auth SDK
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { accountId, account_id, username, clientReferenceId, client_reference_id } = body
+    
+    const finalAccountId = accountId || account_id
+    const finalUserId = clientReferenceId || client_reference_id
+
+    console.log('[v0] OnlyFans POST callback:', { finalAccountId, username, finalUserId })
+
+    if (!finalAccountId) {
+      return NextResponse.json({ error: 'No account ID provided' }, { status: 400 })
+    }
+
+    const supabase = await createClient()
+    
+    // Get user ID from the reference or current session
+    let userId = finalUserId
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      userId = user?.id
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 })
+    }
+
+    // Save the connection
+    const { error: dbError } = await supabase
+      .from('platform_connections')
+      .upsert({
+        user_id: userId,
+        platform: 'onlyfans',
+        platform_user_id: finalAccountId,
+        platform_username: username || 'Connected',
+        is_connected: true,
+        access_token: finalAccountId,
+        last_sync_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,platform'
+      })
+
+    if (dbError) {
+      console.error('[v0] Database error:', dbError)
+      return NextResponse.json({ error: 'Failed to save connection' }, { status: 500 })
+    }
+
+    // Trigger sync
+    await syncOnlyFansData(userId, finalAccountId)
+
+    return NextResponse.json({ 
+      success: true,
+      accountId: finalAccountId,
+      username
+    })
+  } catch (error) {
+    console.error('[v0] OnlyFans POST callback error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Callback failed' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const code = searchParams.get('code')

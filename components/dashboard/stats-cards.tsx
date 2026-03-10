@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { DollarSign, Users, MessageSquare, Calendar, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DashboardStats } from '@/lib/types'
+import { ConnectedPlatforms } from './connected-platforms'
 
 // Manual number formatting to avoid hydration mismatch (no Intl/locale dependency)
 function formatNumber(amount: number): string {
@@ -51,7 +52,17 @@ export function StatsCards({ stats }: StatsCardsProps) {
   ]
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="space-y-3">
+      {/* Connected platforms header */}
+      {hasConnectedPlatforms && (
+        <div className="flex items-center justify-between">
+          <ConnectedPlatforms />
+          <span className="text-xs text-muted-foreground">Auto-refreshes every 2 min</span>
+        </div>
+      )}
+      
+      {/* Stats grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => (
         <Card key={card.title} className="border-border bg-card">
           <CardContent className="p-6">
@@ -90,6 +101,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
           </CardContent>
         </Card>
       ))}
+      </div>
     </div>
   )
 }

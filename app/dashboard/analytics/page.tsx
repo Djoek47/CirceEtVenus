@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AnalyticsCharts } from '@/components/analytics/analytics-charts'
 import { PlatformBreakdown } from '@/components/analytics/platform-breakdown'
 import { TopContent } from '@/components/analytics/top-content'
+import { ConnectedPlatforms } from '@/components/dashboard/connected-platforms'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
@@ -27,11 +28,12 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Analytics</h2>
-        <p className="text-muted-foreground">
-          Track your performance across all platforms
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Analytics</h2>
+          <p className="text-muted-foreground">Track your performance across all platforms</p>
+        </div>
+        <ConnectedPlatforms />
       </div>
 
       {/* Overview Stats */}

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { StatsCards } from '@/components/dashboard/stats-cards'
+import { ConnectedPlatforms } from '@/components/dashboard/connected-platforms'
 import { RevenueChart } from '@/components/dashboard/revenue-chart'
 import { RecentFans } from '@/components/dashboard/recent-fans'
 import { QuickActions } from '@/components/dashboard/quick-actions'
@@ -16,51 +17,6 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return null
-
-  // Check for OnlyFans accounts via API and sync to database if found
-  // This ensures accounts that completed async authentication are detected
-  try {
-    const apiKey = process.env.ONLYFANS_API_KEY
-    if (apiKey) {
-      const { createOnlyFansAPI } = await import('@/lib/onlyfans-api')
-      const api = createOnlyFansAPI()
-      const accountsResult = await api.listAccounts()
-      
-      if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
-        const account = accountsResult.accounts[accountsResult.accounts.length - 1]
-        
-        // Check if we already have this connection
-        const { data: existingConn } = await supabase
-          .from('platform_connections')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('platform', 'onlyfans')
-          .eq('is_connected', true)
-          .single()
-        
-        if (!existingConn) {
-          // Save the connection
-          const { error: insertError } = await supabase
-            .from('platform_connections')
-            .upsert({
-              user_id: user.id,
-              platform: 'onlyfans',
-              platform_username: account.onlyfans_username || account.display_name || 'Connected',
-              is_connected: true,
-              access_token: account.id, // Store account ID here
-              last_sync_at: new Date().toISOString(),
-            }, { onConflict: 'user_id,platform' })
-          
-          if (insertError) {
-            console.error('[v0] Failed to save OnlyFans connection:', insertError.message)
-          }
-        }
-      }
-    }
-  } catch (e) {
-    // Silent fail - continue loading dashboard
-    console.error('[v0] Dashboard OnlyFans check failed:', e)
-  }
 
   // Fetch dashboard data
   const [
@@ -132,6 +88,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Page header with connected platform refresh buttons */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-sm text-muted-foreground">Your creator command centre</p>
+        </div>
+        <ConnectedPlatforms />
+      </div>
+
       {/* Divine Assistants Quick Access */}
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="border-circe/30 bg-gradient-to-br from-circe/10 via-circe/5 to-transparent">

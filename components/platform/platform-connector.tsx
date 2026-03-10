@@ -52,12 +52,12 @@ import Image from 'next/image'
 
 // OnlyFans Logo
 const OnlyFansLogo = () => (
-  <Image src="/onlyfans-logo.png" alt="OnlyFans" width={24} height={24} className="h-6 w-6" />
+  <img src="/onlyfans-logo.png" alt="OnlyFans" className="h-6 w-6" />
 )
 
 // Fansly Logo
 const FanslyLogo = () => (
-  <Image src="/fansly-logo.png" alt="Fansly" width={24} height={24} className="h-6 w-6" />
+  <img src="/fansly-logo.png" alt="Fansly" className="h-6 w-6" />
 )
 
 // ManyVids Logo

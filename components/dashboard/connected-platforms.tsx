@@ -11,14 +11,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import Image from 'next/image'
-
 const OnlyFansLogo = ({ className }: { className?: string }) => (
-  <Image src="/onlyfans-logo.png" alt="OnlyFans" width={16} height={16} className={cn('h-4 w-4', className)} />
+  <img src="/onlyfans-logo.png" alt="OnlyFans" className={cn('h-4 w-4', className)} />
 )
 
 const FanslyLogo = ({ className }: { className?: string }) => (
-  <Image src="/fansly-logo.png" alt="Fansly" width={16} height={16} className={cn('h-4 w-4', className)} />
+  <img src="/fansly-logo.png" alt="Fansly" className={cn('h-4 w-4', className)} />
 )
 
 const PLATFORM_META: Record<string, { color: string; label: string; Logo: React.FC<{ className?: string }> }> = {

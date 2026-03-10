@@ -9,7 +9,6 @@ import { ArrowRight, MessageSquare, RefreshCw, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { stripHtmlForPreview } from '@/lib/html-utils'
-import Image from 'next/image'
 
 interface Conversation {
   user: {
@@ -168,12 +167,10 @@ export function MessageActivity() {
                     </Avatar>
                     {/* Platform indicator */}
                     <div className="absolute -bottom-0.5 -right-0.5 rounded-full bg-background p-0.5 shadow-sm">
-                      <Image 
+                      <img 
                         src={conv.platform === 'onlyfans' ? '/onlyfans-logo.png' : '/fansly-logo.png'} 
                         alt={conv.platform} 
-                        width={12} 
-                        height={12} 
-                        className="rounded-sm"
+                        className="h-3 w-3 rounded-sm"
                       />
                     </div>
                     {conv.unreadCount > 0 && (

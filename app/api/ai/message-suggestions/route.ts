@@ -105,10 +105,21 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(result)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating message suggestions:', error)
+    // Surface a bit more detail to help diagnose provider/env issues in production
+    const message =
+      typeof error?.message === 'string'
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : 'Unknown error'
+
     return NextResponse.json(
-      { error: 'Failed to generate message suggestions' },
+      {
+        error: 'Failed to generate message suggestions',
+        detail: message,
+      },
       { status: 500 }
     )
   }

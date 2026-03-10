@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 import {
   Tooltip,
   TooltipContent,
@@ -45,6 +46,7 @@ export function ConnectedPlatforms() {
   const [syncing, setSyncing] = useState<string | null>(null)
   const supabase = createClient()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const router = useRouter()
 
   const loadConnections = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -83,6 +85,8 @@ export function ConnectedPlatforms() {
         if (data.connected) {
           // Account found - trigger a sync to ensure data is up to date
           await fetch('/api/onlyfans/sync', { method: 'POST' })
+          // Refresh server-rendered analytics/dashboard data after sync completes
+          router.refresh()
         }
       } catch {
         // ignore

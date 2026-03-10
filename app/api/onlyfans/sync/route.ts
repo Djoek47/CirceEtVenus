@@ -154,6 +154,29 @@ export async function POST(request: NextRequest) {
     const conversations = conversationsData.conversations || []
     const unreadMessages = conversations.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0)
     const totalConversations = conversations.length
+
+    // Prefer fans total from the most reliable source available
+    const totalFans =
+      stats.fans.total ||
+      fansData.total ||
+      (Array.isArray(fansData.fans) ? fansData.fans.length : 0) ||
+      userData.subscribersCount ||
+      0
+
+    // Prefer revenue from chart (today) if available, else earnings endpoint, else stats
+    const todayPoint = (chartData.data || []).find((p: any) => p.date === today)
+    const revenueToday =
+      (todayPoint?.amount ?? 0) ||
+      (stats.earnings?.today ?? 0) ||
+      (earningsData?.today ?? 0) ||
+      (earningsData?.thisDay ?? 0) ||
+      0
+
+    const revenueFallbackTotal =
+      (earningsData?.thisMonth ?? 0) ||
+      (earningsData?.total ?? 0) ||
+      (stats.earnings?.thisMonth ?? 0) ||
+      0
     
     // Use total conversations as a proxy for message activity
     // messages_received = unread count (new messages waiting)
@@ -162,10 +185,10 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       platform: 'onlyfans',
       date: today,
-      total_fans: stats.fans.total || 0,
+      total_fans: totalFans,
       new_fans: stats.fans.new || 0,
       churned_fans: stats.fans.expired || 0,
-      revenue: stats.earnings?.today || earningsData.total || 0,
+      revenue: revenueToday || revenueFallbackTotal,
       messages_received: unreadMessages,
       messages_sent: totalConversations,
     }

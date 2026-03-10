@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Link2, Check, ArrowRight, Loader2, X, Unplug } from 'lucide-react'
+import { Link2, Check, ArrowRight, Loader2, X, Unplug, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
@@ -83,6 +83,7 @@ export function PlatformIntegrationWidget() {
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   
@@ -160,9 +161,19 @@ export function PlatformIntegrationWidget() {
                 onConflict: 'user_id,platform'
               })
             
-            setSuccess('OnlyFans connected!')
+            setSuccess('OnlyFans connected! Syncing your data...')
             await loadConnections()
-            setTimeout(() => setSuccess(null), 3000)
+            
+            // Auto-sync data after connecting
+            try {
+              await fetch('/api/onlyfans/sync', { method: 'POST' })
+              setSuccess('OnlyFans synced! Refreshing...')
+              // Refresh the page to show updated data
+              setTimeout(() => window.location.reload(), 1500)
+            } catch {
+              setSuccess('Connected! Click Sync to import your data.')
+              setTimeout(() => setSuccess(null), 3000)
+            }
           }
           setConnecting(null)
         },
@@ -235,9 +246,15 @@ export function PlatformIntegrationWidget() {
       await loadConnections()
 
       // Auto-sync data after connecting
-      await fetch('/api/fansly/sync', { method: 'POST' })
-      
-      setTimeout(() => setSuccess(null), 3000)
+      try {
+        await fetch('/api/fansly/sync', { method: 'POST' })
+        setSuccess('Fansly synced! Refreshing...')
+        // Refresh the page to show updated data
+        setTimeout(() => window.location.reload(), 1500)
+      } catch {
+        setSuccess('Connected! Click Sync to import your data.')
+        setTimeout(() => setSuccess(null), 3000)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to link Fansly account')
     } finally {
@@ -279,6 +296,30 @@ export function PlatformIntegrationWidget() {
       setError(err instanceof Error ? err.message : 'Failed to disconnect')
     } finally {
       setDisconnecting(null)
+    }
+  }
+
+  const handleSync = async (platformId: string) => {
+    setSyncing(platformId)
+    setError(null)
+
+    try {
+      const endpoint = platformId === 'onlyfans' ? '/api/onlyfans/sync' : `/api/${platformId}/sync`
+      const response = await fetch(endpoint, { method: 'POST' })
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      setSuccess(`${platformId.charAt(0).toUpperCase() + platformId.slice(1)} synced! Refreshing...`)
+      
+      // Refresh the page to show updated data
+      setTimeout(() => window.location.reload(), 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync')
+    } finally {
+      setSyncing(null)
     }
   }
 
@@ -383,13 +424,22 @@ export function PlatformIntegrationWidget() {
                 </div>
                 
                 {platform.connected ? (
-                  <div className="flex items-center gap-2">
-                    <Badge 
-                      variant="secondary" 
-                      className="bg-green-500/10 text-green-600 border-0 text-xs"
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-3 text-xs gap-1.5"
+                      onClick={() => handleSync(platform.id)}
+                      disabled={syncing === platform.id}
+                      title="Sync data"
                     >
-                      Synced
-                    </Badge>
+                      {syncing === platform.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      Sync
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"

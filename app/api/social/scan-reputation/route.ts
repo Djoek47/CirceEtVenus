@@ -51,12 +51,15 @@ export async function POST(req: NextRequest) {
   // Determine plan to gate Grok enrichment for Pro users only
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('plan_id, plan')
+    .select('plan_id')
     .eq('user_id', user.id)
     .maybeSingle()
 
-  const planId = (subscription as any)?.plan_id || (subscription as any)?.plan
-  const isProPlan = !!planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)
+  const rawPlanId = (subscription as any)?.plan_id as string | null | undefined
+  const normalizedPlanId = rawPlanId?.toLowerCase() || null
+  const isProPlan = Boolean(
+    normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId),
+  )
 
   // Gather usernames from social_profiles + platform_connections
   const [{ data: profiles }, { data: platforms }] = await Promise.all([

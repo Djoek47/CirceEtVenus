@@ -2,7 +2,7 @@ import { gateway } from '@ai-sdk/gateway'
 import { generateText } from 'ai'
 
 type Role = 'creator' | 'fan'
-type Mode = 'scan' | 'circe' | 'venus'
+type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
 
 export type NormalizedChatMessage = {
   from: Role
@@ -86,8 +86,10 @@ export async function generateMessageSuggestionsWithGrok(
     ctx.mode === 'circe'
       ? 'You are Circe, goddess of retention and enchantment, focused on keeping paying fans engaged and preventing churn.'
       : ctx.mode === 'venus'
-        ? 'You are Venus, goddess of love and attraction, focused on seduction, flirtation, and driving sales.'
-        : 'You are an analyst helping a creator understand a fan conversation and how best to respond.'
+        ? 'You are Venus, goddess of love and attraction, focused on seduction, flirtation, and gently steering fans toward paid interactions.'
+        : ctx.mode === 'flirt'
+          ? 'You are a pure flirting persona for an adult creator: your role is to generate natural, seductive, emotionally tuned replies without mentioning business, conversion, or retention strategy.'
+          : 'You are an analyst helping a creator understand a fan conversation and how best to respond.'
 
   let task: string
   if (ctx.mode === 'scan') {
@@ -108,7 +110,9 @@ Focus on:
     const flavor =
       ctx.mode === 'circe'
         ? 'Retention, upsells, reassurance, and preventing churn.'
-        : 'Attraction, flirtation, and gently steering towards paid content and tips.'
+        : ctx.mode === 'venus'
+          ? 'Attraction, flirtation, and gently steering towards paid content and tips.'
+          : 'Natural flirting, chemistry, and emotional connection only (no explicit sales or business language).'
 
     task = `Using the recent conversation, generate 2-3 candidate replies the creator could send next.
 Return ONLY JSON:
@@ -219,8 +223,10 @@ export async function generateMessageSuggestionsWithOpenAI(
     ctx.mode === 'circe'
       ? 'You are Circe, a retention strategist for creators.'
       : ctx.mode === 'venus'
-        ? 'You are Venus, a flirtatious growth strategist for creators.'
-        : 'You are an analyst helping a creator understand a fan conversation.'
+        ? 'You are Venus, a flirtatious growth strategist for creators, mixing seduction with gentle sales instincts.'
+        : ctx.mode === 'flirt'
+          ? 'You are a pure flirting companion for an adult creator. Your only job is to generate natural, seductive, emotionally tuned replies without sounding like a marketer or strategist.'
+          : 'You are an analyst helping a creator understand a fan conversation.'
 
   let instruction: string
   if (ctx.mode === 'scan') {
@@ -235,7 +241,9 @@ export async function generateMessageSuggestionsWithOpenAI(
     const flavor =
       ctx.mode === 'circe'
         ? 'Retention, upsells, reassurance, and preventing churn.'
-        : 'Attraction, flirtation, and gently steering towards paid content and tips.'
+        : ctx.mode === 'venus'
+          ? 'Attraction, flirtation, and gently steering towards paid content and tips.'
+          : 'Attraction, flirtation, emotional chemistry, and keeping the fan eager to talk more – without explicit sales language.'
 
     instruction = `Using the recent conversation, generate 2-3 candidate replies the creator could send next.
 Return ONLY JSON:

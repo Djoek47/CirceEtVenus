@@ -6,7 +6,7 @@ import {
   NormalizedChatMessage,
 } from '@/lib/ai/message-suggestions'
 
-type Mode = 'scan' | 'circe' | 'venus'
+type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
 
 type RequestBody = {
   mode: Mode
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     }
 
     const mode: Mode = body.mode
-    if (!['scan', 'circe', 'venus'].includes(mode)) {
+    if (!['scan', 'circe', 'venus', 'flirt'].includes(mode)) {
       return NextResponse.json({ error: 'Unsupported mode' }, { status: 400 })
     }
 
@@ -52,13 +52,14 @@ export async function POST(req: NextRequest) {
     // Check subscription for Pro / Grok access
     const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('plan_id, plan, ai_credits_used')
+      .select('plan_id, ai_credits_used')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    const planId = (subscription as any)?.plan_id || (subscription as any)?.plan
+    const rawPlanId = (subscription as any)?.plan_id as string | null | undefined
+    const normalizedPlanId = rawPlanId?.toLowerCase() || null
     const isPro =
-      !!planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)
+      !!normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId)
 
     const xaiKey = process.env.XAI_API_KEY
 

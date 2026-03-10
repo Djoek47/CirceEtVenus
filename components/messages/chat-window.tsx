@@ -23,6 +23,7 @@ import {
   Sparkles,
   Moon,
   Sun,
+  Heart,
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { cn } from '@/lib/utils'
@@ -108,7 +109,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPolling, setIsPolling] = useState(false)
-  const [suggestionsLoading, setSuggestionsLoading] = useState<'scan' | 'circe' | 'venus' | null>(null)
+  const [suggestionsLoading, setSuggestionsLoading] = useState<'scan' | 'circe' | 'venus' | 'flirt' | null>(null)
   const [scanInsights, setScanInsights] = useState<{
     insights: string[]
     riskFlags: string[]
@@ -116,7 +117,8 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   } | null>(null)
   const [circeSuggestions, setCirceSuggestions] = useState<string[] | null>(null)
   const [venusSuggestions, setVenusSuggestions] = useState<string[] | null>(null)
-  const [activePanel, setActivePanel] = useState<'circe' | 'venus' | null>(null)
+  const [flirtSuggestions, setFlirtSuggestions] = useState<string[] | null>(null)
+  const [activePanel, setActivePanel] = useState<'circe' | 'venus' | 'flirt' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -187,7 +189,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     }))
   }
 
-  const callSuggestionApi = async (mode: 'scan' | 'circe' | 'venus') => {
+  const callSuggestionApi = async (mode: 'scan' | 'circe' | 'venus' | 'flirt') => {
     if (!conversation) return
     setError(null)
     setSuggestionsLoading(mode)
@@ -225,14 +227,18 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
             suggestedAngles: [],
           }
         )
-      } else if (mode === 'circe') {
+      } else {
         const texts = (data.suggestions || []).map((s: any) => String(s.text || '')).filter(Boolean)
-        setCirceSuggestions(texts.length ? texts : null)
-        setActivePanel('circe')
-      } else if (mode === 'venus') {
-        const texts = (data.suggestions || []).map((s: any) => String(s.text || '')).filter(Boolean)
-        setVenusSuggestions(texts.length ? texts : null)
-        setActivePanel('venus')
+        if (mode === 'circe') {
+          setCirceSuggestions(texts.length ? texts : null)
+          setActivePanel('circe')
+        } else if (mode === 'venus') {
+          setVenusSuggestions(texts.length ? texts : null)
+          setActivePanel('venus')
+        } else if (mode === 'flirt') {
+          setFlirtSuggestions(texts.length ? texts : null)
+          setActivePanel('flirt')
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate suggestions')
@@ -650,13 +656,33 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
             )}
             Venus Reply
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 text-xs border-pink-500/50 text-pink-500"
+            disabled={suggestionsLoading === 'flirt' || messages.length === 0}
+            onClick={() => callSuggestionApi('flirt')}
+          >
+            {suggestionsLoading === 'flirt' ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Heart className="h-3 w-3" />
+            )}
+            Flirt Reply
+          </Button>
         </div>
 
-        {(circeSuggestions && activePanel === 'circe') || (venusSuggestions && activePanel === 'venus') ? (
+        {(activePanel === 'circe' && circeSuggestions) ||
+        (activePanel === 'venus' && venusSuggestions) ||
+        (activePanel === 'flirt' && flirtSuggestions) ? (
           <div className="rounded-md border border-border bg-secondary/40 p-2 space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium">
-                {activePanel === 'circe' ? 'Circe spell suggestions' : 'Venus charm suggestions'}
+                {activePanel === 'circe'
+                  ? 'Circe spell suggestions'
+                  : activePanel === 'venus'
+                    ? 'Venus charm suggestions'
+                    : 'Flirt mode suggestions'}
               </span>
               <button
                 type="button"
@@ -667,22 +693,30 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
               </button>
             </div>
             <div className="space-y-1">
-              {(activePanel === 'circe' ? circeSuggestions : venusSuggestions)?.slice(0, 3).map((text, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-left text-xs hover:border-primary hover:bg-primary/5"
-                  onClick={() => {
-                    setMessage(text)
-                    setActivePanel(null)
-                  }}
-                >
-                  {text}
-                </button>
-              ))}
+              {(activePanel === 'circe'
+                ? circeSuggestions
+                : activePanel === 'venus'
+                  ? venusSuggestions
+                  : flirtSuggestions
+              )
+                ?.slice(0, 3)
+                .map((text, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="w-full rounded border border-border bg-background px-2 py-1 text-left text-xs hover:border-primary hover:bg-primary/5"
+                    onClick={() => {
+                      setMessage(text)
+                      setActivePanel(null)
+                    }}
+                  >
+                    {text}
+                  </button>
+                ))}
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Tap to insert, then edit before sending. Generated by {activePanel === 'circe' ? 'Circe' : 'Venus'}.
+              Tap to insert, then edit before sending. Generated by{' '}
+              {activePanel === 'circe' ? 'Circe' : activePanel === 'venus' ? 'Venus' : 'Flirt'}.
             </p>
           </div>
         ) : null}

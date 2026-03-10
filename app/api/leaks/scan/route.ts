@@ -50,11 +50,12 @@ export async function POST(req: NextRequest) {
   // Pro gating (used for Grok enrichment)
   const { data: subRow } = await supabase
     .from('subscriptions')
-    .select('plan,plan_id,status')
+    .select('plan_id,status')
     .eq('user_id', user.id)
     .maybeSingle()
-  const planId = (subRow as any)?.plan_id || (subRow as any)?.plan
-  const isPro = Boolean(planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId))
+  const rawPlanId = (subRow as any)?.plan_id as string | null | undefined
+  const normalizedPlanId = rawPlanId?.toLowerCase() || null
+  const isPro = Boolean(normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId))
 
   // Load connected platform usernames (OnlyFans primary)
   const { data: connections } = await supabase

@@ -51,11 +51,12 @@ export default function AIStudioPage() {
         if (!user) return
         const { data } = await supabase
           .from('subscriptions')
-          .select('plan_id,plan')
+          .select('plan_id')
           .eq('user_id', user.id)
           .maybeSingle()
-        const planId = (data as any)?.plan_id || (data as any)?.plan
-        if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
+        const rawPlanId = (data as any)?.plan_id as string | null | undefined
+        const normalizedPlanId = rawPlanId?.toLowerCase() || null
+        if (normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId)) {
           setIsPro(true)
         }
       } catch {

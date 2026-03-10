@@ -244,12 +244,14 @@ export function AIToolsSelector() {
     
     const { data } = await supabase
       .from('subscriptions')
-      .select('plan, ai_credits_used, ai_credits_limit')
+      .select('plan_id, ai_credits_used, ai_credits_limit')
       .eq('user_id', user.id)
       .single()
     
     if (data) {
-      setIsPro(['venus-pro', 'circe-elite', 'divine-duo'].includes(data.plan))
+      const planId = (data as any).plan_id as string | null | undefined
+      const normalized = planId?.toLowerCase() || null
+      setIsPro(Boolean(normalized && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalized)))
       setAiCreditsUsed(data.ai_credits_used || 0)
       setAiCreditsLimit(data.ai_credits_limit || 100)
     }

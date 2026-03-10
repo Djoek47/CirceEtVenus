@@ -12,11 +12,13 @@ export async function POST(req: Request) {
   // Check subscription for Pro access
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('plan, ai_credits_used, ai_credits_limit')
+    .select('plan_id, ai_credits_used, ai_credits_limit')
     .eq('user_id', user.id)
     .single()
 
-  const isPro = subscription?.plan && ['venus-pro', 'circe-elite', 'divine-duo'].includes(subscription.plan)
+  const planId = (subscription as any)?.plan_id as string | null | undefined
+  const normalizedPlanId = planId?.toLowerCase() || null
+  const isPro = Boolean(normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId))
   if (!isPro) {
     return new Response(JSON.stringify({ error: 'Pro subscription required for Mass DM Composer' }), { 
       status: 403,

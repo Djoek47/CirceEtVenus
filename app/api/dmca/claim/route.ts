@@ -16,6 +16,7 @@ interface DMCAClaimData {
   infringingUrl: string
   originalContentUrl?: string // Link to original on OnlyFans/Fansly
   contentDescription: string
+  proofPaths?: string[] // Supabase Storage paths for proof uploads (optional at draft time)
   
   // Platform info
   platform: string // onlyfans, fansly, etc.
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
       platform: body.platform || connections?.[0]?.platform || 'onlyfans',
       platformUsername: body.platformUsername || connections?.[0]?.platform_username || '',
       leakAlertId: body.leakAlertId,
+      proofPaths: Array.isArray(body.proofPaths) ? body.proofPaths.filter(Boolean) : [],
     }
     
     // If this is from a leak alert, get that data
@@ -95,6 +97,9 @@ export async function POST(request: NextRequest) {
         platform_username: claimData.platformUsername,
         claimant_name: claimData.claimantName,
         claimant_email: claimData.claimantEmail,
+        claimant_phone: claimData.claimantPhone || null,
+        claimant_address: claimData.claimantAddress || null,
+        proof_urls: claimData.proofPaths || [],
         status: 'draft',
         notice_text: dmcaNotice,
         created_at: new Date().toISOString(),

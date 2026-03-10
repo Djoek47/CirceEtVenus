@@ -240,6 +240,7 @@ export function PlatformIntegrationWidget() {
       })
 
       const data = await response.json()
+      console.log('[v0] OnlyFans auth response:', data)
 
       // If we got an attemptId, start polling for status
       if (data.attemptId && !data.success && !data.requires_2fa) {

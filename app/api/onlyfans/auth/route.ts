@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.ONLYFANS_API_KEY
+    console.log('[v0] OnlyFans API key check:', { hasKey: !!apiKey, keyLength: apiKey?.length })
     if (!apiKey) {
       return NextResponse.json({ 
         error: 'OnlyFans API not configured. Please contact support.' 

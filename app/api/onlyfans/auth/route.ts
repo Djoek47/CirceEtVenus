@@ -145,38 +145,38 @@ export async function POST(request: NextRequest) {
       }, { status: 200 })
     }
 
-    // No attempt_id - check if this is an "already connected" error
-    if (result.message?.includes('already connected')) {
-      // Try to get existing accounts
-      const accountsResult = await api.listAccounts()
-      if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
-        const account = accountsResult.accounts[accountsResult.accounts.length - 1]
-        
-        // Save connection
-        await supabase
-          .from('platform_connections')
-          .upsert({
-            user_id: user.id,
-            platform: 'onlyfans',
-            platform_user_id: account.id,
-            platform_username: account.onlyfans_username || 'Connected',
-            is_connected: true,
-            access_token: account.id,
-            last_sync_at: new Date().toISOString(),
-          }, {
-            onConflict: 'user_id,platform'
-          })
+    // No attempt_id - check if this is an "already connected" error or any auth issue
+    // In either case, try to fetch existing accounts first
+    const accountsResult = await api.listAccounts()
+    if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
+      const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+      
+      // Save connection to our database
+      const { error: dbError } = await supabase
+        .from('platform_connections')
+        .upsert({
+          user_id: user.id,
+          platform: 'onlyfans',
+          platform_user_id: account.id,
+          platform_username: account.onlyfans_username || 'Connected',
+          is_connected: true,
+          access_token: account.id,
+          last_sync_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id,platform'
+        })
 
+      if (!dbError) {
         return NextResponse.json({ 
           success: true, 
           accountId: account.id,
           username: account.onlyfans_username,
-          message: 'Account already connected - synced successfully!'
+          message: 'OnlyFans account connected successfully!'
         })
       }
     }
 
-    // No attempt_id means actual error
+    // No accounts found and no attempt_id - return the error
     return NextResponse.json({ error: result.message || 'Failed to start authentication' }, { status: 400 })
 
   } catch (error) {

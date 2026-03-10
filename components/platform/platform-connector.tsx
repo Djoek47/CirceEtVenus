@@ -14,7 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, Check, RefreshCw, AlertCircle, ExternalLink, X } from 'lucide-react'
+import {
+  Loader2, Check, RefreshCw, AlertCircle, ExternalLink, X,
+  Link2, ArrowRight, Mail, Lock, Shield,
+} from 'lucide-react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 interface PlatformConnection {
@@ -84,15 +88,27 @@ const PLATFORMS: Platform[] = [
   },
 ]
 
-export function PlatformConnector() {
+function getPlatformLogo(platformId: string) {
+  switch (platformId) {
+    case 'onlyfans': return <OnlyFansLogo />
+    case 'fansly': return <FanslyLogo />
+    case 'manyvids': return <ManyVidsLogo />
+    default: return null
+  }
+}
+
+interface PlatformConnectorProps {
+  compact?: boolean
+}
+
+export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
   const [connections, setConnections] = useState<PlatformConnection[]>([])
   const [loading, setLoading] = useState(true)
-  const [connecting, setConnecting] = useState<string | null>(null)
   const [syncing, setSyncing] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  
+
   // OnlyFans auth state
   const [onlyfansDialogOpen, setOnlyfansDialogOpen] = useState(false)
   const [onlyfansEmail, setOnlyfansEmail] = useState('')
@@ -101,23 +117,21 @@ export function PlatformConnector() {
   const [onlyfans2FACode, setOnlyfans2FACode] = useState('')
   const [onlyfansLoading, setOnlyfansLoading] = useState(false)
   const [onlyfansStatus, setOnlyfansStatus] = useState<string | null>(null)
-  
+
   // Fansly auth state
   const [fanslyDialogOpen, setFanslyDialogOpen] = useState(false)
-  const [fanslyUsername, setFanslyUsername] = useState('')
+  const [fanslyEmail, setFanslyEmail] = useState('')
   const [fanslyPassword, setFanslyPassword] = useState('')
   const [fansly2FAToken, setFansly2FAToken] = useState<string | null>(null)
   const [fansly2FACode, setFansly2FACode] = useState('')
+  const [fanslyMaskedEmail, setFanslyMaskedEmail] = useState<string | null>(null)
   const [fanslyLoading, setFanslyLoading] = useState(false)
-  
+
   const supabase = createClient()
 
   const loadConnections = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) { setLoading(false); return }
 
     const { data } = await supabase
       .from('platform_connections')
@@ -132,24 +146,23 @@ export function PlatformConnector() {
     loadConnections()
   }, [])
 
-  const isConnected = (platformId: string) => {
-    return connections.some(c => c.platform === platformId && c.is_connected)
+  const isConnected = (platformId: string) =>
+    connections.some(c => c.platform === platformId && c.is_connected)
+
+  const getConnection = (platformId: string) =>
+    connections.find(c => c.platform === platformId)
+
+  // ── OnlyFans ──────────────────────────────────────────────────────────────
+
+  const openOnlyfansDialog = () => {
+    setOnlyfansEmail('')
+    setOnlyfansPassword('')
+    setOnlyfansAttemptId(null)
+    setOnlyfans2FACode('')
+    setOnlyfansStatus(null)
+    setOnlyfansDialogOpen(true)
   }
 
-  const getConnection = (platformId: string) => {
-    return connections.find(c => c.platform === platformId)
-  }
-
-  const getPlatformLogo = (platformId: string) => {
-    switch (platformId) {
-      case 'onlyfans': return <OnlyFansLogo />
-      case 'fansly': return <FanslyLogo />
-      case 'manyvids': return <ManyVidsLogo />
-      default: return null
-    }
-  }
-
-  // Handle OnlyFans login
   const handleOnlyfansLogin = async () => {
     setOnlyfansLoading(true)
     setError(null)
@@ -169,7 +182,6 @@ export function PlatformConnector() {
 
       const data = await response.json()
 
-      // If we got an attemptId, start polling for status
       if (data.attemptId && !data.success && !data.requires_2fa) {
         setOnlyfansAttemptId(data.attemptId)
         setOnlyfansStatus(data.message || 'Processing authentication...')
@@ -177,7 +189,6 @@ export function PlatformConnector() {
         return
       }
 
-      // If 2FA required
       if (data.requires_2fa) {
         setOnlyfansAttemptId(data.attemptId)
         setOnlyfansStatus('2FA code required')
@@ -185,28 +196,19 @@ export function PlatformConnector() {
         return
       }
 
-      // If error
-      if (data.error) {
-        throw new Error(data.error)
-      }
+      if (data.error) throw new Error(data.error)
 
-      // Success!
       if (data.success) {
         setOnlyfansDialogOpen(false)
         setOnlyfansEmail('')
         setOnlyfansPassword('')
         setOnlyfansAttemptId(null)
         setOnlyfans2FACode('')
-        setSuccess('OnlyFans connected! Syncing your data...')
         await loadConnections()
-
-        // Auto-sync data
         try {
           await fetch('/api/onlyfans/sync', { method: 'POST' })
-          setSuccess('OnlyFans synced!')
-          setTimeout(() => window.location.reload(), 1500)
+          setTimeout(() => window.location.reload(), 1000)
         } catch {
-          setSuccess('Connected! Click Sync to import your data.')
           setTimeout(() => setSuccess(null), 3000)
         }
       }
@@ -217,26 +219,21 @@ export function PlatformConnector() {
     }
   }
 
-  // Poll for OnlyFans authentication status
   const pollOnlyfansStatus = async (attemptId: string) => {
     let pollCount = 0
-    const maxPolls = 30
-
     const poll = async () => {
       pollCount++
-      if (pollCount > maxPolls) {
+      if (pollCount > 30) {
         setOnlyfansLoading(false)
         setError('Authentication timed out. Please try again.')
         return
       }
-
       try {
         const response = await fetch('/api/onlyfans/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ attemptId }),
         })
-
         const data = await response.json()
 
         if (data.requires_2fa) {
@@ -244,39 +241,42 @@ export function PlatformConnector() {
           setOnlyfansLoading(false)
           return
         }
-
         if (data.success && data.accountId) {
           setOnlyfansDialogOpen(false)
-          setSuccess('OnlyFans connected! Syncing...')
           await loadConnections()
           try {
             await fetch('/api/onlyfans/sync', { method: 'POST' })
-            setTimeout(() => window.location.reload(), 1500)
-          } catch {
-            setTimeout(() => setSuccess(null), 3000)
-          }
+            setTimeout(() => window.location.reload(), 1000)
+          } catch { /* silent */ }
           setOnlyfansLoading(false)
           return
         }
-
         if (data.error || data.status === 'failed') {
           setError(data.error || data.message || 'Authentication failed')
           setOnlyfansLoading(false)
           return
         }
-
-        // Still pending, continue polling
         setOnlyfansStatus(data.message || 'Processing...')
         setTimeout(poll, 2000)
       } catch {
         setTimeout(poll, 2000)
       }
     }
-
     poll()
   }
 
-  const handleConnectFansly = async () => {
+  // ── Fansly ────────────────────────────────────────────────────────────────
+
+  const openFanslyDialog = () => {
+    setFanslyEmail('')
+    setFanslyPassword('')
+    setFansly2FAToken(null)
+    setFansly2FACode('')
+    setFanslyMaskedEmail(null)
+    setFanslyDialogOpen(true)
+  }
+
+  const handleFanslyLogin = async () => {
     setFanslyLoading(true)
     setError(null)
 
@@ -285,7 +285,7 @@ export function PlatformConnector() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: fanslyUsername,
+          username: fanslyEmail,
           password: fanslyPassword,
           twoFactorToken: fansly2FAToken,
           twoFactorCode: fansly2FACode || undefined,
@@ -296,21 +296,26 @@ export function PlatformConnector() {
 
       if (data.requires_2fa) {
         setFansly2FAToken(data.twoFactorToken)
+        setFanslyMaskedEmail(data.masked_email)
         setFanslyLoading(false)
         return
       }
 
+      if (data.error) throw new Error(data.error)
+
       if (data.success) {
         setFanslyDialogOpen(false)
-        setFanslyUsername('')
+        setFanslyEmail('')
         setFanslyPassword('')
         setFansly2FAToken(null)
         setFansly2FACode('')
-        setSuccess('Fansly connected successfully!')
         await loadConnections()
-        setTimeout(() => setSuccess(null), 5000)
-      } else {
-        throw new Error(data.error || 'Connection failed')
+        try {
+          await fetch('/api/fansly/sync', { method: 'POST' })
+          setTimeout(() => window.location.reload(), 1000)
+        } catch {
+          setTimeout(() => setSuccess(null), 3000)
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect Fansly')
@@ -319,37 +324,24 @@ export function PlatformConnector() {
     }
   }
 
-  const handleConnect = async (platformId: string) => {
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  const handleConnect = (platformId: string) => {
     setError(null)
-    
-    if (platformId === 'onlyfans') {
-      // Open OnlyFans dialog instead of SDK modal
-      setOnlyfansEmail('')
-      setOnlyfansPassword('')
-      setOnlyfansAttemptId(null)
-      setOnlyfans2FACode('')
-      setOnlyfansStatus(null)
-      setOnlyfansDialogOpen(true)
-    } else if (platformId === 'fansly') {
-      setFanslyDialogOpen(true)
-    } else {
-      setError(`${platformId} integration coming soon`)
-    }
+    if (platformId === 'onlyfans') openOnlyfansDialog()
+    else if (platformId === 'fansly') openFanslyDialog()
+    else setError(`${platformId} integration coming soon`)
   }
 
   const handleSync = async (platformId: string) => {
     setSyncing(platformId)
     setError(null)
-
     try {
       const response = await fetch(`/api/${platformId}/sync`, { method: 'POST' })
       const data = await response.json()
-
       if (!response.ok) throw new Error(data.error || 'Sync failed')
-
-      setSuccess(`${platformId} data synced successfully!`)
       await loadConnections()
-      setTimeout(() => setSuccess(null), 5000)
+      setTimeout(() => window.location.reload(), 1000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sync failed')
     } finally {
@@ -360,7 +352,6 @@ export function PlatformConnector() {
   const handleDisconnect = async (platformId: string) => {
     setDisconnecting(platformId)
     setError(null)
-    
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
@@ -373,16 +364,15 @@ export function PlatformConnector() {
 
       if (dbError) throw dbError
 
-      const platformName = PLATFORMS.find(p => p.id === platformId)?.name || platformId
-      setSuccess(`${platformName} disconnected successfully`)
       await loadConnections()
-      setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to disconnect')
     } finally {
       setDisconnecting(null)
     }
   }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -392,89 +382,236 @@ export function PlatformConnector() {
     )
   }
 
+  const connectedCount = PLATFORMS.filter(p => isConnected(p.id)).length
+
+  const Alerts = () => (
+    <>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {success && (
+        <Alert className="border-green-500/50 bg-green-500/10">
+          <Check className="h-4 w-4 text-green-500" />
+          <AlertDescription className="text-green-500">{success}</AlertDescription>
+        </Alert>
+      )}
+    </>
+  )
+
+  // ── Compact layout (dashboard widget) ─────────────────────────────────────
+  if (compact) {
+    return (
+      <>
+        <Card className="overflow-hidden border-0 bg-gradient-to-br from-card via-card to-muted/20 shadow-xl">
+          <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                  <Link2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Creator Platforms</CardTitle>
+                  <CardDescription className="text-xs">Connect to import your data</CardDescription>
+                </div>
+              </div>
+              {connectedCount > 0 ? (
+                <Badge className="gap-1.5 bg-green-500/10 text-green-500 border-green-500/20">
+                  <Check className="h-3.5 w-3.5" />
+                  {connectedCount} Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">Not Connected</Badge>
+              )}
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-4 space-y-3">
+            {error && (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-center gap-2">
+                <X className="h-4 w-4 flex-shrink-0" />{error}
+              </div>
+            )}
+            {success && (
+              <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3 text-sm text-green-500 flex items-center gap-2">
+                <Check className="h-4 w-4 flex-shrink-0" />{success}
+              </div>
+            )}
+
+            {PLATFORMS.map((platform) => {
+              const connected = isConnected(platform.id)
+              const connection = getConnection(platform.id)
+              return (
+                <div
+                  key={platform.id}
+                  className={`group relative flex items-center justify-between rounded-xl border-2 p-3.5 transition-all duration-300 ${
+                    connected
+                      ? 'border-green-500/30 bg-green-500/5'
+                      : 'border-border/50 hover:border-primary/30 hover:bg-muted/50'
+                  }`}
+                >
+                  <div className={`absolute left-0 top-0 h-full w-1 rounded-l-xl bg-gradient-to-b ${platform.gradient}`} />
+
+                  <div className="flex items-center gap-3 pl-2">
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-xl shadow-sm transition-transform group-hover:scale-105"
+                      style={{ backgroundColor: `${platform.color}15`, color: platform.color }}
+                    >
+                      {getPlatformLogo(platform.id)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{platform.name}</span>
+                        {connected && (
+                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
+                            <Check className="h-3 w-3 text-white" />
+                          </div>
+                        )}
+                      </div>
+                      {connection?.platform_username ? (
+                        <p className="text-xs text-muted-foreground">@{connection.platform_username}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {connected ? 'Connected' : 'Click to connect'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {connected ? (
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        className="h-8 px-3 text-xs gap-1.5 cursor-default"
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', border: 'none' }}
+                        disabled
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Connected
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleSync(platform.id)}
+                        disabled={syncing === platform.id}
+                        title="Sync data"
+                      >
+                        {syncing === platform.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <RefreshCw className="h-3.5 w-3.5" />}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="h-8 px-4 text-xs font-medium shadow-sm"
+                      style={{ background: `linear-gradient(135deg, ${platform.color}, ${platform.color}CC)` }}
+                      onClick={() => handleConnect(platform.id)}
+                    >
+                      Connect
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+
+            <Link href="/dashboard/settings?tab=integrations" className="block">
+              <Button variant="ghost" size="sm" className="w-full mt-2 gap-1.5 text-primary hover:text-primary hover:bg-primary/5">
+                Manage All Platforms
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <ConnectDialogs
+          onlyfansDialogOpen={onlyfansDialogOpen} setOnlyfansDialogOpen={setOnlyfansDialogOpen}
+          onlyfansEmail={onlyfansEmail} setOnlyfansEmail={setOnlyfansEmail}
+          onlyfansPassword={onlyfansPassword} setOnlyfansPassword={setOnlyfansPassword}
+          onlyfansAttemptId={onlyfansAttemptId}
+          onlyfans2FACode={onlyfans2FACode} setOnlyfans2FACode={setOnlyfans2FACode}
+          onlyfansLoading={onlyfansLoading}
+          onlyfansStatus={onlyfansStatus}
+          handleOnlyfansLogin={handleOnlyfansLogin}
+          fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
+          fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
+          fanslyPassword={fanslyPassword} setFanslyPassword={setFanslyPassword}
+          fansly2FAToken={fansly2FAToken}
+          fansly2FACode={fansly2FACode} setFansly2FACode={setFansly2FACode}
+          fanslyMaskedEmail={fanslyMaskedEmail}
+          fanslyLoading={fanslyLoading}
+          handleFanslyLogin={handleFanslyLogin}
+        />
+      </>
+    )
+  }
+
+  // ── Full layout (settings page) ───────────────────────────────────────────
   return (
     <>
       <div className="space-y-6">
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        
-        {success && (
-          <Alert className="border-green-500/50 bg-green-500/10">
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription className="text-green-500">{success}</AlertDescription>
-          </Alert>
-        )}
+        <Alerts />
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {PLATFORMS.map((platform) => {
             const connected = isConnected(platform.id)
             const connection = getConnection(platform.id)
-            
+
             return (
-              <Card 
-                key={platform.id} 
+              <Card
+                key={platform.id}
                 className={`relative overflow-hidden border-2 transition-all duration-300 ${
-                  connected 
-                    ? 'border-green-500/50 bg-gradient-to-br from-green-500/5 to-transparent shadow-lg shadow-green-500/10' 
+                  connected
+                    ? 'border-green-500/50 bg-gradient-to-br from-green-500/5 to-transparent shadow-lg shadow-green-500/10'
                     : 'border-border hover:border-primary/50 hover:shadow-lg'
                 }`}
               >
-                {/* Platform color accent bar */}
-                <div 
-                  className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${platform.gradient}`}
-                />
-                
+                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${platform.gradient}`} />
+
                 <CardHeader className="pb-4 pt-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div 
-                        className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg transition-transform hover:scale-105"
-                        style={{ 
-                          background: `linear-gradient(135deg, ${platform.color}20, ${platform.color}10)`,
-                          color: platform.color,
-                          border: `1px solid ${platform.color}30`
-                        }}
-                      >
-                        {getPlatformLogo(platform.id)}
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          {platform.name}
-                          {connected && (
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
-                              <Check className="h-3 w-3 text-white" />
-                            </div>
-                          )}
-                        </CardTitle>
-                        {connection?.platform_username && (
-                          <p className="text-sm text-muted-foreground">
-                            @{connection.platform_username}
-                          </p>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg"
+                      style={{
+                        background: `linear-gradient(135deg, ${platform.color}20, ${platform.color}10)`,
+                        color: platform.color,
+                        border: `1px solid ${platform.color}30`,
+                      }}
+                    >
+                      {getPlatformLogo(platform.id)}
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        {platform.name}
+                        {connected && (
+                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                            <Check className="h-3 w-3 text-white" />
+                          </div>
                         )}
-                      </div>
+                      </CardTitle>
+                      {connection?.platform_username && (
+                        <p className="text-sm text-muted-foreground">@{connection.platform_username}</p>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
-                
+
                 <CardContent className="space-y-4">
-                  <CardDescription className="text-sm">
-                    {platform.description}
-                  </CardDescription>
-                  
+                  <CardDescription className="text-sm">{platform.description}</CardDescription>
+
                   <div className="flex flex-wrap gap-1.5">
                     {platform.dataTypes.map((type) => (
-                      <Badge 
-                        key={type} 
-                        variant="secondary" 
+                      <Badge
+                        key={type}
+                        variant="secondary"
                         className="text-xs"
-                        style={{ 
+                        style={{
                           backgroundColor: `${platform.color}10`,
                           color: platform.color,
-                          borderColor: `${platform.color}20`
+                          borderColor: `${platform.color}20`,
                         }}
                       >
                         {type}
@@ -484,21 +621,15 @@ export function PlatformConnector() {
 
                   {connected ? (
                     <div className="flex flex-col gap-2 pt-2">
-                      {/* Connected indicator button */}
                       <Button
                         size="sm"
                         className="w-full cursor-default"
-                        style={{
-                          background: `linear-gradient(135deg, #22c55e, #16a34a)`,
-                          color: 'white',
-                          border: 'none',
-                        }}
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', border: 'none' }}
                         disabled
                       >
                         <Check className="mr-2 h-4 w-4" />
                         Connected
                       </Button>
-                      {/* Sync + Disconnect row */}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -507,11 +638,9 @@ export function PlatformConnector() {
                           onClick={() => handleSync(platform.id)}
                           disabled={syncing === platform.id}
                         >
-                          {syncing === platform.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                          )}
+                          {syncing === platform.id
+                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            : <RefreshCw className="mr-2 h-4 w-4" />}
                           Sync Data
                         </Button>
                         <Button
@@ -522,11 +651,9 @@ export function PlatformConnector() {
                           disabled={disconnecting === platform.id}
                           title="Disconnect"
                         >
-                          {disconnecting === platform.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <X className="h-4 w-4" />
-                          )}
+                          {disconnecting === platform.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <X className="h-4 w-4" />}
                         </Button>
                       </div>
                     </div>
@@ -534,17 +661,10 @@ export function PlatformConnector() {
                     <Button
                       size="sm"
                       className="w-full shadow-lg transition-all hover:shadow-xl"
-                      style={{ 
-                        background: `linear-gradient(135deg, ${platform.color}, ${platform.color}CC)`,
-                      }}
+                      style={{ background: `linear-gradient(135deg, ${platform.color}, ${platform.color}CC)` }}
                       onClick={() => handleConnect(platform.id)}
-                      disabled={connecting === platform.id}
                     >
-                      {connecting === platform.id ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                      )}
+                      <ExternalLink className="mr-2 h-4 w-4" />
                       Connect {platform.name}
                     </Button>
                   )}
@@ -561,93 +681,81 @@ export function PlatformConnector() {
         </div>
       </div>
 
-      {/* Fansly Login Dialog */}
-      <Dialog open={fanslyDialogOpen} onOpenChange={setFanslyDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div 
-                className="flex h-12 w-12 items-center justify-center rounded-xl"
-                style={{ backgroundColor: '#009FFF15', color: '#009FFF' }}
-              >
-                <FanslyLogo />
-              </div>
-              <div>
-                <DialogTitle>Connect Fansly</DialogTitle>
-                <DialogDescription>
-                  Enter your Fansly credentials to connect
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            {!fansly2FAToken ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="fansly-username">Email or Username</Label>
-                  <Input
-                    id="fansly-username"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={fanslyUsername}
-                    onChange={(e) => setFanslyUsername(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fansly-password">Password</Label>
-                  <Input
-                    id="fansly-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={fanslyPassword}
-                    onChange={(e) => setFanslyPassword(e.target.value)}
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="fansly-2fa">2FA Code</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Enter the verification code sent to your email or phone
-                </p>
-                <Input
-                  id="fansly-2fa"
-                  type="text"
-                  placeholder="Enter 6-digit code"
-                  value={fansly2FACode}
-                  onChange={(e) => setFansly2FACode(e.target.value)}
-                  maxLength={6}
-                />
-              </div>
-            )}
+      <ConnectDialogs
+        onlyfansDialogOpen={onlyfansDialogOpen} setOnlyfansDialogOpen={setOnlyfansDialogOpen}
+        onlyfansEmail={onlyfansEmail} setOnlyfansEmail={setOnlyfansEmail}
+        onlyfansPassword={onlyfansPassword} setOnlyfansPassword={setOnlyfansPassword}
+        onlyfansAttemptId={onlyfansAttemptId}
+        onlyfans2FACode={onlyfans2FACode} setOnlyfans2FACode={setOnlyfans2FACode}
+        onlyfansLoading={onlyfansLoading}
+        onlyfansStatus={onlyfansStatus}
+        handleOnlyfansLogin={handleOnlyfansLogin}
+        fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
+        fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
+        fanslyPassword={fanslyPassword} setFanslyPassword={setFanslyPassword}
+        fansly2FAToken={fansly2FAToken}
+        fansly2FACode={fansly2FACode} setFansly2FACode={setFansly2FACode}
+        fanslyMaskedEmail={fanslyMaskedEmail}
+        fanslyLoading={fanslyLoading}
+        handleFanslyLogin={handleFanslyLogin}
+      />
+    </>
+  )
+}
 
-            <Button
-              className="w-full"
-              style={{ background: 'linear-gradient(135deg, #009FFF, #0066CC)' }}
-              onClick={handleConnectFansly}
-              disabled={fanslyLoading || (!fansly2FAToken && (!fanslyUsername || !fanslyPassword)) || (!!fansly2FAToken && !fansly2FACode)}
-            >
-              {fanslyLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {fansly2FAToken ? 'Verify Code' : 'Connect Fansly'}
-            </Button>
+// ── Shared Dialogs ─────────────────────────────────────────────────────────
 
-            <p className="text-xs text-muted-foreground text-center">
-              Your credentials are securely transmitted and never stored locally
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
+interface ConnectDialogsProps {
+  onlyfansDialogOpen: boolean
+  setOnlyfansDialogOpen: (v: boolean) => void
+  onlyfansEmail: string
+  setOnlyfansEmail: (v: string) => void
+  onlyfansPassword: string
+  setOnlyfansPassword: (v: string) => void
+  onlyfansAttemptId: string | null
+  onlyfans2FACode: string
+  setOnlyfans2FACode: (v: string) => void
+  onlyfansLoading: boolean
+  onlyfansStatus: string | null
+  handleOnlyfansLogin: () => void
+  fanslyDialogOpen: boolean
+  setFanslyDialogOpen: (v: boolean) => void
+  fanslyEmail: string
+  setFanslyEmail: (v: string) => void
+  fanslyPassword: string
+  setFanslyPassword: (v: string) => void
+  fansly2FAToken: string | null
+  fansly2FACode: string
+  setFansly2FACode: (v: string) => void
+  fanslyMaskedEmail: string | null
+  fanslyLoading: boolean
+  handleFanslyLogin: () => void
+}
 
+function ConnectDialogs({
+  onlyfansDialogOpen, setOnlyfansDialogOpen,
+  onlyfansEmail, setOnlyfansEmail,
+  onlyfansPassword, setOnlyfansPassword,
+  onlyfansAttemptId,
+  onlyfans2FACode, setOnlyfans2FACode,
+  onlyfansLoading, onlyfansStatus,
+  handleOnlyfansLogin,
+  fanslyDialogOpen, setFanslyDialogOpen,
+  fanslyEmail, setFanslyEmail,
+  fanslyPassword, setFanslyPassword,
+  fansly2FAToken,
+  fansly2FACode, setFansly2FACode,
+  fanslyMaskedEmail, fanslyLoading,
+  handleFanslyLogin,
+}: ConnectDialogsProps) {
+  return (
+    <>
       {/* OnlyFans Login Dialog */}
       <Dialog open={onlyfansDialogOpen} onOpenChange={setOnlyfansDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
-              <div 
-                className="flex h-12 w-12 items-center justify-center rounded-xl"
-                style={{ backgroundColor: '#00AFF015', color: '#00AFF0' }}
-              >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: '#00AFF015', color: '#00AFF0' }}>
                 <OnlyFansLogo />
               </div>
               <div>
@@ -655,13 +763,12 @@ export function PlatformConnector() {
                 <DialogDescription>
                   {onlyfansAttemptId && onlyfansStatus?.includes('2FA')
                     ? 'Enter your 2FA code to complete authentication'
-                    : 'Sign in with your OnlyFans credentials'
-                  }
+                    : 'Sign in with your OnlyFans credentials'}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             {onlyfansStatus && (
               <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-sm text-blue-400 flex items-center gap-2">
@@ -673,41 +780,28 @@ export function PlatformConnector() {
             {!onlyfansAttemptId ? (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="onlyfans-email">Email</Label>
-                  <Input
-                    id="onlyfans-email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={onlyfansEmail}
-                    onChange={(e) => setOnlyfansEmail(e.target.value)}
-                  />
+                  <Label htmlFor="of-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="of-email" type="email" placeholder="your@email.com" value={onlyfansEmail} onChange={e => setOnlyfansEmail(e.target.value)} className="pl-10" />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="onlyfans-password">Password</Label>
-                  <Input
-                    id="onlyfans-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={onlyfansPassword}
-                    onChange={(e) => setOnlyfansPassword(e.target.value)}
-                  />
+                  <Label htmlFor="of-password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="of-password" type="password" placeholder="Enter your password" value={onlyfansPassword} onChange={e => setOnlyfansPassword(e.target.value)} className="pl-10" />
+                  </div>
                 </div>
               </>
             ) : onlyfansStatus?.includes('2FA') ? (
               <div className="space-y-2">
-                <Label htmlFor="onlyfans-2fa">Verification Code</Label>
-                <Input
-                  id="onlyfans-2fa"
-                  type="text"
-                  placeholder="Enter 6-digit code"
-                  value={onlyfans2FACode}
-                  onChange={(e) => setOnlyfans2FACode(e.target.value)}
-                  className="text-center text-lg tracking-widest"
-                  maxLength={6}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Check your email or authenticator app for the code
-                </p>
+                <Label htmlFor="of-2fa">Verification Code</Label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="of-2fa" type="text" placeholder="Enter 6-digit code" value={onlyfans2FACode} onChange={e => setOnlyfans2FACode(e.target.value)} className="pl-10 text-center text-lg tracking-widest" maxLength={6} />
+                </div>
+                <p className="text-xs text-muted-foreground">Check your email or authenticator app for the code</p>
               </div>
             ) : null}
 
@@ -718,17 +812,71 @@ export function PlatformConnector() {
               disabled={onlyfansLoading || (!onlyfansAttemptId && (!onlyfansEmail || !onlyfansPassword))}
             >
               {onlyfansLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {onlyfansAttemptId && onlyfansStatus?.includes('2FA') 
-                ? 'Verify & Connect' 
-                : onlyfansAttemptId 
-                  ? 'Processing...'
-                  : 'Connect OnlyFans'
-              }
+              {onlyfansAttemptId && onlyfansStatus?.includes('2FA') ? 'Verify & Connect' : onlyfansAttemptId ? 'Processing...' : 'Connect OnlyFans'}
             </Button>
+            <p className="text-xs text-muted-foreground text-center">Your credentials are securely encrypted and never stored locally</p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-            <p className="text-xs text-muted-foreground text-center">
-              Your credentials are securely transmitted and never stored locally
-            </p>
+      {/* Fansly Login Dialog */}
+      <Dialog open={fanslyDialogOpen} onOpenChange={setFanslyDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: '#009FFF15', color: '#009FFF' }}>
+                <FanslyLogo />
+              </div>
+              <div>
+                <DialogTitle>Connect Fansly</DialogTitle>
+                <DialogDescription>
+                  {fansly2FAToken
+                    ? `Enter the code sent to ${fanslyMaskedEmail || 'your email'}`
+                    : 'Sign in with your Fansly credentials'}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {!fansly2FAToken ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fl-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="fl-email" type="email" placeholder="your@email.com" value={fanslyEmail} onChange={e => setFanslyEmail(e.target.value)} className="pl-10" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fl-password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input id="fl-password" type="password" placeholder="Enter your password" value={fanslyPassword} onChange={e => setFanslyPassword(e.target.value)} className="pl-10" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="fl-2fa">Verification Code</Label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="fl-2fa" type="text" placeholder="Enter 6-digit code" value={fansly2FACode} onChange={e => setFansly2FACode(e.target.value)} className="pl-10 text-center text-lg tracking-widest" maxLength={6} />
+                </div>
+                <p className="text-xs text-muted-foreground">Check your email or authenticator app for the code</p>
+              </div>
+            )}
+
+            <Button
+              className="w-full"
+              style={{ background: 'linear-gradient(135deg, #009FFF, #0066CC)' }}
+              onClick={handleFanslyLogin}
+              disabled={fanslyLoading || (!fansly2FAToken && (!fanslyEmail || !fanslyPassword)) || (!!fansly2FAToken && fansly2FACode.length < 5)}
+            >
+              {fanslyLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {fansly2FAToken ? 'Verify & Connect' : 'Connect Fansly'}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">Your credentials are securely encrypted and never stored locally</p>
           </div>
         </DialogContent>
       </Dialog>

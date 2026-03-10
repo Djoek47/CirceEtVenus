@@ -138,7 +138,7 @@ export default async function DashboardPage() {
 
         {/* Quick Actions & Platform Integration */}
         <div className="space-y-4">
-          <PlatformIntegrationWidget />
+          <PlatformIntegrationWidget compact />
           <QuickActions />
         </div>
       </div>

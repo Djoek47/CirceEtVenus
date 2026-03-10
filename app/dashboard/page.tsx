@@ -7,6 +7,7 @@ import { QuickActions } from '@/components/dashboard/quick-actions'
 import { AlertsWidget } from '@/components/dashboard/alerts-widget'
 import { PlatformIntegrationWidget } from '@/components/dashboard/platform-integration-widget'
 import { SocialReputationWidget } from '@/components/dashboard/social-reputation-widget'
+import { MessageActivity } from '@/components/dashboard/message-activity'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -229,12 +230,15 @@ export default async function DashboardPage() {
 
       {/* Bottom Grid */}
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-        {/* Recent Fans */}
-        <RecentFans fans={fans || []} />
+        {/* Message Activity - Active Conversations */}
+        <MessageActivity />
 
         {/* Alerts & Mentions */}
         <AlertsWidget leakAlerts={leakAlerts || []} mentions={mentions || []} />
       </div>
+      
+      {/* Recent Fans */}
+      <RecentFans fans={fans || []} />
 
       {/* Social Media Reputation */}
       <SocialReputationWidget />

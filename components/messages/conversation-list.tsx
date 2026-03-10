@@ -1,31 +1,44 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Search, Plus, Star } from 'lucide-react'
+import { Search, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Conversation, Fan } from '@/lib/types'
 
-interface ConversationWithFan extends Conversation {
-  fan: Fan | null
+interface OnlyFansConversation {
+  user: {
+    id: string
+    username: string
+    name: string
+    avatar: string
+  }
+  lastMessage: {
+    id: string
+    text: string
+    createdAt: string
+    isRead: boolean
+  }
+  unreadCount: number
 }
 
 interface ConversationListProps {
-  conversations: ConversationWithFan[]
+  conversations: OnlyFansConversation[]
   selectedId?: string
-  onSelect: (conversation: ConversationWithFan) => void
-}
-
-const platformColors = {
-  onlyfans: 'bg-[#00AFF0]/20 text-[#00AFF0]',
-  mym: 'bg-[#FF4D67]/20 text-[#FF4D67]',
-  fansly: 'bg-[#009FFF]/20 text-[#009FFF]',
+  onSelect: (conversation: OnlyFansConversation) => void
 }
 
 export function ConversationList({ conversations, selectedId, onSelect }: ConversationListProps) {
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredConversations = conversations.filter((conv) =>
+    conv.user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    conv.user.username?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   const getTimeAgo = (date: string) => {
     const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
     if (seconds < 60) return 'now'
@@ -48,66 +61,68 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
         </div>
         <div className="relative mt-2">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search conversations..." className="bg-input pl-9" />
+          <Input 
+            placeholder="Search conversations..." 
+            className="bg-input pl-9"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-y-auto p-2">
-        {conversations.length === 0 ? (
+        {filteredConversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <p className="text-sm text-muted-foreground">No conversations yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Connect platforms to sync messages</p>
+            <p className="text-sm text-muted-foreground">
+              {searchQuery ? 'No conversations found' : 'No conversations yet'}
+            </p>
+            {!searchQuery && (
+              <p className="text-xs text-muted-foreground mt-1">Messages from fans will appear here</p>
+            )}
           </div>
         ) : (
         <div className="space-y-1">
-          {conversations.map((conv) => (
+          {filteredConversations.map((conv) => (
             <button
-              key={conv.id}
+              key={conv.user.id}
               onClick={() => onSelect(conv)}
               className={cn(
                 'flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors',
-                selectedId === conv.id
+                selectedId === conv.user.id
                   ? 'bg-secondary'
                   : 'hover:bg-secondary/50'
               )}
             >
               <div className="relative">
                 <Avatar className="h-10 w-10 border border-border">
-                  <AvatarImage src={conv.fan?.avatar_url || undefined} />
+                  <AvatarImage src={conv.user.avatar} />
                   <AvatarFallback className="bg-primary/10 text-primary">
-                    {conv.fan?.display_name?.[0] || conv.fan?.platform_username?.[0]?.toUpperCase() || '?'}
+                    {conv.user.name?.[0]?.toUpperCase() || conv.user.username?.[0]?.toUpperCase() || '?'}
                   </AvatarFallback>
                 </Avatar>
-                {conv.unread_count > 0 && (
+                {conv.unreadCount > 0 && (
                   <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-                    {conv.unread_count}
+                    {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
                   </span>
                 )}
               </div>
               <div className="flex-1 overflow-hidden">
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1 font-medium">
-                    {conv.fan?.display_name || conv.fan?.platform_username || 'Unknown'}
-                    {conv.fan?.is_favorite && (
-                      <Star className="h-3 w-3 fill-chart-4 text-chart-4" />
-                    )}
+                  <span className={cn(
+                    'font-medium truncate',
+                    conv.unreadCount > 0 && 'text-foreground'
+                  )}>
+                    {conv.user.name || conv.user.username || 'Unknown'}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {conv.last_message_at ? getTimeAgo(conv.last_message_at) : ''}
+                  <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                    {conv.lastMessage?.createdAt ? getTimeAgo(conv.lastMessage.createdAt) : ''}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <Badge
-                    variant="outline"
-                    className={cn('text-[10px]', platformColors[conv.platform])}
-                  >
-                    {conv.platform.toUpperCase()}
-                  </Badge>
-                  {conv.fan?.tier === 'whale' && (
-                    <Badge variant="outline" className="text-[10px] border-primary/30 bg-primary/10 text-primary">
-                      WHALE
-                    </Badge>
-                  )}
-                </div>
+                <p className={cn(
+                  'text-sm truncate mt-0.5',
+                  conv.unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground'
+                )}>
+                  {conv.lastMessage?.text || 'Media message'}
+                </p>
               </div>
             </button>
           ))}

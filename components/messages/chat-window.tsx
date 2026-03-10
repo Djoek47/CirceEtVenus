@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -12,33 +12,64 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Send, Paperclip, DollarSign, MoreVertical, Star, Ban, User, Loader2 } from 'lucide-react'
+import { Send, Paperclip, DollarSign, MoreVertical, User, Loader2, RefreshCw } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
-import type { Conversation, Fan, Message } from '@/lib/types'
 
-interface ConversationWithFan extends Conversation {
-  fan: Fan | null
+interface OnlyFansConversation {
+  user: {
+    id: string
+    username: string
+    name: string
+    avatar: string
+  }
+  lastMessage: {
+    id: string
+    text: string
+    createdAt: string
+    isRead: boolean
+  }
+  unreadCount: number
+}
+
+interface OnlyFansMessage {
+  id: string
+  fromUser: {
+    id: string
+    username: string
+    name: string
+    avatar: string
+  }
+  text: string
+  createdAt: string
+  isRead: boolean
+  media: {
+    id: string
+    type: 'photo' | 'video'
+    url: string
+    preview: string
+  }[]
+  price: number | null
+  isPaid: boolean
 }
 
 interface ChatWindowProps {
-  conversation: ConversationWithFan | null
+  conversation: OnlyFansConversation | null
   userId: string
+  onMessageSent?: () => void
 }
 
-const tierColors = {
-  whale: 'bg-primary/20 text-primary border-primary/30',
-  regular: 'bg-chart-2/20 text-chart-2 border-chart-2/30',
-  new: 'bg-chart-4/20 text-chart-4 border-chart-4/30',
-  inactive: 'bg-muted text-muted-foreground border-border',
-}
-
-export function ChatWindow({ conversation }: ChatWindowProps) {
+export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<OnlyFansMessage[]>([])
   const [loading, setLoading] = useState(false)
-  const supabase = createClient()
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -49,18 +80,66 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
     const loadMessages = async () => {
       setLoading(true)
-      const { data } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversation.id)
-        .order('sent_at', { ascending: true })
+      setError(null)
       
-      setMessages(data || [])
-      setLoading(false)
+      try {
+        const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}`)
+        const data = await res.json()
+        
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load messages')
+        }
+        
+        setMessages(data.messages || [])
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load messages')
+      } finally {
+        setLoading(false)
+      }
     }
 
     loadMessages()
-  }, [conversation, supabase])
+  }, [conversation])
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const handleSendMessage = async () => {
+    if (!message.trim() || !conversation || sending) return
+    
+    setSending(true)
+    const messageText = message
+    setMessage('')
+    
+    try {
+      const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: messageText }),
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send message')
+      }
+      
+      // Add the sent message to the list
+      if (data.message) {
+        setMessages(prev => [...prev, data.message])
+      }
+      
+      // Notify parent to refresh conversation list
+      onMessageSent?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send message')
+      setMessage(messageText) // Restore message on error
+    } finally {
+      setSending(false)
+    }
+  }
 
   if (!conversation) {
     return (
@@ -75,7 +154,7 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
     )
   }
 
-  const fan = conversation.fan
+  const fan = conversation.user
 
   return (
     <Card className="flex flex-1 flex-col border-border bg-card">
@@ -83,31 +162,18 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
       <CardHeader className="flex flex-row items-center justify-between border-b border-border p-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={fan?.avatar_url || undefined} />
+            <AvatarImage src={fan.avatar} />
             <AvatarFallback className="bg-primary/10 text-primary">
-              {fan?.display_name?.[0] || fan?.platform_username?.[0]?.toUpperCase() || '?'}
+              {fan.name?.[0]?.toUpperCase() || fan.username?.[0]?.toUpperCase() || '?'}
             </AvatarFallback>
           </Avatar>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium">
-                {fan?.display_name || fan?.platform_username || 'Unknown'}
-              </span>
-              {fan?.is_favorite && (
-                <Star className="h-4 w-4 fill-chart-4 text-chart-4" />
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className={cn('text-xs capitalize', fan?.tier && tierColors[fan.tier])}
-              >
-                {fan?.tier || 'unknown'}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                ${fan?.total_spent?.toLocaleString() || 0} spent
+                {fan.name || fan.username || 'Unknown'}
               </span>
             </div>
+            <span className="text-xs text-muted-foreground">@{fan.username}</span>
           </div>
         </div>
         <DropdownMenu>
@@ -121,13 +187,15 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
               <User className="mr-2 h-4 w-4" />
               View Profile
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Star className="mr-2 h-4 w-4" />
-              {fan?.is_favorite ? 'Remove Favorite' : 'Add to Favorites'}
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">
-              <Ban className="mr-2 h-4 w-4" />
-              Block User
+            <DropdownMenuItem onClick={() => {
+              setLoading(true)
+              fetch(`/api/onlyfans/messages/${conversation.user.id}`)
+                .then(res => res.json())
+                .then(data => setMessages(data.messages || []))
+                .finally(() => setLoading(false))
+            }}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh Messages
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -139,58 +207,107 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        ) : error ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-2"
+              onClick={() => {
+                setError(null)
+                setLoading(true)
+                fetch(`/api/onlyfans/messages/${conversation.user.id}`)
+                  .then(res => res.json())
+                  .then(data => setMessages(data.messages || []))
+                  .catch(e => setError(e.message))
+                  .finally(() => setLoading(false))
+              }}
+            >
+              Try Again
+            </Button>
+          </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <p className="text-sm text-muted-foreground">No messages yet</p>
             <p className="text-xs text-muted-foreground">Start the conversation!</p>
           </div>
         ) : (
-        <div className="space-y-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                'flex',
-                msg.sender_type === 'creator' ? 'justify-end' : 'justify-start'
-              )}
-            >
-              <div
-                className={cn(
-                  'max-w-[70%] rounded-2xl px-4 py-2',
-                  msg.sender_type === 'creator'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-secondary-foreground'
-                )}
-              >
-                <p className="text-sm">{msg.content}</p>
-                {msg.is_ppv && msg.ppv_price && (
-                  <Badge className="mt-2 bg-chart-4/20 text-chart-4">
-                    <DollarSign className="mr-1 h-3 w-3" />
-                    PPV ${msg.ppv_price}
-                  </Badge>
-                )}
-                <p
+          <div className="space-y-4">
+            {messages.map((msg) => {
+              const isCreator = msg.fromUser.id !== conversation.user.id
+              return (
+                <div
+                  key={msg.id}
                   className={cn(
-                    'mt-1 text-xs',
-                    msg.sender_type === 'creator'
-                      ? 'text-primary-foreground/70'
-                      : 'text-muted-foreground'
+                    'flex',
+                    isCreator ? 'justify-end' : 'justify-start'
                   )}
                 >
-                  {new Date(msg.sent_at).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div
+                    className={cn(
+                      'max-w-[70%] rounded-2xl px-4 py-2',
+                      isCreator
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground'
+                    )}
+                  >
+                    {msg.media && msg.media.length > 0 && (
+                      <div className="mb-2 space-y-2">
+                        {msg.media.map((m) => (
+                          <div key={m.id} className="relative">
+                            {m.type === 'photo' ? (
+                              <img 
+                                src={m.preview || m.url} 
+                                alt="Media" 
+                                className="rounded-lg max-w-full"
+                              />
+                            ) : (
+                              <video 
+                                src={m.url} 
+                                poster={m.preview}
+                                controls 
+                                className="rounded-lg max-w-full"
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {msg.text && <p className="text-sm">{msg.text}</p>}
+                    {msg.price && !msg.isPaid && (
+                      <Badge className="mt-2 bg-chart-4/20 text-chart-4">
+                        <DollarSign className="mr-1 h-3 w-3" />
+                        PPV ${msg.price}
+                      </Badge>
+                    )}
+                    <p
+                      className={cn(
+                        'mt-1 text-xs',
+                        isCreator
+                          ? 'text-primary-foreground/70'
+                          : 'text-muted-foreground'
+                      )}
+                    >
+                      {new Date(msg.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+            <div ref={messagesEndRef} />
+          </div>
         )}
       </CardContent>
 
       {/* Message Input */}
       <div className="border-t border-border p-4">
+        {error && (
+          <p className="text-xs text-destructive mb-2">{error}</p>
+        )}
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="flex-shrink-0">
             <Paperclip className="h-5 w-5" />
@@ -200,13 +317,15 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
           </Button>
           <div className="relative flex-1">
             <Input
-              placeholder="Type or speak a message..."
+              placeholder="Type a message..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               className="bg-input pr-10"
+              disabled={sending}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && message.trim()) {
-                  setMessage('')
+                if (e.key === 'Enter' && !e.shiftKey && message.trim()) {
+                  e.preventDefault()
+                  handleSendMessage()
                 }
               }}
             />
@@ -218,8 +337,16 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
               />
             </div>
           </div>
-          <Button size="icon" disabled={!message.trim()}>
-            <Send className="h-5 w-5" />
+          <Button 
+            size="icon" 
+            disabled={!message.trim() || sending}
+            onClick={handleSendMessage}
+          >
+            {sending ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
           </Button>
         </div>
       </div>

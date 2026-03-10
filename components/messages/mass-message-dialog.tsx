@@ -83,29 +83,48 @@ export function MassMessageDialog() {
     setIsSending(true)
     setResults(null)
 
-    try {
-      const response = await fetch('/api/messages/mass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          platforms,
-          filter,
-        }),
-      })
+    const results: Record<string, { success: boolean; sent?: number; error?: string }> = {}
+    let totalSent = 0
+    let totalFailed = 0
 
-      const data = await response.json()
-      setResults(data)
-    } catch (error) {
-      setResults({
-        success: false,
-        totalSent: 0,
-        totalFailed: 0,
-        results: { error: { success: false, error: 'Failed to send' } }
-      })
-    } finally {
-      setIsSending(false)
+    // Send to each platform
+    for (const platform of platforms) {
+      try {
+        const endpoint = platform === 'onlyfans' 
+          ? '/api/onlyfans/messages/mass'
+          : `/api/${platform}/messages/mass`
+        
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: message,
+            // Map filter to targetLists if needed
+          }),
+        })
+
+        const data = await response.json()
+        
+        if (response.ok && data.success) {
+          results[platform] = { success: true, sent: data.sent || 0 }
+          totalSent += data.sent || 0
+        } else {
+          results[platform] = { success: false, error: data.error || 'Failed' }
+          totalFailed++
+        }
+      } catch (error) {
+        results[platform] = { success: false, error: 'Network error' }
+        totalFailed++
+      }
     }
+
+    setResults({
+      success: totalFailed === 0,
+      totalSent,
+      totalFailed,
+      results
+    })
+    setIsSending(false)
   }
 
   const platformConfig: Record<string, { label: string; color: string }> = {

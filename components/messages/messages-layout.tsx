@@ -1,24 +1,97 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ConversationList } from './conversation-list'
 import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
-import type { Conversation, Fan } from '@/lib/types'
+import { Button } from '@/components/ui/button'
+import { RefreshCw, Loader2 } from 'lucide-react'
 
-interface ConversationWithFan extends Conversation {
-  fan: Fan | null
+interface OnlyFansConversation {
+  user: {
+    id: string
+    username: string
+    name: string
+    avatar: string
+  }
+  lastMessage: {
+    id: string
+    text: string
+    createdAt: string
+    isRead: boolean
+  }
+  unreadCount: number
 }
 
 interface MessagesLayoutProps {
-  conversations: ConversationWithFan[]
   userId: string
 }
 
-export function MessagesLayout({ conversations, userId }: MessagesLayoutProps) {
-  const [selectedConversation, setSelectedConversation] = useState<ConversationWithFan | null>(
-    conversations[0] || null
-  )
+export function MessagesLayout({ userId }: MessagesLayoutProps) {
+  const [conversations, setConversations] = useState<OnlyFansConversation[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<OnlyFansConversation | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadConversations = useCallback(async (showRefreshing = false) => {
+    if (showRefreshing) setRefreshing(true)
+    else setLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/onlyfans/conversations')
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load conversations')
+      }
+
+      setConversations(data.conversations || [])
+      if (data.conversations?.length > 0 && !selectedConversation) {
+        setSelectedConversation(data.conversations[0])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load conversations')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [selectedConversation])
+
+  useEffect(() => {
+    loadConversations()
+  }, [loadConversations])
+
+  if (loading) {
+    return (
+      <div className="flex h-[calc(100vh-8rem)] items-center justify-center">
+        <div className="flex flex-col items-center text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+          <p className="text-sm text-muted-foreground">Loading messages...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-[calc(100vh-8rem)] items-center justify-center">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-4 rounded-full bg-destructive/10 p-4">
+            <svg className="h-8 w-8 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium">Failed to Load Messages</h3>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">{error}</p>
+          <Button onClick={() => loadConversations()} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   if (conversations.length === 0) {
     return (
@@ -31,8 +104,12 @@ export function MessagesLayout({ conversations, userId }: MessagesLayoutProps) {
           </div>
           <h3 className="text-lg font-medium">No Messages Yet</h3>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Connect your platforms to import your conversations and start chatting with fans.
+            Your OnlyFans messages will appear here once fans start messaging you.
           </p>
+          <Button onClick={() => loadConversations(true)} className="mt-4" variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </div>
       </div>
     )
@@ -48,7 +125,17 @@ export function MessagesLayout({ conversations, userId }: MessagesLayoutProps) {
             {conversations.length} conversations
           </p>
         </div>
-        <MassMessageDialog />
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => loadConversations(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </Button>
+          <MassMessageDialog />
+        </div>
       </div>
 
       {/* Messages Content */}
@@ -56,12 +143,16 @@ export function MessagesLayout({ conversations, userId }: MessagesLayoutProps) {
         {/* Conversation List */}
         <ConversationList
           conversations={conversations}
-          selectedId={selectedConversation?.id}
+          selectedId={selectedConversation?.user.id}
           onSelect={(conv) => setSelectedConversation(conv)}
         />
 
         {/* Chat Window */}
-        <ChatWindow conversation={selectedConversation} userId={userId} />
+        <ChatWindow 
+          conversation={selectedConversation} 
+          userId={userId}
+          onMessageSent={() => loadConversations(true)}
+        />
       </div>
     </div>
   )

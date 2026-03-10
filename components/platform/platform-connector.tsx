@@ -483,35 +483,52 @@ export function PlatformConnector() {
                   </div>
 
                   {connected ? (
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex flex-col gap-2 pt-2">
+                      {/* Connected indicator button */}
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => handleSync(platform.id)}
-                        disabled={syncing === platform.id}
+                        className="w-full cursor-default"
+                        style={{
+                          background: `linear-gradient(135deg, #22c55e, #16a34a)`,
+                          color: 'white',
+                          border: 'none',
+                        }}
+                        disabled
                       >
-                        {syncing === platform.id ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        Sync Data
+                        <Check className="mr-2 h-4 w-4" />
+                        Connected
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDisconnect(platform.id)}
-                        disabled={disconnecting === platform.id}
-                        title="Disconnect"
-                      >
-                        {disconnecting === platform.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-                      </Button>
+                      {/* Sync + Disconnect row */}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => handleSync(platform.id)}
+                          disabled={syncing === platform.id}
+                        >
+                          {syncing === platform.id ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                          )}
+                          Sync Data
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDisconnect(platform.id)}
+                          disabled={disconnecting === platform.id}
+                          title="Disconnect"
+                        >
+                          {disconnecting === platform.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <X className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <Button

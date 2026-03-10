@@ -556,18 +556,12 @@ export function PlatformIntegrationWidget() {
                 {platform.connected ? (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="h-8 px-3 text-xs gap-1.5 border-green-500/30 text-green-600 hover:bg-green-500/10"
-                    onClick={() => handleSync(platform.id)}
-                    disabled={syncing === platform.id}
-                    title="Sync data"
+                    className="h-8 px-3 text-xs gap-1.5 cursor-default"
+                    style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', border: 'none' }}
+                    disabled
                   >
-                    {syncing === platform.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    )}
-                    Sync
+                    <Check className="h-3.5 w-3.5" />
+                    Connected
                   </Button>
                 ) : (
                   <Button 

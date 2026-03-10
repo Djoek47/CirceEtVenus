@@ -90,11 +90,10 @@ class OnlyFansAPI {
     this.accountId = options?.accountId || null
   }
 
-  // ============ DIRECT AUTHENTICATION (bypassing SDK modal) ============
+  // ============ AUTHENTICATION ============
 
   /**
    * Start authentication - POST /api/authenticate
-   * Returns attempt_id and polling_url
    */
   async startAuthentication(email: string, password: string, proxyCountry: string = 'us'): Promise<{
     success: boolean
@@ -114,8 +113,6 @@ class OnlyFansAPI {
 
       const data = await response.json()
       
-      // The API returns attempt_id and polling_url even on 400 status when auth is in progress
-      // This is not an error - it means we need to poll
       if (data.attempt_id || data.polling_url) {
         return {
           success: true,
@@ -163,12 +160,10 @@ class OnlyFansAPI {
 
       const data = await response.json()
 
-      // Check for 2FA requirement
       if (data.twoFactorPending) {
         return { status: '2fa_required', message: 'Please enter your 2FA code' }
       }
 
-      // API returns account object with id field on success (per docs)
       const accountId = data.account?.id || data.accountId || data.account_id || data.id
       const username = data.account?.onlyfans_username || data.username || data.onlyfans_username
       
@@ -180,12 +175,10 @@ class OnlyFansAPI {
         }
       }
 
-      // Check for explicit error states
       if (data.error || data.failed) {
         return { status: 'failed', message: data.message || data.error }
       }
 
-      // Still processing
       return { status: 'pending', message: data.message || 'Processing...' }
     } catch (error) {
       return { status: 'failed', message: error instanceof Error ? error.message : 'Poll failed' }
@@ -212,8 +205,6 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
-
-      // API returns account object with id field on success (per docs)
       const accountId = data.account?.id || data.accountId || data.account_id || data.id
       const username = data.account?.onlyfans_username || data.username || data.onlyfans_username
 
@@ -233,7 +224,6 @@ class OnlyFansAPI {
 
   /**
    * List all connected accounts - GET /api/accounts
-   * Useful to check if authentication succeeded even if polling missed it
    */
   async listAccounts(): Promise<{
     success: boolean
@@ -269,8 +259,7 @@ class OnlyFansAPI {
   }
 
   /**
-   * Delete/disconnect an account from the API - DELETE /api/accounts/{account_id}
-   * This removes the account from the OnlyFans API so it can be reconnected
+   * Delete/disconnect an account - DELETE /api/accounts/{account_id}
    */
   async deleteAccount(accountId: string): Promise<{
     success: boolean
@@ -304,11 +293,14 @@ class OnlyFansAPI {
       ...(options.headers as Record<string, string> || {}),
     }
 
+    // Use accountId in the URL path as per API docs: /api/{account}/endpoint
+    let url = `${ONLYFANS_API_BASE}`
     if (this.accountId) {
-      headers['X-Account-ID'] = this.accountId
+      url += `/${this.accountId}`
     }
+    url += endpoint
 
-    const response = await fetch(`${ONLYFANS_API_BASE}${endpoint}`, {
+    const response = await fetch(url, {
       ...options,
       headers,
     })
@@ -321,77 +313,12 @@ class OnlyFansAPI {
     return response.json()
   }
 
-  // Set the account ID for subsequent requests
   setAccountId(accountId: string) {
     this.accountId = accountId
   }
 
-  // ============ AUTHENTICATION ============
+  // ============ ACCOUNT ============
 
-  /**
-   * Start authentication process for an OnlyFans account
-   * Returns a polling URL to check authentication status
-   */
-  async startAuthentication(email: string, password: string, proxyCountry?: string): Promise<{ 
-    message: string
-    polling_url: string
-    auth_id: string 
-  }> {
-    return this.request('/authenticate', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        email, 
-        password,
-        proxyCountry: proxyCountry || 'us'
-      }),
-    })
-  }
-
-  /**
-   * Poll authentication status
-   */
-  async pollAuthStatus(authId: string): Promise<{
-    status: 'pending' | 'requires_2fa' | 'requires_face_otp' | 'completed' | 'failed'
-    account_id?: string
-    message?: string
-  }> {
-    return this.request(`/authenticate/${authId}`)
-  }
-
-  /**
-   * Submit 2FA code
-   */
-  async submit2FA(authId: string, code: string): Promise<{
-    status: string
-    account_id?: string
-  }> {
-    return this.request(`/authenticate/${authId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ code }),
-    })
-  }
-
-  /**
-   * Create a client session for embedded auth (recommended approach)
-   */
-  async createClientSession(displayName: string, proxyCountry?: string): Promise<{
-    token: string
-    display_name: string
-  }> {
-    return this.request('/client-sessions', {
-      method: 'POST',
-      body: JSON.stringify({
-        display_name: displayName,
-        proxyCountry: proxyCountry || 'us'
-      }),
-    })
-  }
-
-  // ============ ACCOUNTS ============
-
-  /**
-   * Get connected account info
-   */
   async getAccount(): Promise<{
     id: string
     username: string
@@ -403,18 +330,12 @@ class OnlyFansAPI {
     return this.request('/account')
   }
 
-  /**
-   * Get account statistics
-   */
   async getStats(): Promise<Stats> {
-    return this.request('/account/stats')
+    return this.request('/statistics')
   }
 
   // ============ FANS ============
 
-  /**
-   * Get list of fans/subscribers
-   */
   async getFans(params?: {
     status?: 'active' | 'expired' | 'all'
     limit?: number
@@ -430,9 +351,6 @@ class OnlyFansAPI {
     return this.request(`/fans?${query.toString()}`)
   }
 
-  /**
-   * Get single fan details
-   */
   async getFan(fanId: string): Promise<Fan & { 
     messages: number
     totalTips: number
@@ -441,22 +359,21 @@ class OnlyFansAPI {
     return this.request(`/fans/${fanId}`)
   }
 
-  /**
-   * Search fans
-   */
   async searchFans(query: string): Promise<{ fans: Fan[] }> {
     return this.request(`/fans/search?q=${encodeURIComponent(query)}`)
   }
 
-  // ============ MESSAGES ============
+  // ============ CHATS/MESSAGES ============
 
   /**
-   * Get conversations
+   * Get list of chats (conversations)
+   * Endpoint: GET /api/{account}/chats
    */
   async getConversations(params?: {
     limit?: number
     offset?: number
-    unreadOnly?: boolean
+    order?: 'recent' | 'old'
+    query?: string
   }): Promise<{ 
     conversations: {
       user: Fan
@@ -465,63 +382,84 @@ class OnlyFansAPI {
     }[]
     total: number 
   }> {
-    const query = new URLSearchParams()
-    if (params?.limit) query.set('limit', params.limit.toString())
-    if (params?.offset) query.set('offset', params.offset.toString())
-    if (params?.unreadOnly) query.set('unreadOnly', 'true')
+    const queryParams = new URLSearchParams()
+    if (params?.limit) queryParams.set('limit', params.limit.toString())
+    if (params?.offset) queryParams.set('offset', params.offset.toString())
+    if (params?.order) queryParams.set('order', params.order)
+    if (params?.query) queryParams.set('query', params.query)
     
-    return this.request(`/messages?${query.toString()}`)
+    const response = await this.request<{ data: any[] }>(`/chats?${queryParams.toString()}`)
+    
+    const chats = response.data || []
+    return {
+      conversations: chats.map((chat: any) => ({
+        user: chat.fan || chat.withUser,
+        lastMessage: chat.lastMessage,
+        unreadCount: chat.unreadMessagesCount || 0,
+      })),
+      total: chats.length,
+    }
   }
 
   /**
-   * Get messages with a specific user
+   * Get messages from a specific chat
+   * Endpoint: GET /api/{account}/chats/{chat_id}/messages
    */
-  async getMessages(userId: string, params?: {
+  async getMessages(chatId: string, params?: {
     limit?: number
-    before?: string
+    id?: string
+    order?: 'desc' | 'asc'
   }): Promise<{ messages: Message[] }> {
-    const query = new URLSearchParams()
-    if (params?.limit) query.set('limit', params.limit.toString())
-    if (params?.before) query.set('before', params.before)
+    const queryParams = new URLSearchParams()
+    if (params?.limit) queryParams.set('limit', params.limit.toString())
+    if (params?.id) queryParams.set('id', params.id)
+    if (params?.order) queryParams.set('order', params.order)
     
-    return this.request(`/messages/${userId}?${query.toString()}`)
+    const response = await this.request<{ data: any[] }>(`/chats/${chatId}/messages?${queryParams.toString()}`)
+    return { messages: response.data || [] }
   }
 
   /**
-   * Send a message
+   * Send a message to a specific chat
+   * Endpoint: POST /api/{account}/chats/{chat_id}/messages
    */
-  async sendMessage(userId: string, data: {
-    text?: string
-    mediaIds?: string[]
+  async sendMessage(chatId: string, data: {
+    text: string
+    lockedText?: boolean
     price?: number
+    mediaFiles?: string[]
   }): Promise<Message> {
-    return this.request(`/messages/${userId}`, {
+    const response = await this.request<{ data: Message }>(`/chats/${chatId}/messages`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
+    return response.data
   }
 
   /**
    * Send mass message
+   * Endpoint: POST /api/{account}/mass-messaging
    */
   async sendMassMessage(data: {
     text: string
-    mediaIds?: string[]
+    userLists?: string[]
+    userIds?: string[]
     price?: number
-    targetLists?: string[]
-    excludeLists?: string[]
-  }): Promise<{ sent: number; failed: number }> {
-    return this.request('/messages/mass', {
+    mediaFiles?: string[]
+  }): Promise<{ sent: number; failed: number; id?: number }> {
+    const response = await this.request<{ data: any }>('/mass-messaging', {
       method: 'POST',
       body: JSON.stringify(data),
     })
+    return { 
+      sent: response.data?.total || 0, 
+      failed: 0,
+      id: response.data?.id 
+    }
   }
 
   // ============ EARNINGS ============
 
-  /**
-   * Get earnings summary
-   */
   async getEarnings(params?: {
     startDate?: string
     endDate?: string
@@ -530,12 +468,9 @@ class OnlyFansAPI {
     if (params?.startDate) query.set('startDate', params.startDate)
     if (params?.endDate) query.set('endDate', params.endDate)
     
-    return this.request(`/earnings?${query.toString()}`)
+    return this.request(`/statistics/earnings?${query.toString()}`)
   }
 
-  /**
-   * Get earnings chart data
-   */
   async getEarningsChart(params?: {
     period?: 'day' | 'week' | 'month'
     days?: number
@@ -544,12 +479,9 @@ class OnlyFansAPI {
     if (params?.period) query.set('period', params.period)
     if (params?.days) query.set('days', params.days.toString())
     
-    return this.request(`/earnings/chart?${query.toString()}`)
+    return this.request(`/statistics/earnings/chart?${query.toString()}`)
   }
 
-  /**
-   * Get transactions
-   */
   async getTransactions(params?: {
     type?: 'subscription' | 'tip' | 'message' | 'post'
     limit?: number
@@ -575,9 +507,6 @@ class OnlyFansAPI {
 
   // ============ POSTS ============
 
-  /**
-   * Get posts
-   */
   async getPosts(params?: {
     limit?: number
     offset?: number
@@ -601,9 +530,6 @@ class OnlyFansAPI {
     return this.request(`/posts?${query.toString()}`)
   }
 
-  /**
-   * Create a post
-   */
   async createPost(data: {
     text: string
     mediaIds?: string[]
@@ -632,18 +558,20 @@ class OnlyFansAPI {
 
   // ============ MEDIA ============
 
-  /**
-   * Upload media to vault
-   */
   async uploadMedia(file: File): Promise<{ id: string; url: string; type: string }> {
     const formData = new FormData()
     formData.append('file', file)
     
-    const response = await fetch(`${ONLYFANS_API_BASE}/media/upload`, {
+    let url = `${ONLYFANS_API_BASE}`
+    if (this.accountId) {
+      url += `/${this.accountId}`
+    }
+    url += '/media/upload'
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
-        ...(this.accountId ? { 'X-Account-ID': this.accountId } : {}),
       },
       body: formData,
     })
@@ -655,34 +583,29 @@ class OnlyFansAPI {
     return response.json()
   }
 
-  // ============ WEBHOOKS ============
+  // ============ CLIENT SESSIONS ============
 
-  /**
-   * Register a webhook
-   */
-  async registerWebhook(data: {
-    url: string
-    events: ('message' | 'subscription' | 'tip' | 'post')[]
-    secret?: string
-  }): Promise<{ id: string; secret: string }> {
-    return this.request('/webhooks', {
+  async createClientSession(displayName: string, proxyCountry?: string): Promise<{
+    token: string
+    display_name: string
+  }> {
+    const response = await fetch(`${ONLYFANS_API_BASE}/client-sessions`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        display_name: displayName,
+        proxyCountry: proxyCountry || 'us'
+      }),
     })
-  }
 
-  /**
-   * List webhooks
-   */
-  async listWebhooks(): Promise<{ webhooks: { id: string; url: string; events: string[] }[] }> {
-    return this.request('/webhooks')
-  }
+    if (!response.ok) {
+      throw new Error('Failed to create client session')
+    }
 
-  /**
-   * Delete webhook
-   */
-  async deleteWebhook(webhookId: string): Promise<void> {
-    await this.request(`/webhooks/${webhookId}`, { method: 'DELETE' })
+    return response.json()
   }
 }
 

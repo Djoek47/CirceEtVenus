@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -63,7 +63,16 @@ export default function SettingsPage() {
     tiktok: false,
   })
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { theme, setTheme } = useTheme()
+
+  // Handle tab from URL query param
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['profile', 'notifications', 'security', 'billing', 'integrations', 'data', 'preferences'].includes(tabParam)) {
+      setActiveTab(tabParam as SettingsTab)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     async function loadUser() {

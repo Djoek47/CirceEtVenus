@@ -30,7 +30,8 @@ export function AnalyticsCharts({ analytics, hasConnections = false }: Analytics
       date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       revenue: a.revenue || 0,
       totalFans: a.total_fans || 0,
-      messages: a.messages_received || 0,
+      // Engagement should reflect total activity, not just unread/new messages
+      messages: (a.messages_received || 0) + (a.messages_sent || 0),
       newFans: a.new_fans || 0,
     }))
   } else {

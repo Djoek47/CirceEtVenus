@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
     let fansData = { fans: [] as any[], total: 0 }
     let conversationsData = { conversations: [] as any[] }
     let chartData = { data: [] as any[] }
+    let accountProfile: any = null
 
     // First, fetch fresh account ID for API calls
     const freshAccountsResult = await api.listAccounts()
@@ -104,12 +105,13 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const [statsRes, earningsRes, fansRes, convoRes, chartRes] = await Promise.all([
+      const [statsRes, earningsRes, fansRes, convoRes, chartRes, accountRes] = await Promise.all([
         api.getStats().catch((e) => { console.log('[v0] Stats error:', e.message); return null }),
         api.getEarnings().catch((e) => { console.log('[v0] Earnings error:', e.message); return null }),
         api.getFans({ status: 'all', limit: 500 }).catch((e) => { console.log('[v0] Fans error:', e.message); return null }),
         api.getConversations({ limit: 100 }).catch((e) => { console.log('[v0] Conversations error:', e.message); return null }),
         api.getEarningsChart({ days: 30 }).catch((e) => { console.log('[v0] Chart error:', e.message); return null }),
+        api.getAccount().catch((e) => { console.log('[v0] Account error:', e.message); return null }),
       ])
       
       if (statsRes) stats = statsRes
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest) {
         console.log('[v0] Sync - Conversations count:', convoRes.conversations?.length || 0)
       }
       if (chartRes) chartData = chartRes
+      if (accountRes) accountProfile = accountRes as any
     } catch (e) {
       console.log('[v0] Sync - API fetch error:', e)
       // API fetch failed, will use userData fallback
@@ -160,6 +163,8 @@ export async function POST(request: NextRequest) {
       stats.fans.total ||
       fansData.total ||
       (Array.isArray(fansData.fans) ? fansData.fans.length : 0) ||
+      accountProfile?.subscribersCount ||
+      accountProfile?.fansCount ||
       userData.subscribersCount ||
       0
 

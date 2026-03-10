@@ -27,15 +27,16 @@ export async function POST(request: NextRequest) {
 
     const api = createOnlyFansAPI(connection.access_token)
 
-    // Fetch all data
-    const [stats, earningsData, fansData, conversationsData] = await Promise.all([
+    // Fetch all data including historical chart data
+    const [stats, earningsData, fansData, conversationsData, chartData] = await Promise.all([
       api.getStats(),
       api.getEarnings(),
       api.getFans({ status: 'all', limit: 500 }),
       api.getConversations({ limit: 100 }),
+      api.getEarningsChart({ days: 30 }),
     ])
 
-    // Store analytics snapshot
+    // Store today's analytics snapshot
     const today = new Date().toISOString().split('T')[0]
     await supabase.from('analytics_snapshots').upsert({
       user_id: user.id,
@@ -44,12 +45,31 @@ export async function POST(request: NextRequest) {
       total_fans: stats.fans.total,
       new_fans: stats.fans.new,
       churned_fans: stats.fans.expired,
-      revenue: earningsData.total,
+      revenue: stats.earnings?.today || earningsData.total,
       messages_received: conversationsData.conversations.reduce((sum, c) => sum + c.unreadCount, 0),
       messages_sent: 0,
     }, {
       onConflict: 'user_id,platform,date'
     })
+
+    // Store historical chart data (last 30 days)
+    if (chartData.data && chartData.data.length > 0) {
+      const chartSnapshots = chartData.data.map((point) => ({
+        user_id: user.id,
+        platform: 'onlyfans',
+        date: point.date,
+        revenue: point.amount,
+        total_fans: stats.fans.total, // Use current total for historical records
+        new_fans: 0,
+        churned_fans: 0,
+        messages_received: 0,
+        messages_sent: 0,
+      }))
+
+      await supabase.from('analytics_snapshots').upsert(chartSnapshots, {
+        onConflict: 'user_id,platform,date'
+      })
+    }
 
     // Sync fans
     let synced = 0

@@ -150,9 +150,18 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       const data = await response.json()
       
       if (data.connected && data.newlySynced) {
-        // New account was synced from OnlyFans API - reload connections
+        // New account was synced from OnlyFans API - reload connections and sync data
         await loadConnections()
-        setSuccess(`OnlyFans connected as @${data.username || 'user'}!`)
+        setSuccess(`OnlyFans connected as @${data.username || 'user'}! Syncing data...`)
+        
+        // Automatically sync data from the newly connected account
+        try {
+          await fetch('/api/onlyfans/sync', { method: 'POST' })
+          setSuccess(`OnlyFans synced! Your revenue data is now available.`)
+        } catch {
+          setSuccess(`OnlyFans connected! Click Sync to import your data.`)
+        }
+        
         setTimeout(() => setSuccess(null), 5000)
       }
     } catch {

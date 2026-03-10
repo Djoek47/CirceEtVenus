@@ -147,9 +147,13 @@ export async function POST(request: NextRequest) {
 
     // No attempt_id - check if this is an "already connected" error or any auth issue
     // In either case, try to fetch existing accounts first
+    console.log('[v0] OnlyFans no attempt_id, fetching existing accounts...')
     const accountsResult = await api.listAccounts()
+    console.log('[v0] OnlyFans listAccounts result:', JSON.stringify(accountsResult))
+    
     if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
       const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+      console.log('[v0] OnlyFans saving account to database:', account.id, account.onlyfans_username)
       
       // Save connection to our database
       const { error: dbError } = await supabase
@@ -166,6 +170,8 @@ export async function POST(request: NextRequest) {
           onConflict: 'user_id,platform'
         })
 
+      console.log('[v0] OnlyFans database upsert result:', dbError ? dbError.message : 'success')
+      
       if (!dbError) {
         return NextResponse.json({ 
           success: true, 

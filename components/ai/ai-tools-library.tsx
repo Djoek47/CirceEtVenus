@@ -36,7 +36,6 @@ import {
   Leaf,
   Compass,
   Sun,
-  Heart,
 } from 'lucide-react'
 import { ALL_TOOLS_META, type AIToolCategory } from '@/lib/ai-tools-data'
 import { createClient } from '@/lib/supabase/client'

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { CirceAssistant } from '@/components/ai/circe-assistant'
 import { VenusAssistant } from '@/components/ai/venus-assistant'
+import { FlirtAssistant } from '@/components/ai/flirt-assistant'
 import { CosmicCalendar } from '@/components/content/cosmic-calendar'
 import { AIToolsSelector } from '@/components/ai/ai-tools-selector'
 import { AIChatterWorkspace } from '@/components/ai/ai-chatter-workspace'
@@ -28,6 +29,7 @@ export default function AIStudioPage() {
 
     if (ai === 'circe') return 'circe'
     if (ai === 'venus') return 'venus'
+     if (ai === 'flirt') return 'flirt'
 
     if (tab === 'cosmic') return 'cosmic'
     if (tab === 'tools') return 'tools'
@@ -166,6 +168,10 @@ export default function AIStudioPage() {
             <Moon className="h-4 w-4" />
             <span className="hidden sm:inline">Circe</span>
           </TabsTrigger>
+          <TabsTrigger value="flirt" className="gap-2 border border-border bg-card data-[state=active]:border-pink-500/50 data-[state=active]:bg-pink-500/20 data-[state=active]:text-pink-500 sm:border-0 sm:bg-transparent">
+            <Heart className="h-4 w-4" />
+            <span className="hidden sm:inline">Flirt</span>
+          </TabsTrigger>
           <TabsTrigger value="venus" className="gap-2 border border-border bg-card data-[state=active]:border-amber-500/50 data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-500 dark:data-[state=active]:text-amber-400 sm:border-0 sm:bg-transparent">
             <Sun className="h-4 w-4" />
             <span className="hidden sm:inline">Venus</span>
@@ -229,6 +235,47 @@ export default function AIStudioPage() {
                   variant="ghost"
                 >
                   Consult Circe
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Flirt Card */}
+            <Card className="overflow-hidden border-pink-500/40 bg-gradient-to-br from-pink-500/10 via-rose-500/5 to-transparent">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-pink-500/20 p-3">
+                    <Heart className="h-6 w-6 text-pink-400" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-pink-100">Flirt Mode</CardTitle>
+                    <CardDescription>Pure teasing & seduction</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  When you just want lines that flirt, tease, and seduce – without talking strategy,
+                  business, or retention. Dial the intensity and let Flirt handle the words.
+                </p>
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-pink-200">Perfect for:</h4>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <Heart className="h-4 w-4 text-pink-300" />
+                      <span>Turning dry fan messages into playful banter</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-pink-300" />
+                      <span>Keeping late-night chats spicy but on-brand</span>
+                    </li>
+                  </ul>
+                </div>
+                <Button
+                  onClick={() => setActiveTab('flirt')}
+                  className="w-full bg-pink-500/20 text-pink-200 hover:bg-pink-500/30"
+                  variant="ghost"
+                >
+                  Open Flirt Mode
                 </Button>
               </CardContent>
             </Card>
@@ -471,6 +518,11 @@ export default function AIStudioPage() {
         {/* Circe Tab */}
         <TabsContent value="circe">
           <CirceAssistant />
+        </TabsContent>
+
+        {/* Flirt Tab */}
+        <TabsContent value="flirt">
+          <FlirtAssistant />
         </TabsContent>
 
         {/* Venus Tab */}

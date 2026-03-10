@@ -362,9 +362,20 @@ export default function AIToolsPage() {
             used: data.ai_credits_used ?? 0,
             limit: data.ai_credits_limit ?? 100,
           })
-          const planId = (data as any).plan_id || (data as any).plan
-          if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
+          const rawPlanId = (data as any).plan_id as string | null | undefined
+          const rawPlanName = (data as any).plan as string | null | undefined
+          const normalizedPlanId = rawPlanId?.toLowerCase() || rawPlanName?.toLowerCase() || null
+
+          const isKnownProPlan =
+            !!normalizedPlanId &&
+            ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId)
+
+          const hasUnlimitedCredits = (data.ai_credits_limit ?? 0) >= 999999
+
+          if (isKnownProPlan || hasUnlimitedCredits) {
             setIsPro(true)
+          } else {
+            setIsPro(false)
           }
         } else {
           setCredits({ used: 0, limit: 100 })

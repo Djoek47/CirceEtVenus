@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     // Check subscription for Pro / Grok access
     const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('plan_id, plan')
+      .select('plan_id, plan, ai_credits_used')
       .eq('user_id', user.id)
       .maybeSingle()
 
@@ -77,6 +77,18 @@ export async function POST(req: NextRequest) {
       result = await generateMessageSuggestionsWithGrok(xaiKey, ctx)
     } else {
       result = await generateMessageSuggestionsWithOpenAI(ctx)
+    }
+
+    // Count one AI credit for this suggestion run (best effort)
+    if (subscription) {
+      try {
+        await supabase
+          .from('subscriptions')
+          .update({ ai_credits_used: (subscription.ai_credits_used || 0) + 1 })
+          .eq('user_id', user.id)
+      } catch {
+        // ignore credit errors
+      }
     }
 
     return NextResponse.json(result)

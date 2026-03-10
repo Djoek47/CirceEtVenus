@@ -1,4 +1,5 @@
 import { streamText, convertToModelMessages, UIMessage } from 'ai'
+import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
 
@@ -42,6 +43,31 @@ export async function POST(req: Request) {
     system: VENUS_SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages),
   })
+
+  // Best-effort AI credit accounting for Venus chat
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('ai_credits_used')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (subscription) {
+        await supabase
+          .from('subscriptions')
+          .update({ ai_credits_used: (subscription.ai_credits_used || 0) + 1 })
+          .eq('user_id', user.id)
+      }
+    }
+  } catch {
+    // ignore credit errors
+  }
 
   return result.toUIMessageStreamResponse()
 }

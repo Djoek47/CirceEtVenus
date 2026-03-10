@@ -239,6 +239,30 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
     .update({ last_activity_at: new Date().toISOString() })
     .eq('user_id', connection.user_id)
     .eq('platform_fan_id', data.message.fromUser.id)
+
+  // Create an in-app notification for the new message
+  const displayName =
+    data.message.fromUser.name ||
+    (data.message.fromUser.username ? `@${data.message.fromUser.username}` : 'a fan')
+
+  const rawText = data.message.text || ''
+  const trimmedText = rawText.trim()
+  const maxLength = 140
+  const preview =
+    trimmedText.length === 0
+      ? 'Sent you a new message'
+      : trimmedText.length > maxLength
+        ? trimmedText.slice(0, maxLength - 1) + '…'
+        : trimmedText
+
+  await supabase.from('notifications').insert({
+    user_id: connection.user_id,
+    type: 'message',
+    title: `New message from ${displayName}`,
+    description: preview,
+    link: `/dashboard/messages?fanId=${encodeURIComponent(data.message.fromUser.id)}`,
+    read: false,
+  })
 }
 
 // Handle tip

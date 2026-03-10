@@ -150,8 +150,12 @@ export function BillingSection({ userId, userEmail }: BillingSectionProps) {
   const aiCreditsLimit = subData?.ai_credits_limit || 100
   const storageUsedGB = (subData?.storage_used_mb || 0) / 1000
   const storageLimitGB = (subData?.storage_limit_mb || 5000) / 1000
-  const periodEnd = subData?.current_period_end ? new Date(subData.current_period_end) : null
-  const daysRemaining = periodEnd ? Math.max(0, Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 14
+  const dbPeriodEnd = subData?.current_period_end ? new Date(subData.current_period_end) : null
+  const statusPeriodEnd = subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null
+  const effectivePeriodEnd = dbPeriodEnd || statusPeriodEnd
+  const daysRemaining = effectivePeriodEnd
+    ? Math.max(0, Math.ceil((effectivePeriodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 14
 
   const getPlanIcon = (planId: string) => {
     switch (planId) {

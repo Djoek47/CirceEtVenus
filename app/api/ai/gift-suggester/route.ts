@@ -1,5 +1,6 @@
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 30
 
@@ -48,6 +49,31 @@ Provide personalized suggestions that will strengthen the relationship.`,
       },
     ],
   })
+
+  // Count AI credit for this gift strategy run
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user) {
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('ai_credits_used')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (subscription) {
+        await supabase
+          .from('subscriptions')
+          .update({ ai_credits_used: (subscription.ai_credits_used || 0) + 1 })
+          .eq('user_id', user.id)
+      }
+    }
+  } catch {
+    // ignore credit errors
+  }
 
   return Response.json(output)
 }

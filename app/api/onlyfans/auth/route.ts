@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-// GET: Return the OnlyFans API console URL
-// The platform connector opens the console directly, this is just a fallback
+// GET: Return the OnlyFans API console URL for account connection
+// Users connect their OF account at app.onlyfansapi.com, then sync from here
 export async function GET() {
   try {
     const supabase = await createClient()

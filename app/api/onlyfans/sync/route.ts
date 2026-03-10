@@ -96,21 +96,32 @@ export async function POST(request: NextRequest) {
     let conversationsData = { conversations: [] as any[] }
     let chartData = { data: [] as any[] }
 
+    // First, fetch fresh account ID for API calls
+    const freshAccountsResult = await api.listAccounts()
+    if (freshAccountsResult.success && freshAccountsResult.accounts && freshAccountsResult.accounts.length > 0) {
+      const freshAccount = freshAccountsResult.accounts[freshAccountsResult.accounts.length - 1]
+      api.setAccountId(freshAccount.id)
+    }
+
     try {
       const [statsRes, earningsRes, fansRes, convoRes, chartRes] = await Promise.all([
-        api.getStats().catch(() => null),
-        api.getEarnings().catch(() => null),
-        api.getFans({ status: 'all', limit: 500 }).catch(() => null),
-        api.getConversations({ limit: 100 }).catch(() => null),
-        api.getEarningsChart({ days: 30 }).catch(() => null),
+        api.getStats().catch((e) => { console.log('[v0] Stats error:', e.message); return null }),
+        api.getEarnings().catch((e) => { console.log('[v0] Earnings error:', e.message); return null }),
+        api.getFans({ status: 'all', limit: 500 }).catch((e) => { console.log('[v0] Fans error:', e.message); return null }),
+        api.getConversations({ limit: 100 }).catch((e) => { console.log('[v0] Conversations error:', e.message); return null }),
+        api.getEarningsChart({ days: 30 }).catch((e) => { console.log('[v0] Chart error:', e.message); return null }),
       ])
       
       if (statsRes) stats = statsRes
       if (earningsRes) earningsData = earningsRes
       if (fansRes) fansData = fansRes
-      if (convoRes) conversationsData = convoRes
+      if (convoRes) {
+        conversationsData = convoRes
+        console.log('[v0] Sync - Conversations count:', convoRes.conversations?.length || 0)
+      }
       if (chartRes) chartData = chartRes
-    } catch {
+    } catch (e) {
+      console.log('[v0] Sync - API fetch error:', e)
       // API fetch failed, will use userData fallback
     }
 
@@ -139,6 +150,14 @@ export async function POST(request: NextRequest) {
       .eq('platform', 'onlyfans')
       .eq('date', today)
     
+    // Calculate message stats from conversations
+    const conversations = conversationsData.conversations || []
+    const unreadMessages = conversations.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0)
+    const totalConversations = conversations.length
+    
+    // Use total conversations as a proxy for message activity
+    // messages_received = unread count (new messages waiting)
+    // messages_sent = total active conversations (as we can send to all of them)
     const snapshotData = {
       user_id: user.id,
       platform: 'onlyfans',
@@ -147,9 +166,11 @@ export async function POST(request: NextRequest) {
       new_fans: stats.fans.new || 0,
       churned_fans: stats.fans.expired || 0,
       revenue: stats.earnings?.today || earningsData.total || 0,
-      messages_received: conversationsData.conversations?.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0) || 0,
-      messages_sent: 0,
+      messages_received: unreadMessages,
+      messages_sent: totalConversations,
     }
+    
+    console.log('[v0] Sync - Message stats:', { unreadMessages, totalConversations })
     
     console.log('[v0] Sync - Inserting snapshot:', snapshotData)
     

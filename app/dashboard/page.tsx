@@ -11,12 +11,80 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Sparkles, Moon, Sun, Star } from 'lucide-react'
+import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return null
+
+  // Auto-sync: Check for OnlyFans accounts and ensure we have data
+  try {
+    const api = createOnlyFansAPI()
+    const accountsResult = await api.listAccounts()
+    
+    if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
+      const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+      const userData = (account as any)?.onlyfans_user_data || {}
+      
+      // Check if we have a connection
+      const { data: existingConn } = await supabase
+        .from('platform_connections')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('platform', 'onlyfans')
+        .eq('is_connected', true)
+        .single()
+      
+      if (!existingConn) {
+        // Save the connection
+        await supabase
+          .from('platform_connections')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('platform', 'onlyfans')
+        
+        await supabase
+          .from('platform_connections')
+          .insert({
+            user_id: user.id,
+            platform: 'onlyfans',
+            platform_username: account.onlyfans_username || 'Connected',
+            is_connected: true,
+            access_token: account.id,
+            last_sync_at: new Date().toISOString(),
+          })
+      }
+      
+      // Check if we have analytics for today
+      const today = new Date().toISOString().split('T')[0]
+      const { data: todayAnalytics } = await supabase
+        .from('analytics_snapshots')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('platform', 'onlyfans')
+        .eq('date', today)
+        .single()
+      
+      if (!todayAnalytics) {
+        // Insert today's analytics
+        await supabase.from('analytics_snapshots').insert({
+          user_id: user.id,
+          platform: 'onlyfans',
+          date: today,
+          total_fans: userData.subscribesCount || 0,
+          new_fans: 0,
+          churned_fans: 0,
+          revenue: 0,
+          messages_received: 0,
+          messages_sent: 0,
+        })
+      }
+    }
+  } catch {
+    // Silent fail - continue loading dashboard
+  }
 
   // Fetch dashboard data
   const [

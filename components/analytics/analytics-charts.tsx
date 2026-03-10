@@ -20,17 +20,36 @@ interface AnalyticsChartsProps {
 }
 
 export function AnalyticsCharts({ analytics }: AnalyticsChartsProps) {
-  const chartData = analytics.slice(0, 14).reverse().map((a) => ({
-    date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    revenue: a.revenue || 0,
-    totalFans: a.total_fans || 0,
-    messages: a.messages_received || 0,
-    newFans: a.new_fans || 0,
-  }))
+  // If we have analytics data (even with zeros), show the charts
+  // Generate last 14 days if we have any data at all
+  let chartData: { date: string; revenue: number; totalFans: number; messages: number; newFans: number }[] = []
+  
+  if (analytics.length > 0) {
+    chartData = analytics.slice(0, 14).reverse().map((a) => ({
+      date: new Date(a.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      revenue: a.revenue || 0,
+      totalFans: a.total_fans || 0,
+      messages: a.messages_received || 0,
+      newFans: a.new_fans || 0,
+    }))
+  } else {
+    // Generate placeholder data for last 7 days showing zeros (connected but no activity)
+    const today = new Date()
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      chartData.push({
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        revenue: 0,
+        totalFans: 0,
+        messages: 0,
+        newFans: 0,
+      })
+    }
+  }
 
-  const hasData = chartData.length > 0 && chartData.some(d => d.revenue > 0 || d.totalFans > 0)
-
-  if (!hasData) {
+  // Only show empty state if truly no data and no synced platforms
+  if (analytics.length === 0) {
     return (
       <Card className="border-border bg-card">
         <CardContent className="flex flex-col items-center justify-center py-16 text-center">

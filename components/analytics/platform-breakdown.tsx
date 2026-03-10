@@ -20,15 +20,24 @@ interface PlatformBreakdownProps {
 
 export function PlatformBreakdown({ analytics }: PlatformBreakdownProps) {
   // Aggregate by platform
-  const platformData = analytics.length > 0
-    ? aggregateByPlatform(analytics)
-    : [
-        { name: 'OnlyFans', value: 6500, color: '#00AFF0' },
-        { name: 'Fansly', value: 2800, color: '#009FFF' },
-        { name: 'MYM', value: 1200, color: '#FF4D67' },
-      ]
-
+  const platformData = aggregateByPlatform(analytics)
   const total = platformData.reduce((sum, p) => sum + p.value, 0)
+
+  if (platformData.length === 0 || total === 0) {
+    return (
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle>Platform Breakdown</CardTitle>
+          <CardDescription>Revenue distribution by platform</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            No revenue data yet. Sync your connected platforms to see the breakdown.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="border-border bg-card">

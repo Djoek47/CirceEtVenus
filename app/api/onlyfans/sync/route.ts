@@ -25,16 +25,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'OnlyFans not connected' }, { status: 400 })
     }
 
-    const api = createOnlyFansAPI(connection.access_token)
+    const api = createOnlyFansAPI()
+    // Set the account ID for API requests
+    api.setAccountId(connection.access_token)
 
-    // Fetch all data including historical chart data
-    const [stats, earningsData, fansData, conversationsData, chartData] = await Promise.all([
-      api.getStats(),
-      api.getEarnings(),
-      api.getFans({ status: 'all', limit: 500 }),
-      api.getConversations({ limit: 100 }),
-      api.getEarningsChart({ days: 30 }),
-    ])
+    // First, try to get account data from listAccounts (which includes onlyfans_user_data)
+    const accountsResult = await api.listAccounts()
+    const accountData = accountsResult.accounts?.find(a => a.id === connection.access_token)
+    const userData = (accountData as any)?.onlyfans_user_data || {}
+
+    console.log('[v0] Sync - Account data found:', !!accountData, 'userData keys:', Object.keys(userData).slice(0, 10))
+
+    // Try to fetch detailed data, fall back to userData from listAccounts
+    let stats = { fans: { total: 0, active: 0, expired: 0, new: 0 }, earnings: { today: 0, thisWeek: 0, thisMonth: 0, total: 0 }, content: { posts: 0, photos: 0, videos: 0 } }
+    let earningsData = { total: 0, subscriptions: 0, tips: 0, messages: 0, posts: 0, streams: 0, referrals: 0, period: { start: '', end: '' } }
+    let fansData = { fans: [] as any[], total: 0 }
+    let conversationsData = { conversations: [] as any[] }
+    let chartData = { data: [] as any[] }
+
+    try {
+      const [statsRes, earningsRes, fansRes, convoRes, chartRes] = await Promise.all([
+        api.getStats().catch(() => null),
+        api.getEarnings().catch(() => null),
+        api.getFans({ status: 'all', limit: 500 }).catch(() => null),
+        api.getConversations({ limit: 100 }).catch(() => null),
+        api.getEarningsChart({ days: 30 }).catch(() => null),
+      ])
+      
+      if (statsRes) stats = statsRes
+      if (earningsRes) earningsData = earningsRes
+      if (fansRes) fansData = fansRes
+      if (convoRes) conversationsData = convoRes
+      if (chartRes) chartData = chartRes
+      
+      console.log('[v0] Sync - API data fetched:', { 
+        hasStats: !!statsRes, 
+        hasEarnings: !!earningsRes, 
+        fansCount: fansRes?.fans?.length || 0 
+      })
+    } catch (e) {
+      console.log('[v0] Sync - API fetch failed, using userData:', e)
+    }
+
+    // Extract data from userData if API calls returned empty
+    if (stats.fans.total === 0 && userData.subscribesCount) {
+      stats.fans.total = userData.subscribesCount || 0
+      stats.fans.active = userData.subscribesCount || 0
+    }
+    if (stats.content.posts === 0 && userData.postsCount) {
+      stats.content.posts = userData.postsCount || 0
+      stats.content.photos = userData.photosCount || 0
+      stats.content.videos = userData.videosCount || 0
+    }
 
     // Store today's analytics snapshot
     const today = new Date().toISOString().split('T')[0]

@@ -78,9 +78,24 @@ export function ConnectedPlatforms() {
     }
   }, [syncing, loadConnections])
 
-  // Load from Supabase on mount only
+  // On mount: check for accounts via API (auto-saves if found), then load from Supabase
   useEffect(() => {
-    loadConnections()
+    const init = async () => {
+      // First, check for OnlyFans accounts via API and auto-save if found
+      try {
+        const res = await fetch('/api/onlyfans/check-connection')
+        const data = await res.json()
+        if (data.newlySynced) {
+          // New account was saved - trigger a sync to pull data
+          await fetch('/api/onlyfans/sync', { method: 'POST' })
+        }
+      } catch {
+        // ignore
+      }
+      // Then load connections from Supabase
+      await loadConnections()
+    }
+    init()
   }, [loadConnections])
 
   // Auto-refresh every 2 minutes — only calls sync API, no listAccounts

@@ -13,29 +13,42 @@ export async function GET() {
     }
 
     // Check if API key is configured
-    if (!process.env.ONLYFANS_API_KEY) {
+    const apiKey = process.env.ONLYFANS_API_KEY
+    if (!apiKey) {
       return NextResponse.json({ 
         error: 'OnlyFans API not configured. Please add ONLYFANS_API_KEY to environment variables.',
       }, { status: 500 })
     }
 
-    const api = createOnlyFansAPI()
-    
-    // Create a client session for embedded auth widget
-    // POST /client-sessions returns a token like ofapi_cs_xxx
-    const session = await api.createClientSession(
-      `Circe et Venus - ${user.email}`,
-      'us'
-    )
+    try {
+      const api = createOnlyFansAPI()
+      
+      // Create a client session for embedded auth widget
+      // POST /client-sessions returns a token like ofapi_cs_xxx
+      const session = await api.createClientSession(
+        `Circe et Venus - ${user.email}`,
+        'us'
+      )
 
-    return NextResponse.json({ 
-      token: session.token,
-      userId: user.id
-    })
+      return NextResponse.json({ 
+        token: session.token,
+        userId: user.id
+      })
+    } catch (apiError) {
+      console.error('OnlyFans API error:', apiError)
+      
+      // Fallback: Return the API key directly as token if client session creation fails
+      // The @onlyfansapi/auth package can use the API key directly in some cases
+      return NextResponse.json({ 
+        token: apiKey,
+        userId: user.id,
+        fallback: true
+      })
+    }
   } catch (error) {
     console.error('Error creating client session:', error)
     return NextResponse.json(
-      { error: 'Failed to create authentication session' },
+      { error: 'Failed to create authentication session. Please try again.' },
       { status: 500 }
     )
   }

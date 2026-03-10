@@ -50,7 +50,15 @@ interface Platform {
   color: string
   description: string
   dataTypes: string[]
+  icon?: React.ReactNode
 }
+
+// OnlyFans Logo SVG Component
+const OnlyFansIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+    <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm0-14c-3.314 0-6 2.686-6 6s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2z"/>
+  </svg>
+)
 
 const PLATFORMS: Platform[] = [
   {
@@ -59,6 +67,7 @@ const PLATFORMS: Platform[] = [
     color: '#00AFF0',
     description: 'Connect your OnlyFans account to import fans, messages, and earnings',
     dataTypes: ['Subscribers', 'Messages', 'Earnings', 'Tips', 'PPV Sales'],
+    icon: <OnlyFansIcon />,
   },
   {
     id: 'fansly',
@@ -401,14 +410,13 @@ export function PlatformConnector() {
                   <div className="flex items-center gap-3">
                     <div 
                       className="flex h-10 w-10 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: `${platform.color}20` }}
+                      style={{ backgroundColor: `${platform.color}20`, color: platform.color }}
                     >
-                      <span 
-                        className="text-sm font-bold"
-                        style={{ color: platform.color }}
-                      >
-                        {platform.name.substring(0, 2).toUpperCase()}
-                      </span>
+                      {platform.icon || (
+                        <span className="text-sm font-bold">
+                          {platform.name.substring(0, 2).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <CardTitle className="text-base">{platform.name}</CardTitle>

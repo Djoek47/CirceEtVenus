@@ -79,10 +79,59 @@ export function PlatformConnector() {
     setError(null)
     
     if (platformId === 'onlyfans') {
-      // Open OnlyFans API console to connect account
-      window.open('https://app.onlyfansapi.com', '_blank')
-      setSuccess('Connect your account in the OnlyFans API console, then click "Sync Now" to import your data.')
-      setConnecting(null)
+      try {
+        // Get client session token from our API
+        const response = await fetch('/api/onlyfans/auth')
+        const data = await response.json()
+        
+        if (data.error) {
+          throw new Error(data.error)
+        }
+        
+        if (!data.token) {
+          throw new Error('No authentication token received')
+        }
+
+        // Dynamically import and use @onlyfansapi/auth
+        const { startOnlyFansAuthentication } = await import('@onlyfansapi/auth')
+        
+        startOnlyFansAuthentication(data.token, {
+          onSuccess: async (result: { accountId: string; username?: string }) => {
+            // Store the connection in database
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              await supabase
+                .from('platform_connections')
+                .upsert({
+                  user_id: user.id,
+                  platform: 'onlyfans',
+                  platform_user_id: result.accountId,
+                  platform_username: result.username || 'Connected',
+                  is_connected: true,
+                  access_token: result.accountId,
+                  last_sync_at: new Date().toISOString(),
+                }, {
+                  onConflict: 'user_id,platform'
+                })
+              
+              setSuccess(`Successfully connected OnlyFans account!`)
+              await loadConnections()
+              setTimeout(() => setSuccess(null), 5000)
+            }
+            setConnecting(null)
+          },
+          onError: (err: { message?: string }) => {
+            setError(err.message || 'Authentication failed')
+            setConnecting(null)
+          },
+          onClose: () => {
+            setConnecting(null)
+          }
+        })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to start authentication')
+        setConnecting(null)
+      }
     } else {
       setError(`${platformId} integration coming soon`)
       setConnecting(null)

@@ -17,6 +17,16 @@ import { VoiceInputButton } from '@/components/voice-input-button'
 import { cn } from '@/lib/utils'
 import { stripHtml } from '@/lib/html-utils'
 
+// Proxy OnlyFans CDN images through our server to avoid CORS/403 issues
+function proxyImageUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined
+  // Only proxy OnlyFans CDN URLs
+  if (url.includes('onlyfans.com') || url.includes('cdn2.onlyfans.com') || url.includes('cdn3.onlyfans.com')) {
+    return `/api/proxy/image?url=${encodeURIComponent(url)}`
+  }
+  return url
+}
+
 interface OnlyFansConversation {
   user: {
     id: string
@@ -180,7 +190,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       <CardHeader className="flex flex-row items-center justify-between border-b border-border p-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={fan.avatar} />
+            <AvatarImage src={proxyImageUrl(fan.avatar) || fan.avatar} />
             <AvatarFallback className="bg-primary/10 text-primary">
               {fan.name?.[0]?.toUpperCase() || fan.username?.[0]?.toUpperCase() || '?'}
             </AvatarFallback>
@@ -287,10 +297,15 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                     {msg.media && msg.media.length > 0 && (
                       <div className="mb-2 space-y-2">
                         {msg.media.map((m) => {
-                          // Get the best available URL from the OnlyFans API response
-                          const imageUrl = m.files?.thumb?.url || m.files?.squarePreview?.url || m.files?.preview?.url || m.files?.full?.url || m.preview || m.url
-                          const videoUrl = m.files?.full?.url || m.url
-                          const posterUrl = m.files?.thumb?.url || m.files?.preview?.url || m.preview
+                          // Get the best available URL from the OnlyFans API response and proxy it
+                          const rawImageUrl = m.files?.thumb?.url || m.files?.squarePreview?.url || m.files?.preview?.url || m.files?.full?.url || m.preview || m.url
+                          const rawVideoUrl = m.files?.full?.url || m.url
+                          const rawPosterUrl = m.files?.thumb?.url || m.files?.preview?.url || m.preview
+                          
+                          // Proxy the URLs to avoid CORS/403 issues
+                          const imageUrl = proxyImageUrl(rawImageUrl)
+                          const videoUrl = proxyImageUrl(rawVideoUrl)
+                          const posterUrl = proxyImageUrl(rawPosterUrl)
                           
                           // Check if media can be viewed
                           if (!m.canView && m.canView !== undefined) {
@@ -344,7 +359,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                         {msg.previews.map((p, idx) => (
                           <img 
                             key={idx}
-                            src={p.url} 
+                            src={proxyImageUrl(p.url) || p.url} 
                             alt="Preview" 
                             className="rounded-lg max-w-full"
                             onError={(e) => {

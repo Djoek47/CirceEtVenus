@@ -10,6 +10,15 @@ import { Search, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { stripHtmlForPreview } from '@/lib/html-utils'
 
+// Proxy OnlyFans CDN images through our server to avoid CORS/403 issues
+function proxyImageUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined
+  if (url.includes('onlyfans.com') || url.includes('cdn2.onlyfans.com') || url.includes('cdn3.onlyfans.com')) {
+    return `/api/proxy/image?url=${encodeURIComponent(url)}`
+  }
+  return url
+}
+
 interface OnlyFansConversation {
   user: {
     id: string
@@ -95,7 +104,7 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
             >
               <div className="relative">
                 <Avatar className="h-10 w-10 border border-border">
-                  <AvatarImage src={conv.user.avatar} />
+                  <AvatarImage src={proxyImageUrl(conv.user.avatar) || conv.user.avatar} />
                   <AvatarFallback className="bg-primary/10 text-primary">
                     {conv.user.name?.[0]?.toUpperCase() || conv.user.username?.[0]?.toUpperCase() || '?'}
                   </AvatarFallback>

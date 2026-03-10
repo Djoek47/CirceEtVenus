@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +19,23 @@ import { AIToolsSelector } from '@/components/ai/ai-tools-selector'
 import { AIChatterWorkspace } from '@/components/ai/ai-chatter-workspace'
 
 export default function AIStudioPage() {
-  const [activeTab, setActiveTab] = useState('overview')
+  const searchParams = useSearchParams()
+
+  const initialTab = (() => {
+    const ai = searchParams.get('ai')
+    const tab = searchParams.get('tab')
+
+    if (ai === 'circe') return 'circe'
+    if (ai === 'venus') return 'venus'
+
+    if (tab === 'cosmic') return 'cosmic'
+    if (tab === 'tools') return 'tools'
+    if (tab === 'chatter') return 'chatter'
+
+    return 'overview'
+  })()
+
+  const [activeTab, setActiveTab] = useState(initialTab)
 
   const aiTools = [
     {

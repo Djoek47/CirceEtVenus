@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export function MentionsHeader() {
   const supabase = createClient()
@@ -66,6 +67,16 @@ export function MentionsHeader() {
             Grok Pro
           </Badge>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          asChild
+          className="border-venus/40 text-venus hover:bg-venus/10"
+        >
+          <Link href="/dashboard/ai-studio?ai=venus">
+            Open Venus Pro
+          </Link>
+        </Button>
         <Button
           className="gap-2 bg-venus hover:bg-venus/90 text-background"
           onClick={handleRefreshVision}

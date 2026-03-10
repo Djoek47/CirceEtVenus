@@ -11,7 +11,7 @@ import { MessageActivity } from '@/components/dashboard/message-activity'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { Sparkles, Moon, Sun, Star } from 'lucide-react'
+import { Sparkles, Moon, Sun, Star, Heart } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -156,6 +156,30 @@ export default async function DashboardPage() {
 
       {/* Stats Overview */}
       <StatsCards stats={stats} />
+
+      {/* Standard of Attraction (Pro) */}
+      <Card className="border-gold/40 bg-gradient-to-r from-gold/10 via-amber-500/5 to-transparent">
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-gold">
+              <Heart className="h-5 w-5" />
+              Standard of Attraction
+            </CardTitle>
+            <CardDescription>
+              Pro-only rating of how commercially attractive your latest photos and videos are, through the eyes of Venus and Circe.
+            </CardDescription>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            className="bg-gradient-to-r from-circe to-venus text-white hover:opacity-90"
+          >
+            <Link href="/dashboard/ai-studio/tools?tab=premium">
+              Open Pro Tool
+            </Link>
+          </Button>
+        </CardHeader>
+      </Card>
 
       {/* Main Content Grid */}
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">

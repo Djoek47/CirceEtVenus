@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { ConnectedPlatforms } from '@/components/dashboard/connected-platforms'
 import { AnalyticsDashboard } from '@/components/analytics/analytics-dashboard'
+import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { Moon } from 'lucide-react'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
@@ -37,7 +40,20 @@ export default async function AnalyticsPage() {
           {/* The dashboard component renders the title/filters; keep header for layout consistency */}
           <h2>Analytics</h2>
         </div>
-        <ConnectedPlatforms />
+        <div className="flex items-center gap-2">
+          <ConnectedPlatforms />
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="hidden sm:inline-flex border-circe/40 text-circe-light hover:bg-circe/10"
+          >
+            <Link href="/dashboard/ai-studio?ai=circe">
+              <Moon className="mr-1 h-4 w-4" />
+              Circe Retention Lab
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <AnalyticsDashboard

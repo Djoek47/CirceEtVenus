@@ -4,7 +4,10 @@ import { ContentCalendar } from '@/components/content/content-calendar'
 import { ContentList } from '@/components/content/content-list'
 import { CosmicCalendar } from '@/components/content/cosmic-calendar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Calendar, List, Stars } from 'lucide-react'
+import { Calendar, List, Stars, Heart } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 
 export default async function ContentPage() {
   const supabase = await createClient()
@@ -21,6 +24,32 @@ export default async function ContentPage() {
   return (
     <div className="space-y-6">
       <ContentHeader />
+
+      <Card className="border-gold/40 bg-gradient-to-r from-gold/10 via-amber-500/5 to-transparent">
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-gold">
+              <Heart className="h-5 w-5" />
+              Standard of Attraction (Pro)
+            </CardTitle>
+            <CardDescription>
+              Let Venus and Circe brutally rate which pieces of content will actually sell in your niche before you post.
+            </CardDescription>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            className="bg-gradient-to-r from-circe to-venus text-white hover:opacity-90"
+          >
+            <Link href="/dashboard/ai-studio/tools?tab=premium">
+              Open Pro Tool
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent className="text-xs text-muted-foreground">
+          Use this before scheduling big drops to compare old vs new photos and choose the highest-earning look.
+        </CardContent>
+      </Card>
       
       <Tabs defaultValue="cosmic" className="w-full">
         <TabsList className="bg-secondary">

@@ -242,13 +242,36 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   // ── OnlyFans ──────────────────────────────────────────────────────────────
 
+  // Restore any in-progress OnlyFans authentication attempt when the component mounts
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = window.localStorage.getItem('onlyfans_auth_attempt')
+    if (!stored) return
+    try {
+      const parsed = JSON.parse(stored) as { attemptId?: string; startedAt?: number }
+      if (parsed.attemptId) {
+        setOnlyfansAttemptId(parsed.attemptId)
+        setOnlyfansStatus('Resuming your previous OnlyFans authentication...')
+        setOnlyfansLoading(true)
+        // Continue polling in the background; when the user opens the dialog they'll see live status
+        pollOnlyfansStatus(parsed.attemptId)
+      }
+    } catch {
+      // Ignore malformed storage and clear it
+      window.localStorage.removeItem('onlyfans_auth_attempt')
+    }
+  }, [])
+
   const openOnlyfansDialog = () => {
-    setOnlyfansEmail('')
-    setOnlyfansPassword('')
-    setOnlyfansAttemptId(null)
-    setOnlyfans2FACode('')
-    setOnlyfansStatus(null)
-    setOnlyfansShowVpnWarning(false)
+    // If there is an in-progress attempt, keep it so the user sees the current status and can enter 2FA.
+    // Otherwise, prepare a clean login form.
+    if (!onlyfansAttemptId) {
+      setOnlyfansEmail('')
+      setOnlyfansPassword('')
+      setOnlyfans2FACode('')
+      setOnlyfansStatus(null)
+      setOnlyfansShowVpnWarning(false)
+    }
     setOnlyfansDialogOpen(true)
   }
 
@@ -274,6 +297,13 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       if (data.attemptId && !data.success && !data.requires_2fa) {
         setOnlyfansAttemptId(data.attemptId)
         setOnlyfansStatus(data.message || 'Processing authentication...')
+        // Persist attempt so closing/reopening the dialog resumes the same flow
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(
+            'onlyfans_auth_attempt',
+            JSON.stringify({ attemptId: data.attemptId, startedAt: Date.now() })
+          )
+        }
         pollOnlyfansStatus(data.attemptId)
         return
       }
@@ -281,6 +311,12 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       if (data.requires_2fa) {
         setOnlyfansAttemptId(data.attemptId)
         setOnlyfansStatus('2FA code required')
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(
+            'onlyfans_auth_attempt',
+            JSON.stringify({ attemptId: data.attemptId, startedAt: Date.now() })
+          )
+        }
         setOnlyfansLoading(false)
         return
       }
@@ -293,6 +329,9 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
         setOnlyfansPassword('')
         setOnlyfansAttemptId(null)
         setOnlyfans2FACode('')
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('onlyfans_auth_attempt')
+        }
         await loadConnections()
         try {
           await fetch('/api/onlyfans/sync', { method: 'POST' })
@@ -317,6 +356,9 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       if (pollCount > 90) {
         setOnlyfansLoading(false)
         setError('Authentication timed out after about 3 minutes. Please try again.')
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('onlyfans_auth_attempt')
+        }
         return
       }
       try {
@@ -342,12 +384,18 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
             setTimeout(() => window.location.reload(), 1000)
           } catch { /* silent */ }
           setOnlyfansLoading(false)
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem('onlyfans_auth_attempt')
+          }
           return
         }
         if (data.error || data.status === 'failed') {
           setOnlyfansShowVpnWarning(false)
           setError(data.error || data.message || 'Authentication failed')
           setOnlyfansLoading(false)
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem('onlyfans_auth_attempt')
+          }
           return
         }
         setOnlyfansStatus(data.message || 'Processing...')

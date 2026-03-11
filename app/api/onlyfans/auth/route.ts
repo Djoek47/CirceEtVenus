@@ -176,6 +176,15 @@ export async function GET() {
       }, { status: 500 })
     }
 
+    // Use the creator's preferred name from their profile if available; fall back to email
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single()
+
+    const creatorName = (profile as any)?.full_name || user.email || 'Creator'
+
     // Create a client session token via OnlyFans API
     const response = await fetch('https://app.onlyfansapi.com/api/client-sessions', {
       method: 'POST',
@@ -184,7 +193,7 @@ export async function GET() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        display_name: `Circe et Venus - ${user.email}`,
+        display_name: `Circe et Venus - ${creatorName}`,
         client_reference_id: user.id,
       }),
     })

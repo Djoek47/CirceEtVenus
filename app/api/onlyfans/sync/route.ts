@@ -275,9 +275,24 @@ export async function POST(request: NextRequest) {
       }
     })
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to sync data'
+
+    // If the upstream OnlyFans session is expired, surface a clear re-authentication requirement
+    if (message.includes('ONLYFANS_SESSION_EXPIRED')) {
+      return NextResponse.json(
+        {
+          error: 'OnlyFans session expired',
+          code: 'ONLYFANS_SESSION_EXPIRED',
+          message:
+            'Your OnlyFans session with our data partner expired. Please reconnect OnlyFans from your dashboard, then try syncing again.',
+        },
+        { status: 401 }
+      )
+    }
+
     console.error('[v0] Sync error:', error)
     return NextResponse.json(
-      { error: 'Failed to sync data' },
+      { error: message },
       { status: 500 }
     )
   }

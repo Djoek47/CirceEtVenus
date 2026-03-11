@@ -142,7 +142,23 @@ class OnlyFansAPI {
   }
 
   /**
+   * Map API progress to a short user-facing message.
+   * API returns state: "authenticating", progress: "filling_out_login" etc.
+   */
+  private authProgressMessage(progress: string | undefined, state: string | undefined): string {
+    if (state && state !== 'authenticating') return 'Almost there...'
+    const map: Record<string, string> = {
+      filling_out_login: 'Filling out login...',
+      submitting: 'Submitting...',
+      waiting_for_otp: 'Waiting for verification...',
+      checking: 'Checking authentication...',
+    }
+    return progress ? (map[progress] || progress.replace(/_/g, ' ')) : 'Processing authentication...'
+  }
+
+  /**
    * Poll authentication status - GET /api/authenticate/{attempt_id}
+   * API may return: state ("authenticating" | "authenticated"), progress, lastAttempt.success, account.onlyfans_data
    */
   async pollAuthenticationStatus(attemptId: string): Promise<{
     status: 'pending' | 'success' | 'failed' | '2fa_required'
@@ -159,19 +175,34 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
+      const state = data.state
+      const progress = data.progress
+      const lastAttempt = data.lastAttempt
 
-      if (data.twoFactorPending) {
-        return { status: '2fa_required', message: 'Please enter your 2FA code' }
+      // 2FA required: API may send twoFactorPending, lastAttempt.needs_otp, or progress "waiting_for_otp"
+      if (data.twoFactorPending || lastAttempt?.needs_otp === true || progress === 'waiting_for_otp') {
+        return { status: '2fa_required', message: 'Please enter your 2FA code from your email or authenticator app' }
       }
 
-      const accountId = data.account?.id || data.accountId || data.account_id || data.id
-      const username = data.account?.onlyfans_username || data.username || data.onlyfans_username
-      
-      if (accountId) {
+      // Success only when authentication is actually done (not still "authenticating")
+      const isDone = state && state !== 'authenticating'
+      const attemptSuccess = lastAttempt && (lastAttempt.success === true || lastAttempt.completed_at != null)
+      const account = data.account
+      const accountId = account?.id || data.accountId || data.account_id || data.id
+      const onlyfansData = account?.onlyfans_data || {}
+      const hasOnlyFansUser = onlyfansData?.username != null || onlyfansData?.id != null
+      const username =
+        onlyfansData?.username ||
+        account?.onlyfans_username ||
+        account?.display_name ||
+        data.username ||
+        data.onlyfans_username
+
+      if (accountId && (isDone || attemptSuccess || hasOnlyFansUser)) {
         return {
           status: 'success',
-          accountId: accountId,
-          username: username,
+          accountId: String(accountId),
+          username: username || undefined,
         }
       }
 
@@ -179,7 +210,8 @@ class OnlyFansAPI {
         return { status: 'failed', message: data.message || data.error }
       }
 
-      return { status: 'pending', message: data.message || 'Processing...' }
+      const message = data.message || this.authProgressMessage(progress, state)
+      return { status: 'pending', message }
     } catch (error) {
       return { status: 'failed', message: error instanceof Error ? error.message : 'Poll failed' }
     }
@@ -305,12 +337,22 @@ class OnlyFansAPI {
       headers,
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Unknown error' }))
-      throw new Error(error.message || `API error: ${response.status}`)
+    const json = await response.json().catch(() => null)
+
+    // OnlyFans API sometimes returns 200 with an error payload. Normalize both cases here.
+    if (!response.ok || (json && typeof json === 'object' && (json as any).error)) {
+      const errorCode = (json as any)?.error as string | undefined
+      const message = (json as any)?.message || (json as any)?.description || errorCode
+
+      // Special case: session expired -> needs re-authentication
+      if (errorCode === 'SESSION_EXPIRED:NEEDS_REAUTHENTICATION') {
+        throw new Error('ONLYFANS_SESSION_EXPIRED:NEEDS_REAUTHENTICATION')
+      }
+
+      throw new Error(message || `API error: ${response.status}`)
     }
 
-    return response.json()
+    return json as T
   }
 
   setAccountId(accountId: string) {

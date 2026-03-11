@@ -147,6 +147,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
   const [onlyfans2FACode, setOnlyfans2FACode] = useState('')
   const [onlyfansLoading, setOnlyfansLoading] = useState(false)
   const [onlyfansStatus, setOnlyfansStatus] = useState<string | null>(null)
+  const [onlyfansShowVpnWarning, setOnlyfansShowVpnWarning] = useState(false)
 
   // Fansly auth state
   const [fanslyDialogOpen, setFanslyDialogOpen] = useState(false)
@@ -247,6 +248,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     setOnlyfansAttemptId(null)
     setOnlyfans2FACode('')
     setOnlyfansStatus(null)
+    setOnlyfansShowVpnWarning(false)
     setOnlyfansDialogOpen(true)
   }
 
@@ -308,11 +310,13 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   const pollOnlyfansStatus = async (attemptId: string) => {
     let pollCount = 0
+    const startedAt = Date.now()
+    const TWO_MINUTES_MS = 120_000
     const poll = async () => {
       pollCount++
-      if (pollCount > 30) {
+      if (pollCount > 90) {
         setOnlyfansLoading(false)
-        setError('Authentication timed out. Please try again.')
+        setError('Authentication timed out after about 3 minutes. Please try again.')
         return
       }
       try {
@@ -324,11 +328,13 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
         const data = await response.json()
 
         if (data.requires_2fa) {
+          setOnlyfansShowVpnWarning(false)
           setOnlyfansStatus('Please enter your 2FA code')
           setOnlyfansLoading(false)
           return
         }
         if (data.success && data.accountId) {
+          setOnlyfansShowVpnWarning(false)
           setOnlyfansDialogOpen(false)
           await loadConnections()
           try {
@@ -339,13 +345,20 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
           return
         }
         if (data.error || data.status === 'failed') {
+          setOnlyfansShowVpnWarning(false)
           setError(data.error || data.message || 'Authentication failed')
           setOnlyfansLoading(false)
           return
         }
         setOnlyfansStatus(data.message || 'Processing...')
+        if (Date.now() - startedAt >= TWO_MINUTES_MS) {
+          setOnlyfansShowVpnWarning(true)
+        }
         setTimeout(poll, 2000)
       } catch {
+        if (Date.now() - startedAt >= TWO_MINUTES_MS) {
+          setOnlyfansShowVpnWarning(true)
+        }
         setTimeout(poll, 2000)
       }
     }
@@ -633,6 +646,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
           onlyfans2FACode={onlyfans2FACode} setOnlyfans2FACode={setOnlyfans2FACode}
           onlyfansLoading={onlyfansLoading}
           onlyfansStatus={onlyfansStatus}
+          onlyfansShowVpnWarning={onlyfansShowVpnWarning}
           handleOnlyfansLogin={handleOnlyfansLogin}
           fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
           fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
@@ -827,6 +841,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
         onlyfans2FACode={onlyfans2FACode} setOnlyfans2FACode={setOnlyfans2FACode}
         onlyfansLoading={onlyfansLoading}
         onlyfansStatus={onlyfansStatus}
+        onlyfansShowVpnWarning={onlyfansShowVpnWarning}
         handleOnlyfansLogin={handleOnlyfansLogin}
         fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
         fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
@@ -855,6 +870,7 @@ interface ConnectDialogsProps {
   setOnlyfans2FACode: (v: string) => void
   onlyfansLoading: boolean
   onlyfansStatus: string | null
+  onlyfansShowVpnWarning: boolean
   handleOnlyfansLogin: () => void
   fanslyDialogOpen: boolean
   setFanslyDialogOpen: (v: boolean) => void
@@ -876,7 +892,7 @@ function ConnectDialogs({
   onlyfansPassword, setOnlyfansPassword,
   onlyfansAttemptId,
   onlyfans2FACode, setOnlyfans2FACode,
-  onlyfansLoading, onlyfansStatus,
+  onlyfansLoading, onlyfansStatus, onlyfansShowVpnWarning,
   handleOnlyfansLogin,
   fanslyDialogOpen, setFanslyDialogOpen,
   fanslyEmail, setFanslyEmail,
@@ -908,10 +924,18 @@ function ConnectDialogs({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 border border-border/50 p-3">
+              OnlyFans authentication can take up to a minute. If data doesn&apos;t load immediately, please wait — we&apos;ll keep checking until it&apos;s done.
+            </p>
             {onlyfansStatus && (
               <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-sm text-blue-400 flex items-center gap-2">
                 {onlyfansLoading && <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />}
                 {onlyfansStatus}
+              </div>
+            )}
+            {onlyfansShowVpnWarning && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-600 dark:text-amber-400">
+                Authentication is taking longer than usual and we haven&apos;t received a confirmation yet. If you&apos;re using a VPN, try disconnecting — VPNs can prevent OnlyFans authentication from completing.
               </div>
             )}
 

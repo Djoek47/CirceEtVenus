@@ -51,8 +51,13 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { getToolMeta } from '@/lib/ai-tools-data'
 
-/** Resize and compress image to stay under ~800KB to avoid 413 on API. Returns data URL (JPEG). */
-function compressImageForUpload(file: File, maxSize = 1024, quality = 0.82): Promise<string> {
+/** Resize and compress image to stay under ~800KB (or maxBytes) to avoid 413 on API. Returns data URL (JPEG). */
+function compressImageForUpload(
+  file: File,
+  maxSize = 1024,
+  quality = 0.82,
+  maxBytes = 750 * 1024
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -81,7 +86,7 @@ function compressImageForUpload(file: File, maxSize = 1024, quality = 0.82): Pro
         }
       }
       let dataUrl = tryExport()
-      while (dataUrl && dataUrl.length > 750 * 1024 && q > 0.2) {
+      while (dataUrl && dataUrl.length > maxBytes && q > 0.2) {
         q -= 0.1
         dataUrl = tryExport()
       }
@@ -94,6 +99,11 @@ function compressImageForUpload(file: File, maxSize = 1024, quality = 0.82): Pro
     }
     img.src = url
   })
+}
+
+/** Tighter compression for vision APIs (e.g. Grok): max ~350KB to avoid 422/413. */
+function compressImageForVision(file: File): Promise<string> {
+  return compressImageForUpload(file, 800, 0.72, 350 * 1024)
 }
 
 // Define the non-Pro AI tools that work
@@ -1062,7 +1072,7 @@ export function AIToolsSelector({
                       const file = e.target.files?.[0]
                       if (!file) return
                       try {
-                        const dataUrl = await compressImageForUpload(file, 1024, 0.82)
+                        const dataUrl = await compressImageForVision(file)
                         setAttractionImage(dataUrl)
                       } catch {
                         const reader = new FileReader()

@@ -54,12 +54,29 @@ export async function GET() {
       })
     }
 
-    // Found account(s) on the OnlyFans API - use the most recent one
-    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
-    
-    // Get display name from onlyfans_user_data (this is the actual username, not the API ID)
+    // Only treat accounts as connected when auth has finished (onlyfans_user_data / onlyfans_username present)
+    // Accounts still "authenticating" have no OnlyFans user data yet — don't show as connected
+    const fullyConnectedAccounts = (accountsResult.accounts || []).filter(
+      (acc: { onlyfans_username?: string; onlyfans_user_data?: unknown }) =>
+        acc.onlyfans_username != null ||
+        (acc as any)?.onlyfans_user_data != null
+    )
+    if (fullyConnectedAccounts.length === 0) {
+      await supabase
+        .from('platform_connections')
+        .update({ is_connected: false })
+        .eq('user_id', user.id)
+        .eq('platform', 'onlyfans')
+      return NextResponse.json({
+        connected: false,
+        accountId: null,
+        username: null
+      })
+    }
+
+    const account = fullyConnectedAccounts[fullyConnectedAccounts.length - 1]
     const userData = (account as any)?.onlyfans_user_data || {}
-    const displayName = userData.name || account.onlyfans_username || 'Unknown'
+    const displayName = userData.name || (account as any).onlyfans_username || 'Unknown'
     
     // Check if we already have this connection saved
     const { data: existingConnection } = await supabase

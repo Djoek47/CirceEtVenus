@@ -47,8 +47,23 @@ export async function GET(request: Request) {
       total: result.total || 0,
     })
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+
+    // Surface OnlyFans session expiry as a clear re-auth requirement to the client
+    if (message.includes('ONLYFANS_SESSION_EXPIRED')) {
+      return NextResponse.json(
+        {
+          error: 'OnlyFans session expired',
+          code: 'ONLYFANS_SESSION_EXPIRED',
+          message:
+            'Your OnlyFans session with our data partner expired. Please reconnect OnlyFans from your dashboard to continue syncing messages.',
+        },
+        { status: 401 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to fetch conversations', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to fetch conversations', details: message },
       { status: 500 }
     )
   }

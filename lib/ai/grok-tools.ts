@@ -53,9 +53,14 @@ export async function callGrokVision(opts: {
 }): Promise<string> {
   const { apiKey, systemPrompt, userPrompt, imageDataUrl, jsonMode } = opts
 
-  const userContent: Array<{ type: 'input_image'; image_url: string; detail?: string } | { type: 'input_text'; text: string }> = [
-    { type: 'input_image', image_url: imageDataUrl, detail: 'high' },
-    { type: 'input_text', text: userPrompt },
+  // Use 'low' detail for large payloads to avoid 422/413 from Grok; client already compresses to ~350KB
+  const imageDetail = imageDataUrl.length > 400_000 ? 'low' : 'high'
+  const userContent: Array<
+    | { type: 'image_url'; image_url: { url: string; detail?: string } }
+    | { type: 'text'; text: string }
+  > = [
+    { type: 'image_url', image_url: { url: imageDataUrl, detail: imageDetail } },
+    { type: 'text', text: userPrompt },
   ]
 
   const res = await fetch('https://api.x.ai/v1/chat/completions', {

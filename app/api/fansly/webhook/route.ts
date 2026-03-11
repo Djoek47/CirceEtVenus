@@ -102,6 +102,8 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient>, 
       description: `${subscriber.display_name || subscriber.username} subscribed on Fansly`,
       link: '/dashboard/fans',
       read: false,
+      platform: 'fansly',
+      avatar_url: subscriber.avatar || undefined,
     })
   }
 }
@@ -230,6 +232,8 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient>, paylo
         description: preview || 'Sent you a new message',
         link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
         read: false,
+        platform: 'fansly',
+        avatar_url: sender.avatar || undefined,
       })
     }
   }
@@ -263,6 +267,8 @@ async function handleNewTip(supabase: ReturnType<typeof createClient>, payload: 
       description: `${sender.display_name || sender.username} tipped $${tip.amount} on Fansly`,
       link: '/dashboard/messages?fanId=' + encodeURIComponent(sender.id),
       read: false,
+      platform: 'fansly',
+      avatar_url: sender.avatar || undefined,
     })
   }
 }

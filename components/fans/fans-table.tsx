@@ -44,6 +44,7 @@ import Link from 'next/link'
 
 interface FansTableProps {
   fans: Fan[]
+  hasFanPlatformsConnected?: boolean
 }
 
 const tierColors = {
@@ -59,7 +60,7 @@ const platformColors = {
   fansly: 'bg-[#009FFF]/20 text-[#009FFF]',
 }
 
-export function FansTable({ fans }: FansTableProps) {
+export function FansTable({ fans, hasFanPlatformsConnected = false }: FansTableProps) {
   const [selectedFans, setSelectedFans] = useState<string[]>([])
 
   const toggleFan = (fanId: string) => {
@@ -87,8 +88,15 @@ export function FansTable({ fans }: FansTableProps) {
           </div>
           <h3 className="text-lg font-medium">No Fans Yet</h3>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Connect your platforms in Settings to import your fans and start managing your community.
+            {hasFanPlatformsConnected
+              ? 'OnlyFans or Fansly is connected. Use the Refresh button above to sync your fans, or they’ll appear as new subscribers and tips come in.'
+              : 'Connect OnlyFans or Fansly in Settings to import your fans and start managing your community.'}
           </p>
+          {!hasFanPlatformsConnected && (
+            <Button variant="outline" size="sm" className="mt-4" asChild>
+              <Link href="/dashboard/settings?tab=integrations">Go to Settings → Integrations</Link>
+            </Button>
+          )}
         </CardContent>
       </Card>
     )

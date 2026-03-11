@@ -21,8 +21,9 @@ export function FlirtAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [flirtLevel, setFlirtLevel] = useState<number>(2)
   const [keywords, setKeywords] = useState('')
+  const [input, setInput] = useState('')
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+  const { messages, sendMessage, status } = useChat({
     api: '/api/ai/flirt',
     body: {
       explicitnessLevel: flirtLevel,
@@ -38,6 +39,16 @@ export function FlirtAssistant() {
     ],
   })
 
+  const isLoading = status === 'streaming' || status === 'submitted'
+
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || isLoading) return
+    sendMessage({ text })
+    setInput('')
+  }
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -45,16 +56,6 @@ export function FlirtAssistant() {
   }, [messages])
 
   const currentLabel = FLIRT_LEVEL_LABELS[flirtLevel] ?? 'Custom'
-
-  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
-    e.preventDefault()
-    handleSubmit(e, {
-      body: {
-        explicitnessLevel: flirtLevel,
-        inspirationKeywords: keywords,
-      },
-    })
-  }
 
   return (
     <div className="space-y-6">
@@ -166,15 +167,14 @@ export function FlirtAssistant() {
                 <div className="relative flex-1">
                   <Input
                     placeholder="Tell me what your fan wrote or what you want to say..."
-                    value={input ?? ''}
-                    onChange={handleInputChange}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
                     className="border-pink-500/40 pr-10 focus-visible:ring-pink-400"
+                    disabled={isLoading}
                   />
                   <div className="absolute right-1 top-1/2 -translate-y-1/2">
                     <VoiceInputButton
-                      onTranscript={(text) =>
-                        setInput((prev) => (prev || '') + (prev ? ' ' : '') + text)
-                      }
+                      onTranscript={(text) => setInput((prev) => (prev ? prev + ' ' + text : text))}
                       size="sm"
                       variant="ghost"
                     />
@@ -182,7 +182,7 @@ export function FlirtAssistant() {
                 </div>
                 <Button
                   type="submit"
-                  disabled={isLoading || !(input ?? '').trim()}
+                  disabled={isLoading || !input.trim()}
                   className="bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:from-pink-500/90 hover:to-rose-500/90"
                 >
                   {isLoading ? (

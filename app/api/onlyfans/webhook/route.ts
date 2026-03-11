@@ -144,6 +144,8 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient> e
       description: `${data.fan.name} just subscribed for $${data.fan.subscriptionPrice}`,
       link: '/dashboard/fans',
       read: false,
+      platform: 'onlyfans',
+      avatar_url: data.fan.avatar || undefined,
     })
   }
 }
@@ -284,6 +286,8 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
       description: preview,
       link: `/dashboard/messages?fanId=${encodeURIComponent(data.message.fromUser.id)}`,
       read: false,
+      platform: 'onlyfans',
+      avatar_url: avatarUrl || undefined,
     })
   }
 }
@@ -322,6 +326,8 @@ async function handleTip(supabase: ReturnType<typeof createClient> extends Promi
       description: `${fromUser.name} tipped $${data.tip.amount}`,
       link: '/dashboard/messages?fanId=' + encodeURIComponent(fromUser.id),
       read: false,
+      platform: 'onlyfans',
+      avatar_url: fromUser.avatar || undefined,
     })
   }
 }

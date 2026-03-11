@@ -33,13 +33,13 @@ export default async function FansPage() {
 
   if (!user) return null
 
-  const { data: rows } = await supabase
-    .from('fans')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('total_spent', { ascending: false })
+  const [{ data: rows }, { data: connections }] = await Promise.all([
+    supabase.from('fans').select('*').eq('user_id', user.id).order('total_spent', { ascending: false }),
+    supabase.from('platform_connections').select('platform').eq('user_id', user.id).in('platform', ['onlyfans', 'fansly']),
+  ])
 
   const fans: Fan[] = (rows || []).map(normalizeFan)
+  const hasFanPlatformsConnected = (connections?.length ?? 0) > 0
 
   const stats = {
     totalFans: fans.length,
@@ -52,7 +52,7 @@ export default async function FansPage() {
     <div className="space-y-6">
       <FansHeader />
       <FansStats stats={stats} />
-      <FansTable fans={fans} />
+      <FansTable fans={fans} hasFanPlatformsConnected={hasFanPlatformsConnected} />
     </div>
   )
 }

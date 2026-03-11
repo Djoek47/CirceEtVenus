@@ -334,6 +334,7 @@ export function AIToolsSelector({
   const [sampleText, setSampleText] = useState('')
   const [audienceSegment, setAudienceSegment] = useState('all')
   const [campaignGoal, setCampaignGoal] = useState('')
+  const [attractionImage, setAttractionImage] = useState<string | null>(null)
   
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
@@ -510,7 +511,8 @@ export function AIToolsSelector({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              description: contentDescription,
+              description: contentDescription.trim() || undefined,
+              image: attractionImage || undefined,
               niche: niche || undefined,
               platform,
             }),
@@ -589,6 +591,7 @@ export function AIToolsSelector({
     setFanMessage('')
     setCurrentPrice('')
     setNiche('')
+    setAttractionImage(null)
   }
   
   // Render tool-specific input form
@@ -990,8 +993,43 @@ export function AIToolsSelector({
               </div>
             </div>
             <div className="space-y-2">
+              <Label>Upload your photo (Grok rates if you&apos;re up to market standards)</Label>
+              {attractionImage ? (
+                <div className="relative rounded-lg border border-border bg-muted/30 overflow-hidden">
+                  <img src={attractionImage} alt="Uploaded for rating" className="max-h-48 w-full object-contain" />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="absolute top-2 right-2"
+                    onClick={() => setAttractionImage(null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/jpeg,image/png,image/jpg"
+                    className="cursor-pointer"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const reader = new FileReader()
+                      reader.onload = () => setAttractionImage(reader.result as string)
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Upload a photo and Grok will judge commercial attractiveness and whether you meet market standards. Or describe below.
+              </p>
+            </div>
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Describe your photos or videos</Label>
+                <Label>Or describe your content (optional if you uploaded a photo)</Label>
                 <VoiceInputButton
                   onTranscript={(text) => setContentDescription(prev => prev + (prev ? ' ' : '') + text)}
                   size="sm"
@@ -1002,7 +1040,7 @@ export function AIToolsSelector({
                 placeholder="Describe the content you want rated: setting, outfit, mood, type (photo/video), what’s in frame... The more detail, the better Venus and Circe can judge commercial appeal."
                 value={contentDescription}
                 onChange={(e) => setContentDescription(e.target.value)}
-                className="min-h-[120px]"
+                className="min-h-[80px]"
               />
             </div>
           </div>
@@ -1449,7 +1487,10 @@ export function AIToolsSelector({
         
         <Button 
           onClick={runTool} 
-          disabled={loading}
+          disabled={
+            loading ||
+            (selectedTool.id === 'standard-of-attraction' && !contentDescription.trim() && !attractionImage)
+          }
           className="w-full"
         >
           {loading ? (

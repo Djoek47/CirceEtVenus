@@ -19,6 +19,7 @@ import {
   Sun,
   Star,
   Share2,
+  BookOpen,
   LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,7 @@ const aiStudioNavigation: NavItem[] = [
 ]
 
 const bottomNavigation: NavItem[] = [
+  { name: 'Guide', href: '/dashboard/guide', icon: BookOpen },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 

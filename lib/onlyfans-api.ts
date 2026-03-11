@@ -94,21 +94,31 @@ class OnlyFansAPI {
 
   /**
    * Start authentication - POST /api/authenticate
+   * displayName: optional label for the account (e.g. Supabase full_name or email), so the account shows our service identity instead of the OnlyFans login email
    */
-  async startAuthentication(email: string, password: string, proxyCountry: string = 'us'): Promise<{
+  async startAuthentication(
+    email: string,
+    password: string,
+    proxyCountry: string = 'us',
+    displayName?: string
+  ): Promise<{
     success: boolean
     attempt_id?: string
     polling_url?: string
     message?: string
   }> {
     try {
+      const body: Record<string, string> = { email, password, proxyCountry }
+      if (displayName != null && displayName !== '') {
+        body.display_name = displayName
+      }
       const response = await fetch(`${ONLYFANS_API_BASE}/authenticate`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password, proxyCountry }),
+        body: JSON.stringify(body),
       })
 
       const data = await response.json()
@@ -161,11 +171,13 @@ class OnlyFansAPI {
    * API may return: state ("authenticating" | "authenticated"), progress, lastAttempt.success, account.onlyfans_data
    */
   async pollAuthenticationStatus(attemptId: string): Promise<{
-    status: 'pending' | 'success' | 'failed' | '2fa_required'
+    status: 'pending' | 'success' | 'failed' | '2fa_required' | 'face_verification_required'
     accountId?: string
     username?: string
     twoFactorPending?: boolean
     message?: string
+    progress?: string
+    faceVerificationUrl?: string
   }> {
     try {
       const response = await fetch(`${ONLYFANS_API_BASE}/authenticate/${attemptId}`, {
@@ -179,11 +191,25 @@ class OnlyFansAPI {
       const progress: string | undefined = data.progress
       const lastAttempt = data.lastAttempt
 
+      // Face verification: API may send needs_face_otp + face_otp_verification_url
+      const faceUrl =
+        data.face_otp_verification_url ??
+        lastAttempt?.face_otp_verification_url ??
+        (typeof data.face_otp === 'string' ? data.face_otp : null)
+      if (data.needs_face_otp === true || lastAttempt?.needs_face_otp === true || (faceUrl && (state === 'needs_face_otp' || data.face_otp))) {
+        return {
+          status: 'face_verification_required',
+          message: 'OnlyFans requires a quick face verification to continue.',
+          faceVerificationUrl: faceUrl || undefined,
+          progress,
+        }
+      }
+
       // 2FA required: API may send twoFactorPending, lastAttempt.needs_otp, progress "waiting_for_otp",
       // or state variants like "needs-otp" / "needs-app-otp"
       const needsOtpState = state === 'needs-otp' || state === 'needs-app-otp'
       if (data.twoFactorPending || lastAttempt?.needs_otp === true || progress === 'waiting_for_otp' || needsOtpState) {
-        return { status: '2fa_required', message: 'Please enter your 2FA code from your email or authenticator app' }
+        return { status: '2fa_required', message: 'Please enter your 2FA code from your email or authenticator app', progress }
       }
 
       // Success only when authentication is actually done (not still "authenticating")
@@ -205,6 +231,7 @@ class OnlyFansAPI {
           status: 'success',
           accountId: String(accountId),
           username: username || undefined,
+          progress,
         }
       }
 
@@ -216,11 +243,11 @@ class OnlyFansAPI {
           data.error ||
           lastAttempt?.error_code ||
           'Authentication failed'
-        return { status: 'failed', message: errorMessage }
+        return { status: 'failed', message: errorMessage, progress }
       }
 
       const message = data.message || this.authProgressMessage(progress, state)
-      return { status: 'pending', message }
+      return { status: 'pending', message, progress }
     } catch (error) {
       return { status: 'failed', message: error instanceof Error ? error.message : 'Poll failed' }
     }

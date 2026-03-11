@@ -49,8 +49,21 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
 
-    // Surface OnlyFans session expiry as a clear re-auth requirement to the client
+    // Surface OnlyFans session expiry and auto-disconnect so the user can reconnect
     if (message.includes('ONLYFANS_SESSION_EXPIRED')) {
+      try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase
+            .from('platform_connections')
+            .update({ is_connected: false, access_token: null })
+            .eq('user_id', user.id)
+            .eq('platform', 'onlyfans')
+        }
+      } catch {
+        // best-effort; still return 401
+      }
       return NextResponse.json(
         {
           error: 'OnlyFans session expired',

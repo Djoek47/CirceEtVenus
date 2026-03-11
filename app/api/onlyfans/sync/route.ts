@@ -277,8 +277,21 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to sync data'
 
-    // If the upstream OnlyFans session is expired, surface a clear re-authentication requirement
+    // If the upstream OnlyFans session is expired, auto-disconnect and tell the user to reconnect
     if (message.includes('ONLYFANS_SESSION_EXPIRED')) {
+      try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase
+            .from('platform_connections')
+            .update({ is_connected: false, access_token: null })
+            .eq('user_id', user.id)
+            .eq('platform', 'onlyfans')
+        }
+      } catch {
+        // best-effort; still return 401
+      }
       return NextResponse.json(
         {
           error: 'OnlyFans session expired',

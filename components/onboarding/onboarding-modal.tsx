@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { ThemedLogo } from '@/components/themed-logo'
+import Link from 'next/link'
 import { 
   ArrowRight, ArrowLeft, Check, Star, Moon, Sun, 
   LayoutDashboard, Users, Calendar, MessageSquare, Shield,
-  Sparkles, Link2, Zap
+  Sparkles, Link2, Zap, BookOpen
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -116,7 +117,7 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
       content: (
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            Connect your platforms to unlock the full power of Circe et Venus.
+            Connect your platforms to unlock the full power of Circe et Venus. We use secure, read-only connections — your credentials are never stored on our servers.
           </p>
           <div className="grid gap-3">
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
@@ -156,8 +157,18 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
               <Button size="sm" variant="outline">Connect</Button>
             </div>
           </div>
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-2">
+            <p className="font-medium text-foreground">OnlyFans tips</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Login can take up to a minute — we keep checking until it completes.</li>
+              <li>If it gets stuck, use &quot;Start fresh login&quot; and try a different proxy (US or UK).</li>
+              <li>You may be asked for 2FA or a quick face verification; we&apos;ll guide you through it.</li>
+              <li>If your session expires, we disconnect for safety; reconnect with a fresh login anytime.</li>
+              <li>The name shown to our partner is your Circe et Venus profile (or email), not your OnlyFans login.</li>
+            </ul>
+          </div>
           <p className="text-center text-xs text-muted-foreground">
-            You can always connect platforms later in Settings
+            You can always connect platforms later in Settings. Need more help? Open the <Link href="/dashboard/guide" className="text-primary underline hover:no-underline">Guide</Link> from the sidebar.
           </p>
         </div>
       ),
@@ -291,6 +302,10 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
               14-Day Pro Trial
             </Badge>
           </div>
+          <Link href="/dashboard/guide" className="mt-4 inline-flex items-center gap-2 text-sm text-primary hover:underline">
+            <BookOpen className="h-4 w-4" />
+            Open the Guide for detailed help
+          </Link>
         </div>
       ),
     },
@@ -333,9 +348,12 @@ export function OnboardingModal({ open, onComplete, userName = 'Creator' }: Onbo
         <div className="mb-2">
           <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>Step {currentStep + 1} of {steps.length}</span>
-            <button onClick={handleSkip} className="hover:text-foreground">
-              Skip tutorial
-            </button>
+            <span className="flex items-center gap-2">
+              <Link href="/dashboard/guide" className="hover:text-foreground">Guide</Link>
+              <button onClick={handleSkip} className="hover:text-foreground">
+                Skip tutorial
+              </button>
+            </span>
           </div>
           <Progress value={progress} className="h-1" />
         </div>

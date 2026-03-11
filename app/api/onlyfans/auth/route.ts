@@ -79,8 +79,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           requires_2fa: true,
           attemptId,
-          message: 'Please enter the 2FA code sent to your device'
+          message: 'Please enter the 2FA code sent to your device',
+          progress: status.progress,
         })
+      }
+
+      if (status.status === 'face_verification_required') {
+        return NextResponse.json({
+          face_verification_required: true,
+          attemptId,
+          message: status.message || 'OnlyFans requires face verification to continue.',
+          face_verification_url: status.faceVerificationUrl,
+          progress: status.progress,
+        }, { status: 200 })
       }
 
       if (status.status === 'success' && status.accountId) {
@@ -126,12 +137,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: status.message || 'Authentication failed' }, { status: 400 })
       }
 
-      // Still pending (e.g. state === 'authenticating') — do not save as connected
+      // Still pending (e.g. state === 'authenticating', progress === 'filling_out_login') — do not save as connected
       // Only mark connected when poll returns success or 2fa_required
       return NextResponse.json({ 
         status: 'pending',
         attemptId,
-        message: status.message || 'Processing...'
+        message: status.message || 'Processing...',
+        progress: status.progress,
       })
     }
 
@@ -140,7 +152,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
-    const result = await api.startAuthentication(email, password, proxyCountry)
+    // Use Supabase identity for display_name (not the OnlyFans login email) so the account shows our service user
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single()
+    const creatorName = (profile as { full_name?: string } | null)?.full_name ?? ''
+    const supabaseEmail = user.email ?? ''
+    const displayName =
+      creatorName.trim() !== ''
+        ? `Circe et Venus / ${creatorName} <${supabaseEmail}>`
+        : supabaseEmail
+        ? `Circe et Venus / ${supabaseEmail}`
+        : undefined
+
+    const result = await api.startAuthentication(email, password, proxyCountry, displayName)
 
     // If we have an attempt_id, return success for polling
     if (result.attempt_id) {

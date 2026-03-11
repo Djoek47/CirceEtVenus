@@ -148,6 +148,9 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
   const [onlyfansLoading, setOnlyfansLoading] = useState(false)
   const [onlyfansStatus, setOnlyfansStatus] = useState<string | null>(null)
   const [onlyfansShowVpnWarning, setOnlyfansShowVpnWarning] = useState(false)
+  const [onlyfansShowStuckHint, setOnlyfansShowStuckHint] = useState(false)
+  const [onlyfansProxyCountry, setOnlyfansProxyCountry] = useState<'us' | 'uk'>('us')
+  const [onlyfansFaceVerificationUrl, setOnlyfansFaceVerificationUrl] = useState<string | null>(null)
 
   // Fansly auth state
   const [fanslyDialogOpen, setFanslyDialogOpen] = useState(false)
@@ -289,6 +292,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
           password: onlyfansPassword,
           attemptId: onlyfansAttemptId,
           twoFactorCode: onlyfans2FACode || undefined,
+          proxyCountry: onlyfansProxyCountry,
         }),
       })
 
@@ -380,8 +384,18 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
         if (data.requires_2fa) {
           setOnlyfansShowVpnWarning(false)
+          setOnlyfansShowStuckHint(false)
           setOnlyfansStatus('Please enter your 2FA code')
           setOnlyfansLoading(false)
+          return
+        }
+        if (data.face_verification_required) {
+          setOnlyfansShowVpnWarning(false)
+          setOnlyfansShowStuckHint(false)
+          setOnlyfansFaceVerificationUrl(data.face_verification_url || null)
+          setOnlyfansStatus(data.message || 'OnlyFans requires face verification. Complete it in the link below, then we’ll keep polling.')
+          setOnlyfansLoading(false)
+          setTimeout(poll, 3000)
           return
         }
         if (data.success && data.accountId) {
@@ -408,6 +422,9 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
           return
         }
         setOnlyfansStatus(data.message || 'Processing...')
+        if (data.progress === 'filling_out_login' && Date.now() - startedAt >= 45_000) {
+          setOnlyfansShowStuckHint(true)
+        }
         if (Date.now() - startedAt >= TWO_MINUTES_MS) {
           setOnlyfansShowVpnWarning(true)
         }
@@ -499,8 +516,9 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       if (!response.ok) {
         // Handle OnlyFans-specific session expiry so we can log the user out cleanly
         if (platformId === 'onlyfans' && response.status === 401 && data?.code === 'ONLYFANS_SESSION_EXPIRED') {
+          if (typeof window !== 'undefined') window.localStorage.removeItem('onlyfans_auth_attempt')
           setError(
-            'Your OnlyFans password or session changed. To keep your data safe, we disconnected your OnlyFans account. Please reconnect.'
+            'Your OnlyFans password or session changed. To keep your data safe, we disconnected your OnlyFans account. Please reconnect (use a fresh login; you can try a different proxy if it was stuck).'
           )
           await loadConnections()
           return
@@ -714,6 +732,11 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
           onlyfansLoading={onlyfansLoading}
           onlyfansStatus={onlyfansStatus}
           onlyfansShowVpnWarning={onlyfansShowVpnWarning}
+          onlyfansShowStuckHint={onlyfansShowStuckHint}
+          onlyfansProxyCountry={onlyfansProxyCountry}
+          setOnlyfansProxyCountry={setOnlyfansProxyCountry}
+          onlyfansFaceVerificationUrl={onlyfansFaceVerificationUrl}
+          startFreshOnlyfans={startFreshOnlyfans}
           handleOnlyfansLogin={handleOnlyfansLogin}
           fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
           fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
@@ -909,6 +932,11 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
         onlyfansLoading={onlyfansLoading}
         onlyfansStatus={onlyfansStatus}
         onlyfansShowVpnWarning={onlyfansShowVpnWarning}
+        onlyfansShowStuckHint={onlyfansShowStuckHint}
+        onlyfansProxyCountry={onlyfansProxyCountry}
+        setOnlyfansProxyCountry={setOnlyfansProxyCountry}
+        onlyfansFaceVerificationUrl={onlyfansFaceVerificationUrl}
+        startFreshOnlyfans={startFreshOnlyfans}
         handleOnlyfansLogin={handleOnlyfansLogin}
         fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
         fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
@@ -938,6 +966,11 @@ interface ConnectDialogsProps {
   onlyfansLoading: boolean
   onlyfansStatus: string | null
   onlyfansShowVpnWarning: boolean
+  onlyfansShowStuckHint: boolean
+  onlyfansProxyCountry: 'us' | 'uk'
+  setOnlyfansProxyCountry: (v: 'us' | 'uk') => void
+  onlyfansFaceVerificationUrl: string | null
+  startFreshOnlyfans: () => void
   handleOnlyfansLogin: () => void
   fanslyDialogOpen: boolean
   setFanslyDialogOpen: (v: boolean) => void
@@ -960,6 +993,8 @@ function ConnectDialogs({
   onlyfansAttemptId,
   onlyfans2FACode, setOnlyfans2FACode,
   onlyfansLoading, onlyfansStatus, onlyfansShowVpnWarning,
+  onlyfansShowStuckHint, onlyfansProxyCountry, setOnlyfansProxyCountry,
+  onlyfansFaceVerificationUrl, startFreshOnlyfans,
   handleOnlyfansLogin,
   fanslyDialogOpen, setFanslyDialogOpen,
   fanslyEmail, setFanslyEmail,
@@ -1000,14 +1035,42 @@ function ConnectDialogs({
                 {onlyfansStatus}
               </div>
             )}
-            {onlyfansShowVpnWarning && (
+            {onlyfansShowStuckHint && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-600 dark:text-amber-400 space-y-2">
+                <p>Login is stuck at the form step. Start a fresh attempt (you can switch proxy to UK if needed).</p>
+                <Button type="button" variant="outline" size="sm" onClick={startFreshOnlyfans} className="w-full border-amber-500/50">
+                  Start fresh login
+                </Button>
+              </div>
+            )}
+            {onlyfansShowVpnWarning && !onlyfansShowStuckHint && (
               <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-600 dark:text-amber-400">
-                Authentication is taking longer than usual and we haven&apos;t received a confirmation yet. If you&apos;re using a VPN, try disconnecting — VPNs can prevent OnlyFans authentication from completing.
+                Authentication is taking longer than usual. If you&apos;re using a VPN, try disconnecting — or use &quot;Start fresh login&quot; and choose a different proxy (e.g. UK).
+              </div>
+            )}
+            {onlyfansFaceVerificationUrl && (
+              <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3 text-sm text-blue-600 dark:text-blue-400 space-y-2">
+                <p>{onlyfansStatus || 'OnlyFans requires a quick face verification.'}</p>
+                <a href={onlyfansFaceVerificationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 underline font-medium">
+                  Complete face verification →
+                </a>
               </div>
             )}
 
             {!onlyfansAttemptId ? (
               <>
+                <div className="space-y-2">
+                  <Label htmlFor="of-proxy">Proxy region (if stuck, try switching)</Label>
+                  <select
+                    id="of-proxy"
+                    value={onlyfansProxyCountry}
+                    onChange={e => setOnlyfansProxyCountry(e.target.value as 'us' | 'uk')}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="us">US</option>
+                    <option value="uk">UK</option>
+                  </select>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="of-email">Email</Label>
                   <div className="relative">
@@ -1034,6 +1097,11 @@ function ConnectDialogs({
               </div>
             ) : null}
 
+            {onlyfansAttemptId && !onlyfansStatus?.includes('2FA') && (
+              <Button type="button" variant="outline" size="sm" onClick={startFreshOnlyfans} className="w-full">
+                Start fresh login
+              </Button>
+            )}
             <Button
               className="w-full"
               style={{ background: 'linear-gradient(135deg, #00AFF0, #0090C0)' }}

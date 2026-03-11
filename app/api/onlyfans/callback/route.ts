@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
+import { assertPlatformAccountAvailable } from '@/lib/platform-connections'
 
 // POST: Handle callback from @onlyfansapi/auth SDK
 export async function POST(request: NextRequest) {
@@ -10,8 +11,6 @@ export async function POST(request: NextRequest) {
     
     const finalAccountId = accountId || account_id
     const finalUserId = clientReferenceId || client_reference_id
-
-    
 
     if (!finalAccountId) {
       return NextResponse.json({ error: 'No account ID provided' }, { status: 400 })
@@ -28,6 +27,18 @@ export async function POST(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 })
+    }
+
+    const ownership = await assertPlatformAccountAvailable(supabase as any, {
+      platform: 'onlyfans',
+      externalAccountId: finalAccountId,
+      currentUserId: userId,
+    })
+    if (!ownership.ok && ownership.ownedByOtherUser) {
+      return NextResponse.json(
+        { error: 'This OnlyFans account is already connected to another Circe et Venus workspace.', code: 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED' },
+        { status: 409 }
+      )
     }
 
     // Save the connection

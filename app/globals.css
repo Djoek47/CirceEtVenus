@@ -435,3 +435,12 @@
 .tools-sparkle-text {
   animation: tools-sparkle 3s ease-in-out infinite, rainbow-text-animation 4s ease-in-out infinite;
 }
+
+/* Mobile: prevent horizontal scroll, safe min-height */
+html {
+  min-height: 100dvh;
+}
+body {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}

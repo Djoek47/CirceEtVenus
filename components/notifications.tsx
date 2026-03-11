@@ -220,7 +220,7 @@ export function Notifications() {
 // Render static button during SSR to avoid hydration mismatch with Radix IDs
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" className="relative">
+      <Button variant="ghost" size="icon" className="relative h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0">
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary dark:bg-circe text-[10px] font-bold text-primary-foreground dark:text-circe-foreground">
@@ -234,7 +234,7 @@ export function Notifications() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
@@ -243,8 +243,8 @@ export function Notifications() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0 sm:w-96" align="end">
-        <div className="flex items-center justify-between border-b border-border p-4">
+      <PopoverContent className="flex w-80 max-w-[calc(100vw-2rem)] max-h-[min(80vh,400px)] flex-col overflow-hidden p-0 sm:w-96" align="end">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-border p-4">
           <h3 className="text-lg font-semibold">Notifications</h3>
           {unreadCount > 0 && (
             <Button 
@@ -258,7 +258,7 @@ export function Notifications() {
           )}
         </div>
         
-        <ScrollArea className="h-[300px] sm:h-[400px]">
+        <ScrollArea className="min-h-0 flex-1 overflow-y-auto">
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Bell className="mb-2 h-8 w-8 text-muted-foreground" />
@@ -358,7 +358,7 @@ export function Notifications() {
           )}
         </ScrollArea>
         
-        <div className="border-t border-border p-2">
+        <div className="flex-shrink-0 border-t border-border p-2">
           <Button 
             variant="ghost" 
             className="w-full justify-center text-sm"

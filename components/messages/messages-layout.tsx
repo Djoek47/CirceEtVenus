@@ -5,7 +5,7 @@ import { ConversationList, type Conversation } from './conversation-list'
 import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { RefreshCw, Loader2, ArrowLeft } from 'lucide-react'
 
 interface MessagesLayoutProps {
   userId: string
@@ -127,19 +127,35 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
-      {/* Header with Mass Message */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Messages</h2>
-          <p className="text-sm text-muted-foreground">
-            {conversations.length} conversations
-          </p>
+    <div className="flex flex-col h-[calc(100vh-8rem)] min-h-0">
+      {/* Header: back on mobile when chat open, title, actions */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 flex-shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {selectedConversation && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden h-10 w-10 flex-shrink-0"
+              onClick={() => setSelectedConversation(null)}
+              aria-label="Back to conversations"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
+              {selectedConversation ? (selectedConversation.user.name || selectedConversation.user.username || 'Chat') : 'Messages'}
+            </h2>
+            <p className="text-sm text-muted-foreground truncate">
+              {selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations`}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="outline"
             size="icon"
+            className="h-10 w-10"
             onClick={() => loadConversations(true)}
             disabled={refreshing}
           >
@@ -149,21 +165,35 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
         </div>
       </div>
 
-      {/* Messages Content */}
-      <div className="flex flex-1 gap-4 min-h-0">
-        {/* Conversation List */}
+      {/* Desktop: side-by-side list + chat */}
+      <div className="hidden md:flex flex-1 gap-4 min-h-0">
         <ConversationList
           conversations={conversations}
           selectedId={selectedConversation?.user.id}
           onSelect={(conv) => setSelectedConversation(conv)}
         />
-
-        {/* Chat Window */}
-        <ChatWindow 
-          conversation={selectedConversation} 
+        <ChatWindow
+          conversation={selectedConversation}
           userId={userId}
           onMessageSent={() => loadConversations(true)}
         />
+      </div>
+
+      {/* Mobile: list or chat (full width) */}
+      <div className="flex flex-1 flex-col min-h-0 md:hidden">
+        {selectedConversation ? (
+          <ChatWindow
+            conversation={selectedConversation}
+            userId={userId}
+            onMessageSent={() => loadConversations(true)}
+          />
+        ) : (
+          <ConversationList
+            conversations={conversations}
+            selectedId={selectedConversation?.user.id}
+            onSelect={(conv) => setSelectedConversation(conv)}
+          />
+        )}
       </div>
     </div>
   )

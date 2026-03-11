@@ -237,38 +237,38 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-4">
+      <div className="grid gap-6 lg:grid-cols-4 min-w-0">
         {/* Sidebar Navigation */}
-        <Card className="h-fit border-border bg-card lg:col-span-1">
+        <Card className="h-fit border-border bg-card lg:col-span-1 min-w-0">
           <CardContent className="p-4">
             <nav className="space-y-1">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? 'bg-secondary text-foreground'
                       : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
                   }`}
                 >
-                  <tab.icon className="h-4 w-4" />
+                  <tab.icon className="h-4 w-4 flex-shrink-0" />
                   {tab.label}
                 </button>
               ))}
             </nav>
             <Separator className="my-4" />
             <div className="space-y-1 text-sm">
-              <a href="/terms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
-                <ExternalLink className="h-3 w-3" />
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-h-[44px] px-3 py-2 text-muted-foreground hover:text-foreground rounded-lg">
+                <ExternalLink className="h-3 w-3 flex-shrink-0" />
                 Terms of Service
               </a>
-              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
-                <ExternalLink className="h-3 w-3" />
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-h-[44px] px-3 py-2 text-muted-foreground hover:text-foreground rounded-lg">
+                <ExternalLink className="h-3 w-3 flex-shrink-0" />
                 Privacy Policy
               </a>
-              <a href="/contact" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground">
-                <ExternalLink className="h-3 w-3" />
+              <a href="/contact" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-h-[44px] px-3 py-2 text-muted-foreground hover:text-foreground rounded-lg">
+                <ExternalLink className="h-3 w-3 flex-shrink-0" />
                 Contact Support
               </a>
             </div>
@@ -276,7 +276,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Main Content */}
-        <div className="space-y-6 lg:col-span-3">
+        <div className="space-y-6 lg:col-span-3 min-w-0 overflow-x-hidden">
           {/* Profile Section */}
           {activeTab === 'profile' && (
             <>

@@ -31,10 +31,10 @@ export default function AboutPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-background">
       {/* Header */}
       <header className="border-b border-border">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4">
+        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
             <ThemedLogo width={32} height={32} className="rounded-full" priority />
             <span className="font-serif text-lg font-semibold text-primary">CIRCE ET VENUS</span>

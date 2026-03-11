@@ -142,7 +142,7 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex gap-2">
           <Button className="gap-2 bg-circe hover:bg-circe/90" onClick={runScan} disabled={scanLoading}>

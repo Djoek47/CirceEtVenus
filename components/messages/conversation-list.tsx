@@ -61,7 +61,7 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
   }
 
   return (
-    <Card className="flex w-80 flex-shrink-0 flex-col border-border bg-card">
+    <Card className="flex w-full md:w-80 flex-shrink-0 flex-col border-border bg-card min-h-0">
       <CardHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Messages</CardTitle>

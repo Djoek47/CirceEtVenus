@@ -40,7 +40,7 @@ export default async function MentionsPage() {
   const negativeCount = allMentions.filter(m => m.sentiment === 'negative').length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <MentionsHeader />
 
       {/* Stats */}

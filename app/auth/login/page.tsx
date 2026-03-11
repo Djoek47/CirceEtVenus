@@ -102,7 +102,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-input border-border"
+                className="bg-input border-border min-h-[44px]"
               />
             </div>
 
@@ -123,7 +123,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-input border-border"
+                className="bg-input border-border min-h-[44px]"
               />
             </div>
 

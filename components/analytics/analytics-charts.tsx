@@ -70,21 +70,21 @@ export function AnalyticsCharts({ analytics, hasConnections = false }: Analytics
   }
 
   return (
-    <Tabs defaultValue="revenue" className="w-full">
-      <TabsList className="bg-secondary">
+    <Tabs defaultValue="revenue" className="w-full min-w-0">
+      <TabsList className="bg-secondary overflow-x-auto">
         <TabsTrigger value="revenue">Revenue</TabsTrigger>
         <TabsTrigger value="subscribers">Subscribers</TabsTrigger>
         <TabsTrigger value="engagement">Engagement</TabsTrigger>
       </TabsList>
 
       <TabsContent value="revenue">
-        <Card className="border-border bg-card">
+        <Card className="min-w-0 border-border bg-card overflow-hidden">
           <CardHeader>
             <CardTitle>Revenue Trend</CardTitle>
             <CardDescription>Daily earnings over the past 14 days</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
+          <CardContent className="overflow-x-auto">
+            <div className="h-[300px] min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
                   <defs>
@@ -114,13 +114,13 @@ export function AnalyticsCharts({ analytics, hasConnections = false }: Analytics
       </TabsContent>
 
       <TabsContent value="subscribers">
-        <Card className="border-border bg-card">
+        <Card className="min-w-0 border-border bg-card overflow-hidden">
           <CardHeader>
             <CardTitle>Subscriber Growth</CardTitle>
             <CardDescription>New fans acquired over time</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
+          <CardContent className="overflow-x-auto">
+            <div className="h-[300px] min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.015 260)" />
@@ -143,13 +143,13 @@ export function AnalyticsCharts({ analytics, hasConnections = false }: Analytics
       </TabsContent>
 
       <TabsContent value="engagement">
-        <Card className="border-border bg-card">
+        <Card className="min-w-0 border-border bg-card overflow-hidden">
           <CardHeader>
             <CardTitle>Message Activity</CardTitle>
             <CardDescription>Messages received daily</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
+          <CardContent className="overflow-x-auto">
+            <div className="h-[300px] min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
                   <defs>

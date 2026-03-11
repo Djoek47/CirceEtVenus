@@ -63,7 +63,7 @@ export default function SignUpPage() {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Left Side - Form */}
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
+      <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-4 py-12">
         <div className="absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-gold/10 via-venus/5 to-transparent" />
         </div>
@@ -114,7 +114,7 @@ export default function SignUpPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
-                  className="bg-input border-border"
+                  className="bg-input border-border min-h-[44px]"
                 />
               </div>
 
@@ -127,7 +127,7 @@ export default function SignUpPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="bg-input border-border"
+                  className="bg-input border-border min-h-[44px]"
                 />
               </div>
 
@@ -141,7 +141,7 @@ export default function SignUpPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="bg-input border-border"
+                  className="bg-input border-border min-h-[44px]"
                 />
                 <p className="text-xs text-muted-foreground">
                   Must be at least 8 characters
@@ -149,7 +149,7 @@ export default function SignUpPage() {
               </div>
 
               <Button type="submit" className={cn(
-                "w-full bg-primary hover:bg-primary/90 text-primary-foreground",
+                "w-full min-h-[44px] bg-primary hover:bg-primary/90 text-primary-foreground",
                 mounted && "dark:bg-circe dark:hover:bg-circe/90"
               )} disabled={loading}>
                 {loading ? (

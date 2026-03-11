@@ -18,10 +18,10 @@ export default function TermsOfServicePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-background">
       {/* Header */}
       <header className="border-b border-border">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4">
+        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
             <ThemedLogo width={32} height={32} className="rounded-full" priority />
             <span className="font-serif text-lg font-semibold text-primary">CIRCE ET VENUS</span>
@@ -34,11 +34,11 @@ export default function TermsOfServicePage() {
       </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-4xl px-4 py-12">
-        <h1 className="font-serif text-3xl font-bold">Terms of Service</h1>
-        <p className="mt-2 text-muted-foreground">Last updated: March 9, 2026</p>
+      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+        <h1 className="font-serif text-2xl font-bold sm:text-3xl">Terms of Service</h1>
+        <p className="mt-2 text-sm text-muted-foreground sm:text-base">Last updated: March 9, 2026</p>
 
-        <div className="prose prose-invert mt-8 max-w-none space-y-8">
+        <div className="prose prose-invert mt-8 max-w-full space-y-8">
           <section>
             <h2 className="text-xl font-semibold">1. Acceptance of Terms</h2>
             <p className="text-muted-foreground">

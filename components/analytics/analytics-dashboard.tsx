@@ -105,16 +105,16 @@ export function AnalyticsDashboard({
   const showNone = () => setSelectedPlatforms([])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Analytics</h2>
+    <div className="space-y-6 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Analytics</h2>
           <p className="text-muted-foreground">Track your performance across all platforms</p>
         </div>
 
         {/* Platform filters */}
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:items-end gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={showAll} disabled={!hasConnections}>
               All
             </Button>
@@ -122,7 +122,7 @@ export function AnalyticsDashboard({
               Clear
             </Button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {connectedPlatforms.map((platform) => {
               const meta = PLATFORM_META[platform] || { label: platform, logoSrc: '', ring: 'ring-border', bg: 'bg-muted' }
               const selected = selectedPlatforms.includes(platform)

@@ -78,7 +78,7 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
         {mounted ? (
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden">
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Open menu</span>
               </Button>
@@ -117,7 +117,7 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
         {mounted ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
+              <Button variant="ghost" className="relative h-11 w-11 min-h-[44px] min-w-[44px] rounded-full sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0">
                 <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                   <AvatarImage src={profile?.avatar_url || undefined} alt={profile?.full_name || 'User'} />
                   <AvatarFallback className="bg-primary dark:bg-circe text-primary-foreground dark:text-circe-foreground text-xs sm:text-sm">
@@ -158,7 +158,7 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button variant="ghost" className="relative h-8 w-8 rounded-full sm:h-9 sm:w-9">
+          <Button variant="ghost" className="relative h-11 w-11 min-h-[44px] min-w-[44px] rounded-full sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0">
             <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
               <AvatarFallback className="bg-primary dark:bg-circe text-primary-foreground dark:text-circe-foreground text-xs sm:text-sm">
                 {initials}

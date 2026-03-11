@@ -445,7 +445,7 @@ export function CosmicCalendar() {
   const isActivated = birthdayData.hasBirthday
   
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 min-w-0">
       {/* Activation Status Banner */}
       {!loadingBirthday && (
         <Card className={`relative overflow-hidden transition-all duration-500 ${
@@ -502,8 +502,8 @@ export function CosmicCalendar() {
       )}
 
       {/* Tabs for different views */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+        <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex overflow-x-auto">
           <TabsTrigger value="calendar" className="gap-1.5 text-xs sm:gap-2 sm:text-sm">
             <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Cosmic</span> Calendar
@@ -632,8 +632,8 @@ export function CosmicCalendar() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+            <CardContent className="min-w-0 overflow-x-auto">
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1 min-w-0">
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
                   <div key={i} className="p-1 text-center text-xs font-medium text-muted-foreground sm:p-2 sm:text-sm">
                     {day}

@@ -33,9 +33,9 @@ export default async function DashboardLayout({
         <div className="hidden md:block">
           <DashboardSidebar user={user} profile={profile} />
         </div>
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <DashboardHeader user={user} profile={profile} />
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
             {children}
           </main>
         </div>

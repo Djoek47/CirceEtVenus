@@ -143,7 +143,7 @@ export function SocialPromotion({ connections }: SocialPromotionProps) {
   const fullPostText = postText + (hashtags.length > 0 ? '\n\n' + hashtags.map(h => `#${h}`).join(' ') : '')
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Social Media Promotion</h2>
         <p className="text-muted-foreground">

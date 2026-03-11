@@ -142,11 +142,11 @@ export default function AIStudioPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">AI Studio</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">AI Studio</h1>
           <p className="text-muted-foreground">
             Divine intelligence at your command. Choose your guide.
           </p>

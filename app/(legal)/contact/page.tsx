@@ -63,10 +63,10 @@ export default function ContactPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-background">
       {/* Header */}
       <header className="border-b border-border">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
             <ThemedLogo width={32} height={32} className="rounded-full" priority />
             <span className="font-serif text-lg font-semibold text-primary">CIRCE ET VENUS</span>
@@ -79,7 +79,7 @@ export default function ContactPage() {
       </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-5xl px-4 py-12">
+      <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         <div className="text-center">
           <h1 className="font-serif text-3xl font-bold">Contact Us</h1>
           <p className="mt-2 text-muted-foreground">

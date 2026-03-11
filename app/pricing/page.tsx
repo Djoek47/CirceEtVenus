@@ -199,7 +199,7 @@ export default function PricingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-background constellation-bg">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-background constellation-bg">
       {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-xl">
         <nav className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">
@@ -329,7 +329,7 @@ export default function PricingPage() {
 
         {/* Feature Comparison */}
         <section className="border-y border-border/30 bg-card/30 px-4 py-16 sm:px-6 sm:py-24">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-5xl min-w-0">
             <div className="mb-12 text-center">
               <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 Compare Plans
@@ -339,7 +339,7 @@ export default function PricingPage() {
               </p>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="-mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
               <table className="w-full min-w-[640px] border-collapse">
                 <thead>
                   <tr className="border-b border-border">

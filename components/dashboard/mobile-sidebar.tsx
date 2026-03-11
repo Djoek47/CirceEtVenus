@@ -90,7 +90,7 @@ export function MobileSidebar({ profile }: MobileSidebarProps) {
         <Link
           href={item.href}
           className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
+            'flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
             isActive ? styles.active : styles.inactive
           )}
         >

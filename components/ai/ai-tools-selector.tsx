@@ -1496,7 +1496,7 @@ export function AIToolsSelector({
   
   // Tool workspace view
   return (
-    <Card className={`border-primary/20 ${selectedTool.borderColor}`}>
+    <Card className={`min-w-0 border-primary/20 ${selectedTool.borderColor}`}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1556,13 +1556,15 @@ export function AIToolsSelector({
           )}
         </Button>
         
-        {/* Results */}
+        {/* Results — scrollable on mobile so page doesn't grow unbounded */}
         {result && (
-          selectedTool.id === 'caption-generator' && 'captions' in result
-            ? renderCaptionResults(result as CaptionResult)
-            : selectedTool.id === 'standard-of-attraction' && 'score' in result
-              ? renderAttractionResults(result as AttractionResult)
-              : renderGenericResults(result as AIResult)
+          <div className="max-h-[min(60vh,400px)] overflow-y-auto overflow-x-hidden rounded-lg border border-border p-3">
+            {selectedTool.id === 'caption-generator' && 'captions' in result
+              ? renderCaptionResults(result as CaptionResult)
+              : selectedTool.id === 'standard-of-attraction' && 'score' in result
+                ? renderAttractionResults(result as AttractionResult)
+                : renderGenericResults(result as AIResult)}
+          </div>
         )}
       </CardContent>
     </Card>

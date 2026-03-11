@@ -73,7 +73,7 @@ export default function HowItWorksPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-background constellation-bg">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-background constellation-bg">
       {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/80 backdrop-blur-xl">
         <nav className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">

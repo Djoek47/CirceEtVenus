@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -141,6 +141,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   // OnlyFans: SDK modal only; overlay blocks app until user completes or cancels
   const [onlyfansSdkInProgress, setOnlyfansSdkInProgress] = useState(false)
+  const onlyfansSdkSeenIframeRef = useRef(false)
 
   // Fansly auth state
   const [fanslyDialogOpen, setFanslyDialogOpen] = useState(false)
@@ -199,6 +200,51 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     checkAndSyncOnlyFans()
   }, [])
 
+  // If the user closes the OnlyFans SDK modal (presses X), the SDK should call onError.
+  // As a fallback (some browser edge-cases), detect when the auth iframe appears then disappears
+  // and cancel the in-progress state so the app is unblocked.
+  useEffect(() => {
+    if (!onlyfansSdkInProgress) {
+      onlyfansSdkSeenIframeRef.current = false
+      return
+    }
+
+    let cancelled = false
+    const startedAt = Date.now()
+
+    const tick = () => {
+      if (cancelled) return
+
+      const iframe = document.querySelector(
+        'iframe[src*="onlyfansapi.com"], iframe[src*="onlyfansapi"], iframe[src*="app.onlyfansapi.com"]'
+      )
+      const hasIframe = !!iframe
+      if (hasIframe) {
+        onlyfansSdkSeenIframeRef.current = true
+      }
+
+      // If we previously saw the iframe and now it's gone, user likely closed (X)
+      if (onlyfansSdkSeenIframeRef.current && !hasIframe) {
+        void cancelOnlyfansSdkAuth('OnlyFans sign-in was cancelled')
+        return
+      }
+
+      // If nothing showed up after a while, likely blocked
+      if (!onlyfansSdkSeenIframeRef.current && Date.now() - startedAt > 10000) {
+        void cancelOnlyfansSdkAuth('OnlyFans sign-in window did not open (popup blocked?). Please allow popups and try again.')
+        return
+      }
+    }
+
+    // poll quickly; the modal injects/removes DOM nodes
+    const interval = window.setInterval(tick, 400)
+    tick()
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [onlyfansSdkInProgress])
+
   const isConnected = (platformId: string) =>
     connections.some(c => c.platform === platformId && c.is_connected)
 
@@ -235,7 +281,19 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   // ── OnlyFans (SDK modal only; 2FA handled inside OnlyFansAPI.com modal) ───
 
+  const cancelOnlyfansSdkAuth = async (reason?: string) => {
+    try {
+      await fetch('/api/onlyfans/cancel-auth', { method: 'POST' })
+    } catch {
+      // best-effort cleanup; still unblock UI
+    } finally {
+      if (reason) setError(reason)
+      setOnlyfansSdkInProgress(false)
+    }
+  }
+
   const connectOnlyfansWithSdk = async () => {
+    if (onlyfansSdkInProgress) return
     setOnlyfansSdkInProgress(true)
     setError(null)
     try {
@@ -279,9 +337,12 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
             setOnlyfansSdkInProgress(false)
           }
         },
-        onError: (err: { message?: string }) => {
-          setError(err?.message || 'OnlyFans sign-in was cancelled or failed')
-          setOnlyfansSdkInProgress(false)
+        onError: (err: { message?: string; code?: string }) => {
+          if (err?.code === 'AUTH_CANCELLED') {
+            void cancelOnlyfansSdkAuth('OnlyFans sign-in was cancelled')
+            return
+          }
+          void cancelOnlyfansSdkAuth(err?.message || 'OnlyFans sign-in was cancelled or failed')
         },
       })
     } catch (e) {

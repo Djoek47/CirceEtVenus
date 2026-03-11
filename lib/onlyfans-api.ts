@@ -297,9 +297,11 @@ class OnlyFansAPI {
     success: boolean
     accounts?: Array<{
       id: string
+      client_reference_id?: string
       onlyfans_id?: string
       onlyfans_username?: string
       onlyfans_email?: string
+      onlyfans_user_data?: unknown
     }>
     message?: string
   }> {
@@ -350,6 +352,16 @@ class OnlyFansAPI {
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : 'Failed to delete account' }
     }
+  }
+
+  /**
+   * Disconnect an account (alias of deleteAccount) - DELETE /api/accounts/{account_id}
+   */
+  async disconnectAccount(accountId: string): Promise<{
+    success: boolean
+    message?: string
+  }> {
+    return this.deleteAccount(accountId)
   }
 
   // ============ API REQUESTS ============

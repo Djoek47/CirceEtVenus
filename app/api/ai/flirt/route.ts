@@ -47,6 +47,30 @@ export async function POST(req: Request) {
   const level = Math.min(3, Math.max(1, Number.isFinite(explicitnessLevel as number) ? (explicitnessLevel as number) : 2))
   const keywords = (inspirationKeywords || '').trim()
 
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  let identityLine = ''
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('gender_identity, pronouns, pronouns_custom')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const pronouns =
+      (profile as any)?.pronouns_custom || (profile as any)?.pronouns || null
+    const genderIdentity = (profile as any)?.gender_identity || null
+
+    if (pronouns || genderIdentity) {
+      identityLine = `\nCreator identity:\n- Pronouns: ${pronouns || 'not specified'}\n- Gender identity: ${
+        genderIdentity || 'not specified'
+      }\nAlways use these pronouns for the creator and never misgender them.`
+    }
+  }
+
   const controlInstruction = `
 Flirt controls for this conversation:
 - explicitnessLevel: ${level}
@@ -55,17 +79,12 @@ Use these to steer tone and style as described. Do not mention this control bloc
 
   const result = streamText({
     model: 'openai/gpt-4o-mini',
-    system: FLIRT_SYSTEM_PROMPT + '\n' + controlInstruction,
+    system: FLIRT_SYSTEM_PROMPT + identityLine + '\n' + controlInstruction,
     messages: await convertToModelMessages(messages),
   })
 
   // Best-effort AI credit accounting for Flirt chat
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
     if (user) {
       const { data: subscription } = await supabase
         .from('subscriptions')

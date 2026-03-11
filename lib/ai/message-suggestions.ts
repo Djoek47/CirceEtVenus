@@ -49,6 +49,12 @@ export type SuggestionRequestContext = {
   tonePreferences?: string[]
   niches?: string[]
   boundaries?: string[]
+  flirtControls?: {
+    explicitnessLevel?: number
+    inspirationKeywords?: string
+  }
+  creatorPronouns?: string
+  creatorGenderIdentity?: string
 }
 
 function buildConversationPreview(ctx: SuggestionRequestContext): string {
@@ -114,6 +120,15 @@ Focus on:
           ? 'Attraction, flirtation, and gently steering towards paid content and tips.'
           : 'Natural flirting, chemistry, and emotional connection only (no explicit sales or business language).'
 
+    const flirtControlText =
+      ctx.mode === 'flirt'
+        ? `
+Flirt controls for this request:
+- explicitnessLevel: ${typeof ctx.flirtControls?.explicitnessLevel === 'number' ? ctx.flirtControls.explicitnessLevel : 2}
+- inspirationKeywords: ${ctx.flirtControls?.inspirationKeywords?.trim() || 'none provided'}
+Use these to steer tone and style only. Do NOT repeat the keywords; just embody them.`
+        : ''
+
     task = `Using the recent conversation, generate 2-3 candidate replies the creator could send next.
 Return ONLY JSON:
 {
@@ -130,13 +145,23 @@ Return ONLY JSON:
 
 Focus on: ${flavor}
 - Keep replies in the same language/register as the chat.
-- \"soft\" = playful and light, \"medium\" = more teasing and sultry, \"intense\" = very spicy but still within the safety rules.`
+- \"soft\" = playful and light, \"medium\" = more teasing and sultry, \"intense\" = very spicy but still within the safety rules.${ctx.mode === 'flirt' ? flirtControlText : ''}`
   }
+
+  const identityLine =
+    ctx.creatorPronouns || ctx.creatorGenderIdentity
+      ? `Creator identity:
+- Pronouns: ${ctx.creatorPronouns || 'not specified'}
+- Gender identity: ${ctx.creatorGenderIdentity || 'not specified'}
+Always use these pronouns for the creator and never misgender them.`
+      : ''
 
   const prompt = `${persona}
 
 Platform: ${ctx.platform}
 Fan handle: @${ctx.fan.username || 'fan'}
+
+${identityLine}
 
 ${nicheLine}
 ${safety}

@@ -125,6 +125,10 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const supabase = createClient()
   const [niches, setNiches] = useState<string[]>([])
   const [boundaries, setBoundaries] = useState<string[]>([])
+  const [flirtLevel, setFlirtLevel] = useState<number>(2)
+  const [flirtKeywords, setFlirtKeywords] = useState<string>('')
+  const [creatorPronouns, setCreatorPronouns] = useState<string | null>(null)
+  const [creatorGenderIdentity, setCreatorGenderIdentity] = useState<string | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -153,7 +157,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     })
   }
 
-  // Load creator niches/boundaries for the active platform
+  // Load creator niches/boundaries and identity for the active platform
   useEffect(() => {
     const loadNiches = async () => {
       if (!conversation) {
@@ -174,6 +178,17 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         const tags = ((data as any)?.niches || []) as string[]
         setNiches(tags)
         setBoundaries(tags.filter((n) => isBoundaryNiche(n)))
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('gender_identity, pronouns, pronouns_custom')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (profile) {
+          const basePronouns = (profile as any).pronouns_custom || (profile as any).pronouns || null
+          setCreatorPronouns(basePronouns)
+          setCreatorGenderIdentity(((profile as any).gender_identity as string) || null)
+        }
       } catch {
         // ignore niche loading errors
       }
@@ -195,7 +210,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     setSuggestionsLoading(mode)
 
     try {
-      const body = {
+      const body: any = {
         mode,
         platform: conversation.platform,
         fan: {
@@ -206,6 +221,20 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         messages: buildNormalizedMessages(),
         niches,
         boundaries,
+      }
+
+      if (mode === 'flirt') {
+        body.flirtControls = {
+          explicitnessLevel: flirtLevel,
+          inspirationKeywords: flirtKeywords,
+        }
+      }
+
+      if (creatorPronouns) {
+        body.creatorPronouns = creatorPronouns
+      }
+      if (creatorGenderIdentity) {
+        body.creatorGenderIdentity = creatorGenderIdentity
       }
 
       const res = await fetch('/api/ai/message-suggestions', {

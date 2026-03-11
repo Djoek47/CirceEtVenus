@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
+import { assertPlatformAccountAvailable } from '@/lib/platform-connections'
 
 // POST: Direct authentication with email/password (bypasses broken SDK modal)
 export async function POST(request: NextRequest) {
@@ -29,6 +30,22 @@ export async function POST(request: NextRequest) {
       const result = await api.submit2FA(attemptId, twoFactorCode)
       
       if (result.success && result.accountId) {
+        const ownership = await assertPlatformAccountAvailable(supabase as any, {
+          platform: 'onlyfans',
+          externalAccountId: result.accountId,
+          currentUserId: user.id,
+        })
+
+        if (!ownership.ok && ownership.ownedByOtherUser) {
+          return NextResponse.json(
+            {
+              error: 'This OnlyFans account is already connected to another Circe et Venus workspace.',
+              code: 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED',
+            },
+            { status: 409 }
+          )
+        }
+
         // Save connection to database
         await supabase
           .from('platform_connections')
@@ -67,7 +84,23 @@ export async function POST(request: NextRequest) {
       }
 
       if (status.status === 'success' && status.accountId) {
-        // Save connection
+        const ownership = await assertPlatformAccountAvailable(supabase as any, {
+          platform: 'onlyfans',
+          externalAccountId: status.accountId,
+          currentUserId: user.id,
+        })
+
+        if (!ownership.ok && ownership.ownedByOtherUser) {
+          return NextResponse.json(
+            {
+              error: 'This OnlyFans account is already connected to another Circe et Venus workspace.',
+              code: 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED',
+            },
+            { status: 409 }
+          )
+        }
+
+        // Save connection for this user
         await supabase
           .from('platform_connections')
           .upsert({
@@ -123,6 +156,23 @@ export async function POST(request: NextRequest) {
     
     if (accountsResult.success && accountsResult.accounts && accountsResult.accounts.length > 0) {
       const account = accountsResult.accounts[accountsResult.accounts.length - 1]
+
+      const ownership = await assertPlatformAccountAvailable(supabase as any, {
+        platform: 'onlyfans',
+        externalAccountId: account.id,
+        currentUserId: user.id,
+      })
+
+      if (!ownership.ok && ownership.ownedByOtherUser) {
+        return NextResponse.json(
+          {
+            error: 'This OnlyFans account is already connected to another Circe et Venus workspace.',
+            code: 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED',
+          },
+          { status: 409 }
+        )
+      }
+
       const userData2 = (account as any)?.onlyfans_user_data || {}
       const displayName2 = userData2.name || account.onlyfans_username || 'Unknown'
       
@@ -183,7 +233,9 @@ export async function GET() {
       .eq('id', user.id)
       .single()
 
-    const creatorName = (profile as any)?.full_name || user.email || 'Creator'
+    const creatorName = ((profile as any)?.full_name as string) || ''
+    const emailLabel = user.email || 'unknown-email'
+    const displayLabel = creatorName ? `${creatorName} <${emailLabel}>` : emailLabel
 
     // Create a client session token via OnlyFans API
     const response = await fetch('https://app.onlyfansapi.com/api/client-sessions', {
@@ -193,7 +245,8 @@ export async function GET() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        display_name: `Circe et Venus - ${creatorName}`,
+        // Show both the creator's chosen name and their unique email for easier management in OnlyFansAPI console
+        display_name: `Circe et Venus / ${displayLabel}`,
         client_reference_id: user.id,
       }),
     })

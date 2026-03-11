@@ -38,19 +38,38 @@ You also monitor and protect reputation:
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json()
 
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  let identityLine = ''
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('gender_identity, pronouns, pronouns_custom')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const pronouns =
+      (profile as any)?.pronouns_custom || (profile as any)?.pronouns || null
+    const genderIdentity = (profile as any)?.gender_identity || null
+
+    if (pronouns || genderIdentity) {
+      identityLine = `\nCreator identity:\n- Pronouns: ${pronouns || 'not specified'}\n- Gender identity: ${
+        genderIdentity || 'not specified'
+      }\nAlways use these pronouns for the creator and never misgender them.`
+    }
+  }
+
   const result = streamText({
     model: 'openai/gpt-4o-mini',
-    system: VENUS_SYSTEM_PROMPT,
+    system: VENUS_SYSTEM_PROMPT + identityLine,
     messages: await convertToModelMessages(messages),
   })
 
   // Best-effort AI credit accounting for Venus chat
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
     if (user) {
       const { data: subscription } = await supabase
         .from('subscriptions')

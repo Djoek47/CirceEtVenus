@@ -175,12 +175,14 @@ class OnlyFansAPI {
       })
 
       const data = await response.json()
-      const state = data.state
-      const progress = data.progress
+      const state: string | undefined = data.state
+      const progress: string | undefined = data.progress
       const lastAttempt = data.lastAttempt
 
-      // 2FA required: API may send twoFactorPending, lastAttempt.needs_otp, or progress "waiting_for_otp"
-      if (data.twoFactorPending || lastAttempt?.needs_otp === true || progress === 'waiting_for_otp') {
+      // 2FA required: API may send twoFactorPending, lastAttempt.needs_otp, progress "waiting_for_otp",
+      // or state variants like "needs-otp" / "needs-app-otp"
+      const needsOtpState = state === 'needs-otp' || state === 'needs-app-otp'
+      if (data.twoFactorPending || lastAttempt?.needs_otp === true || progress === 'waiting_for_otp' || needsOtpState) {
         return { status: '2fa_required', message: 'Please enter your 2FA code from your email or authenticator app' }
       }
 
@@ -206,8 +208,15 @@ class OnlyFansAPI {
         }
       }
 
-      if (data.error || data.failed) {
-        return { status: 'failed', message: data.message || data.error }
+      // Terminal failure: explicit error, failed flag, or completed attempt with an error_code/message
+      if (data.error || data.failed || (lastAttempt && lastAttempt.completed_at && lastAttempt.success === false)) {
+        const errorMessage =
+          lastAttempt?.error_message ||
+          data.message ||
+          data.error ||
+          lastAttempt?.error_code ||
+          'Authentication failed'
+        return { status: 'failed', message: errorMessage }
       }
 
       const message = data.message || this.authProgressMessage(progress, state)

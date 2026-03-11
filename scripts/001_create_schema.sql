@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   avatar_url TEXT,
   role TEXT DEFAULT 'creator' CHECK (role IN ('creator', 'agency', 'admin')),
   company_name TEXT,
+  timezone TEXT,
+  gender_identity TEXT,
+  pronouns TEXT,
+  pronouns_custom TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

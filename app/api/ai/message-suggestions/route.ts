@@ -16,6 +16,12 @@ type RequestBody = {
   tonePreferences?: string[]
   niches?: string[]
   boundaries?: string[]
+  flirtControls?: {
+    explicitnessLevel?: number
+    inspirationKeywords?: string
+  }
+  creatorPronouns?: string
+  creatorGenderIdentity?: string
 }
 
 export async function POST(req: NextRequest) {
@@ -72,6 +78,9 @@ export async function POST(req: NextRequest) {
       tonePreferences: body.tonePreferences,
       niches: body.niches,
       boundaries: body.boundaries,
+      flirtControls: body.flirtControls,
+      creatorPronouns: body.creatorPronouns,
+      creatorGenderIdentity: body.creatorGenderIdentity,
     }
 
     let result

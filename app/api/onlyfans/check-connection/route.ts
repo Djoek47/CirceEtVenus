@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
+import { assertPlatformAccountAvailable } from '@/lib/platform-connections'
 
 // GET: Check if user has OnlyFans accounts connected via the API and sync to our database
 // This is called on app load to detect accounts that completed authentication asynchronously
@@ -78,7 +79,7 @@ export async function GET() {
     const userData = (account as any)?.onlyfans_user_data || {}
     const displayName = userData.name || (account as any).onlyfans_username || 'Unknown'
     
-    // Check if we already have this connection saved
+    // Check if we already have this connection saved for this user
     const { data: existingConnection } = await supabase
       .from('platform_connections')
       .select('access_token, platform_username')
@@ -101,6 +102,24 @@ export async function GET() {
         accountId: account.id,
         username: displayName
       })
+    }
+
+    // Enforce global uniqueness: prevent two Circe et Venus users managing the same OnlyFans account
+    const ownership = await assertPlatformAccountAvailable(supabase as any, {
+      platform: 'onlyfans',
+      externalAccountId: account.id,
+      currentUserId: user.id,
+    })
+
+    if (!ownership.ok && ownership.ownedByOtherUser) {
+      return NextResponse.json(
+        {
+          connected: false,
+          error: 'This OnlyFans account is already connected to another Circe et Venus workspace.',
+          code: 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED',
+        },
+        { status: 409 }
+      )
     }
 
     // Save/update the connection to our database (new or different account)

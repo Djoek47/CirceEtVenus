@@ -294,6 +294,15 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
       const data = await response.json()
 
+      if (response.status === 409 && data?.code === 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED') {
+        setOnlyfansLoading(false)
+        setOnlyfansStatus(null)
+        setError(
+          'This OnlyFans account is already connected to another Circe et Venus workspace. If you believe this is a mistake, please contact support so we can help you transfer or disconnect it.'
+        )
+        return
+      }
+
       if (data.attemptId && !data.success && !data.requires_2fa) {
         setOnlyfansAttemptId(data.attemptId)
         setOnlyfansStatus(data.message || 'Processing authentication...')
@@ -487,7 +496,17 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     try {
       const response = await fetch(`/api/${platformId}/sync`, { method: 'POST' })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Sync failed')
+      if (!response.ok) {
+        // Handle OnlyFans-specific session expiry so we can log the user out cleanly
+        if (platformId === 'onlyfans' && response.status === 401 && data?.code === 'ONLYFANS_SESSION_EXPIRED') {
+          setError(
+            'Your OnlyFans password or session changed. To keep your data safe, we disconnected your OnlyFans account. Please reconnect.'
+          )
+          await loadConnections()
+          return
+        }
+        throw new Error(data.error || 'Sync failed')
+      }
       await loadConnections()
       setTimeout(() => window.location.reload(), 1000)
     } catch (err) {

@@ -49,13 +49,24 @@ type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'integ
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [user, setUser] = useState<SupabaseUser | null>(null)
-  const [profile, setProfile] = useState<{ full_name: string; avatar_url: string; timezone: string; has_birthday_set?: boolean } | null>(null)
+  const [profile, setProfile] = useState<{
+    full_name: string
+    avatar_url: string
+    timezone?: string
+    has_birthday_set?: boolean
+    gender_identity?: string | null
+    pronouns?: string | null
+    pronouns_custom?: string | null
+  } | null>(null)
   const [hasBirthdaySet, setHasBirthdaySet] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [fullName, setFullName] = useState('')
   const [timezone, setTimezone] = useState('America/Los_Angeles')
+  const [genderIdentity, setGenderIdentity] = useState<string>('unspecified')
+  const [pronouns, setPronouns] = useState<string>('unspecified')
+  const [customPronouns, setCustomPronouns] = useState<string>('')
   const [notifications, setNotifications] = useState({
     email: true,
     leakAlerts: true,
@@ -121,7 +132,11 @@ export default function SettingsPage() {
       if (profile) {
         setProfile(profile)
         setFullName(profile.full_name || '')
-        setTimezone(profile.timezone || 'America/Los_Angeles')
+        setTimezone((profile as any).timezone || 'America/Los_Angeles')
+        setGenderIdentity(((profile as any).gender_identity as string) || 'unspecified')
+        const storedPronouns = ((profile as any).pronouns as string) || 'unspecified'
+        setPronouns(storedPronouns)
+        setCustomPronouns(((profile as any).pronouns_custom as string) || '')
         setHasBirthdaySet(profile.has_birthday_set || false)
       }
 
@@ -154,6 +169,9 @@ export default function SettingsPage() {
       .update({
         full_name: fullName,
         timezone: timezone,
+        gender_identity: genderIdentity === 'unspecified' ? null : genderIdentity,
+        pronouns: pronouns === 'unspecified' ? null : pronouns,
+        pronouns_custom: customPronouns || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', user.id)
@@ -332,6 +350,55 @@ export default function SettingsPage() {
                       disabled
                       className="bg-input"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Gender identity (optional)</Label>
+                    <Select value={genderIdentity} onValueChange={setGenderIdentity}>
+                      <SelectTrigger id="gender" className="bg-input">
+                        <SelectValue placeholder="Select gender identity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unspecified">Prefer not to say</SelectItem>
+                        <SelectItem value="woman">Woman</SelectItem>
+                        <SelectItem value="man">Man</SelectItem>
+                        <SelectItem value="non-binary">Non-binary</SelectItem>
+                        <SelectItem value="trans-woman">Trans woman</SelectItem>
+                        <SelectItem value="trans-man">Trans man</SelectItem>
+                        <SelectItem value="agender">Agender</SelectItem>
+                        <SelectItem value="other">Other / describe in bio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Used only so Circe, Venus, and Flirt speak about you correctly.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pronouns">Pronouns</Label>
+                    <Select value={pronouns} onValueChange={setPronouns}>
+                      <SelectTrigger id="pronouns" className="bg-input">
+                        <SelectValue placeholder="Select pronouns" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unspecified">Prefer not to say</SelectItem>
+                        <SelectItem value="she/her">She / Her</SelectItem>
+                        <SelectItem value="he/him">He / Him</SelectItem>
+                        <SelectItem value="they/them">They / Them</SelectItem>
+                        <SelectItem value="she/they">She / They</SelectItem>
+                        <SelectItem value="he/they">He / They</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {pronouns === 'custom' && (
+                      <Input
+                        className="mt-2 bg-input"
+                        placeholder="Enter your pronouns (e.g. fae/faer)"
+                        value={customPronouns}
+                        onChange={(e) => setCustomPronouns(e.target.value)}
+                      />
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      We&apos;ll use these everywhere in the app and in AI responses.
+                    </p>
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label htmlFor="timezone">Timezone</Label>

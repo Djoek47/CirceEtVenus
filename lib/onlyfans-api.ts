@@ -292,16 +292,18 @@ class OnlyFansAPI {
 
   /**
    * List all connected accounts - GET /api/accounts
+   * Pending (authenticating) accounts have no onlyfans_username / onlyfans_user_data.
    */
   async listAccounts(): Promise<{
     success: boolean
     accounts?: Array<{
       id: string
       client_reference_id?: string
+      display_name?: string
       onlyfans_id?: string
       onlyfans_username?: string
       onlyfans_email?: string
-      onlyfans_user_data?: unknown
+      onlyfans_user_data?: { name?: string; username?: string; id?: string }
     }>
     message?: string
   }> {
@@ -673,29 +675,42 @@ class OnlyFansAPI {
     return response.json()
   }
 
-  // ============ CLIENT SESSIONS ============
+  // ============ CLIENT SESSIONS (SDK flow) ============
 
-  async createClientSession(displayName: string, proxyCountry?: string): Promise<{
-    token: string
-    display_name: string
-  }> {
+  /**
+   * Create a client session for the OnlyFansAPI SDK.
+   * Pass clientReferenceId (e.g. Supabase user id) so the linked account can be attributed to the user.
+   */
+  async createClientSession(
+    displayName: string,
+    proxyCountry?: string,
+    clientReferenceId?: string
+  ): Promise<{ token: string; display_name: string }> {
+    const body: Record<string, string> = {
+      display_name: displayName,
+      proxyCountry: proxyCountry || 'us',
+    }
+    if (clientReferenceId) body.client_reference_id = clientReferenceId
+
     const response = await fetch(`${ONLYFANS_API_BASE}/client-sessions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        display_name: displayName,
-        proxyCountry: proxyCountry || 'us'
-      }),
+      body: JSON.stringify(body),
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create client session')
+      const err = await response.json().catch(() => ({}))
+      throw new Error((err as any)?.message || 'Failed to create client session')
     }
 
-    return response.json()
+    const data = await response.json()
+    return {
+      token: data.data?.token ?? data.token,
+      display_name: data.display_name ?? displayName,
+    }
   }
 }
 

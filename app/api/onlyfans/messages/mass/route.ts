@@ -25,17 +25,10 @@ export async function POST(request: Request) {
     }
 
     const api = createOnlyFansAPI()
-    
-    // Fetch fresh account ID from API
-    const accountsResult = await api.listAccounts()
-    if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
-      return NextResponse.json({ error: 'No OnlyFans accounts found' }, { status: 400 })
-    }
-    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
-    api.setAccountId(account.id)
+    api.setAccountId(connection.access_token)
 
     const body = await request.json()
-    const { text, mediaIds, price, targetLists, excludeLists } = body
+    const { text, mediaIds, price, targetLists, userIds } = body
 
     if (!text) {
       return NextResponse.json({ error: 'Message text required' }, { status: 400 })
@@ -43,10 +36,10 @@ export async function POST(request: Request) {
 
     const result = await api.sendMassMessage({
       text,
-      mediaIds,
+      mediaFiles: mediaIds,
       price,
-      targetLists,
-      excludeLists,
+      userLists: targetLists,
+      userIds,
     })
 
     return NextResponse.json({

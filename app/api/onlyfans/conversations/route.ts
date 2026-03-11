@@ -25,15 +25,7 @@ export async function GET(request: Request) {
     }
 
     const api = createOnlyFansAPI()
-    
-    // Fetch fresh account ID from API (stored token may be outdated)
-    const accountsResult = await api.listAccounts()
-    if (!accountsResult.success || !accountsResult.accounts || accountsResult.accounts.length === 0) {
-      return NextResponse.json({ error: 'No OnlyFans accounts found' }, { status: 400 })
-    }
-    
-    const account = accountsResult.accounts[accountsResult.accounts.length - 1]
-    api.setAccountId(account.id)
+    api.setAccountId(connection.access_token)
 
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')

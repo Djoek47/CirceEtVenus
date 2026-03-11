@@ -317,10 +317,15 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       startOnlyFansAuthentication(token, {
         onSuccess: async (data: { accountId: string; username?: string }) => {
           try {
+            const { data: { user } } = await supabase.auth.getUser()
             const cbRes = await fetch('/api/onlyfans/callback', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ accountId: data.accountId, username: data.username }),
+              body: JSON.stringify({
+                accountId: data.accountId,
+                username: data.username,
+                clientReferenceId: user?.id,
+              }),
             })
             if (!cbRes.ok) {
               const err = await cbRes.json().catch(() => ({}))

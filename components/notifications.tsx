@@ -109,10 +109,10 @@ export function Notifications() {
     
     setUserId(user.id)
     
-    // Fetch notifications from database
+    // Fetch notifications from database (platform, avatar_url optional - require 015 migration)
     const { data: dbNotifications, error } = await supabase
       .from('notifications')
-      .select('id, type, title, description, read, created_at, link, platform, avatar_url')
+      .select('id, type, title, description, read, created_at, link')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
     
@@ -134,14 +134,12 @@ export function Notifications() {
         description: n.description,
         read: n.read,
         link: n.link,
-        platform: null,
-        avatar_url: null,
       }))
       
       const { data: inserted, error: insertError } = await supabase
         .from('notifications')
         .insert(toInsert)
-        .select()
+        .select('id, type, title, description, read, created_at, link')
       
       if (insertError) {
         console.error('Error creating notifications:', insertError)

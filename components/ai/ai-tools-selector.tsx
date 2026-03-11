@@ -51,6 +51,51 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { getToolMeta } from '@/lib/ai-tools-data'
 
+/** Resize and compress image to stay under ~800KB to avoid 413 on API. Returns data URL (JPEG). */
+function compressImageForUpload(file: File, maxSize = 1024, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const w = img.naturalWidth
+      const h = img.naturalHeight
+      const scale = Math.min(1, maxSize / Math.max(w, h))
+      const cw = Math.round(w * scale)
+      const ch = Math.round(h * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = cw
+      canvas.height = ch
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Canvas not supported'))
+        return
+      }
+      ctx.drawImage(img, 0, 0, cw, ch)
+      let q = quality
+      const tryExport = (): string | null => {
+        try {
+          return canvas.toDataURL('image/jpeg', q)
+        } catch {
+          return null
+        }
+      }
+      let dataUrl = tryExport()
+      while (dataUrl && dataUrl.length > 750 * 1024 && q > 0.2) {
+        q -= 0.1
+        dataUrl = tryExport()
+      }
+      if (dataUrl) resolve(dataUrl)
+      else reject(new Error('Could not compress image'))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Failed to load image'))
+    }
+    img.src = url
+  })
+}
+
 // Define the non-Pro AI tools that work
 const workingTools = [
   {
@@ -1013,12 +1058,17 @@ export function AIToolsSelector({
                     type="file"
                     accept="image/jpeg,image/png,image/jpg"
                     className="cursor-pointer"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0]
                       if (!file) return
-                      const reader = new FileReader()
-                      reader.onload = () => setAttractionImage(reader.result as string)
-                      reader.readAsDataURL(file)
+                      try {
+                        const dataUrl = await compressImageForUpload(file, 1024, 0.82)
+                        setAttractionImage(dataUrl)
+                      } catch {
+                        const reader = new FileReader()
+                        reader.onload = () => setAttractionImage(reader.result as string)
+                        reader.readAsDataURL(file)
+                      }
                     }}
                   />
                 </div>

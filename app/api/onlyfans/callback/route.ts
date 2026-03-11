@@ -57,6 +57,12 @@ export async function POST(request: NextRequest) {
       })
 
     if (dbError) {
+      if (dbError.code === '23505') {
+        return NextResponse.json(
+          { error: 'This OnlyFans account is already connected to another Circe et Venus workspace.', code: 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED' },
+          { status: 409 }
+        )
+      }
       return NextResponse.json({ error: 'Failed to save connection' }, { status: 500 })
     }
 
@@ -120,6 +126,11 @@ export async function GET(request: NextRequest) {
 
     if (dbError) {
       console.error('Database error:', dbError)
+      if (dbError.code === '23505') {
+        return NextResponse.redirect(
+          `${baseUrl}/dashboard/settings?tab=integrations&error=ONLYFANS_ACCOUNT_ALREADY_CONNECTED`
+        )
+      }
       return NextResponse.redirect(
         `${baseUrl}/dashboard/settings?tab=integrations&error=db_error`
       )

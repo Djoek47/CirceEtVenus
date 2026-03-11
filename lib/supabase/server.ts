@@ -1,5 +1,20 @@
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+
+/**
+ * Server-only client that bypasses RLS. Use only for operations that must see
+ * all rows (e.g. checking if a platform account is already owned by another user).
+ * Do not use for general user-scoped data.
+ */
+export function createServiceRoleClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL')
+  }
+  return createSupabaseClient(url, key)
+}
 
 /**
  * Especially important if using Fluid compute: Don't put this client in a

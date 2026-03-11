@@ -1,13 +1,15 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 
 type Database = any // We only use a very small subset of fields here
 
 /**
  * Ensure a given external platform account (e.g. OnlyFans accountId) is not already connected
- * to a different Circe et Venus user.
+ * to a different Circe et Venus user. Uses the service-role client so we can see all rows
+ * (RLS would otherwise hide other users' connections and allow duplicate claims).
  */
 export async function assertPlatformAccountAvailable(
-  supabase: SupabaseClient<Database>,
+  _supabase: SupabaseClient<Database>,
   opts: { platform: string; externalAccountId: string; currentUserId: string }
 ): Promise<
   | { ok: true }
@@ -18,7 +20,8 @@ export async function assertPlatformAccountAvailable(
 > {
   const { platform, externalAccountId, currentUserId } = opts
 
-  const { data: existingOwner } = await supabase
+  const admin = createServiceRoleClient()
+  const { data: existingOwner } = await admin
     .from('platform_connections')
     .select('user_id')
     .eq('platform', platform)

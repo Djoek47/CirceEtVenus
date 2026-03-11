@@ -139,19 +139,8 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // OnlyFans auth state
-  const [onlyfansDialogOpen, setOnlyfansDialogOpen] = useState(false)
-  const [onlyfansEmail, setOnlyfansEmail] = useState('')
-  const [onlyfansPassword, setOnlyfansPassword] = useState('')
-  const [onlyfansAttemptId, setOnlyfansAttemptId] = useState<string | null>(null)
-  const [onlyfans2FACode, setOnlyfans2FACode] = useState('')
-  const [onlyfansLoading, setOnlyfansLoading] = useState(false)
-  const [onlyfansStatus, setOnlyfansStatus] = useState<string | null>(null)
-  const [onlyfansShowVpnWarning, setOnlyfansShowVpnWarning] = useState(false)
-  const [onlyfansShowStuckHint, setOnlyfansShowStuckHint] = useState(false)
-  const [onlyfansProxyCountry, setOnlyfansProxyCountry] = useState<'us' | 'uk'>('us')
-  const [onlyfansFaceVerificationUrl, setOnlyfansFaceVerificationUrl] = useState<string | null>(null)
-  const [onlyfansAuthMethod, setOnlyfansAuthMethod] = useState<'choose' | 'sdk' | 'email'>('choose')
+  // OnlyFans: SDK modal only; overlay blocks app until user completes or cancels
+  const [onlyfansSdkInProgress, setOnlyfansSdkInProgress] = useState(false)
 
   // Fansly auth state
   const [fanslyDialogOpen, setFanslyDialogOpen] = useState(false)
@@ -244,46 +233,10 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     }
   }
 
-  // ── OnlyFans ──────────────────────────────────────────────────────────────
+  // ── OnlyFans (SDK modal only; 2FA handled inside OnlyFansAPI.com modal) ───
 
-  // Restore any in-progress OnlyFans authentication attempt when the component mounts
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const stored = window.localStorage.getItem('onlyfans_auth_attempt')
-    if (!stored) return
-    try {
-      const parsed = JSON.parse(stored) as { attemptId?: string; startedAt?: number }
-      if (parsed.attemptId) {
-        setOnlyfansAttemptId(parsed.attemptId)
-        setOnlyfansStatus('Resuming your previous OnlyFans authentication...')
-        setOnlyfansLoading(true)
-        // Continue polling in the background; when the user opens the dialog they'll see live status
-        pollOnlyfansStatus(parsed.attemptId)
-      }
-    } catch {
-      // Ignore malformed storage and clear it
-      window.localStorage.removeItem('onlyfans_auth_attempt')
-    }
-  }, [])
-
-  const openOnlyfansDialog = () => {
-    // If there is an in-progress attempt, keep it so the user sees the current status and can enter 2FA.
-    // Otherwise, show choice between SDK modal (recommended) and email/password form.
-    if (!onlyfansAttemptId) {
-      setOnlyfansEmail('')
-      setOnlyfansPassword('')
-      setOnlyfans2FACode('')
-      setOnlyfansStatus(null)
-      setOnlyfansShowVpnWarning(false)
-      setOnlyfansShowStuckHint(false)
-      setOnlyfansFaceVerificationUrl(null)
-      setOnlyfansAuthMethod('choose')
-    }
-    setOnlyfansDialogOpen(true)
-  }
-
-  const handleOnlyfansSdkAuth = async () => {
-    setOnlyfansLoading(true)
+  const connectOnlyfansWithSdk = async () => {
+    setOnlyfansSdkInProgress(true)
     setError(null)
     try {
       const res = await fetch('/api/onlyfans/auth')
@@ -312,7 +265,6 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
               }
               return
             }
-            setOnlyfansDialogOpen(false)
             await loadConnections()
             setSuccess(`OnlyFans connected as @${data.username || 'user'}!`)
             try {
@@ -324,189 +276,20 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
           } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to save connection')
           } finally {
-            setOnlyfansLoading(false)
+            setOnlyfansSdkInProgress(false)
           }
         },
         onError: (err: { message?: string }) => {
           setError(err?.message || 'OnlyFans sign-in was cancelled or failed')
-          setOnlyfansLoading(false)
+          setOnlyfansSdkInProgress(false)
         },
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start OnlyFans sign-in')
-      setOnlyfansLoading(false)
+      setOnlyfansSdkInProgress(false)
     }
   }
 
-  const startFreshOnlyfans = () => {
-    setOnlyfansAttemptId(null)
-    setOnlyfansShowStuckHint(false)
-    setOnlyfansFaceVerificationUrl(null)
-    setOnlyfansShowVpnWarning(false)
-    if (typeof window !== 'undefined') window.localStorage.removeItem('onlyfans_auth_attempt')
-    setOnlyfansStatus('Start a fresh login below. You can change proxy (e.g. UK) and try again.')
-  }
-
-  const handleOnlyfansLogin = async () => {
-    setOnlyfansLoading(true)
-    setError(null)
-    setOnlyfansStatus(null)
-
-    try {
-      const response = await fetch('/api/onlyfans/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: onlyfansEmail,
-          password: onlyfansPassword,
-          attemptId: onlyfansAttemptId,
-          twoFactorCode: onlyfans2FACode || undefined,
-          proxyCountry: onlyfansProxyCountry,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (response.status === 409 && data?.code === 'ONLYFANS_ACCOUNT_ALREADY_CONNECTED') {
-        setOnlyfansLoading(false)
-        setOnlyfansStatus(null)
-        setError(
-          'This OnlyFans account is already connected to another Circe et Venus workspace. If you believe this is a mistake, please contact support so we can help you transfer or disconnect it.'
-        )
-        return
-      }
-
-      if (data.attemptId && !data.success && !data.requires_2fa) {
-        setOnlyfansAttemptId(data.attemptId)
-        setOnlyfansStatus(data.message || 'Processing authentication...')
-        // Persist attempt so closing/reopening the dialog resumes the same flow
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(
-            'onlyfans_auth_attempt',
-            JSON.stringify({ attemptId: data.attemptId, startedAt: Date.now() })
-          )
-        }
-        pollOnlyfansStatus(data.attemptId)
-        return
-      }
-
-      if (data.requires_2fa) {
-        setOnlyfansAttemptId(data.attemptId)
-        setOnlyfansStatus('2FA code required')
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(
-            'onlyfans_auth_attempt',
-            JSON.stringify({ attemptId: data.attemptId, startedAt: Date.now() })
-          )
-        }
-        setOnlyfansLoading(false)
-        return
-      }
-
-      if (data.error) throw new Error(data.error)
-
-      if (data.success) {
-        setOnlyfansDialogOpen(false)
-        setOnlyfansEmail('')
-        setOnlyfansPassword('')
-        setOnlyfansAttemptId(null)
-        setOnlyfans2FACode('')
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem('onlyfans_auth_attempt')
-        }
-        await loadConnections()
-        try {
-          await fetch('/api/onlyfans/sync', { method: 'POST' })
-          setTimeout(() => window.location.reload(), 1000)
-        } catch {
-          setTimeout(() => setSuccess(null), 3000)
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect OnlyFans')
-    } finally {
-      setOnlyfansLoading(false)
-    }
-  }
-
-  const pollOnlyfansStatus = async (attemptId: string) => {
-    let pollCount = 0
-    const startedAt = Date.now()
-    const TWO_MINUTES_MS = 120_000
-    const poll = async () => {
-      pollCount++
-      if (pollCount > 90) {
-        setOnlyfansLoading(false)
-        setError('Authentication timed out after about 3 minutes. Please try again.')
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem('onlyfans_auth_attempt')
-        }
-        return
-      }
-      try {
-        const response = await fetch('/api/onlyfans/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attemptId }),
-        })
-        const data = await response.json()
-
-        if (data.requires_2fa) {
-          setOnlyfansShowVpnWarning(false)
-          setOnlyfansShowStuckHint(false)
-          setOnlyfansStatus('Please enter your 2FA code')
-          setOnlyfansLoading(false)
-          return
-        }
-        if (data.face_verification_required) {
-          setOnlyfansShowVpnWarning(false)
-          setOnlyfansShowStuckHint(false)
-          setOnlyfansFaceVerificationUrl(data.face_verification_url || null)
-          setOnlyfansStatus(data.message || 'OnlyFans requires face verification. Complete it in the link below, then we’ll keep polling.')
-          setOnlyfansLoading(false)
-          setTimeout(poll, 3000)
-          return
-        }
-        if (data.success && data.accountId) {
-          setOnlyfansShowVpnWarning(false)
-          setOnlyfansDialogOpen(false)
-          await loadConnections()
-          try {
-            await fetch('/api/onlyfans/sync', { method: 'POST' })
-            setTimeout(() => window.location.reload(), 1000)
-          } catch { /* silent */ }
-          setOnlyfansLoading(false)
-          if (typeof window !== 'undefined') {
-            window.localStorage.removeItem('onlyfans_auth_attempt')
-          }
-          return
-        }
-        if (data.error || data.status === 'failed') {
-          setOnlyfansShowVpnWarning(false)
-          setError(data.error || data.message || 'Authentication failed')
-          setOnlyfansLoading(false)
-          if (typeof window !== 'undefined') {
-            window.localStorage.removeItem('onlyfans_auth_attempt')
-          }
-          return
-        }
-        setOnlyfansStatus(data.message || 'Processing...')
-        if (data.progress === 'filling_out_login' && Date.now() - startedAt >= 45_000) {
-          setOnlyfansShowStuckHint(true)
-        }
-        if (Date.now() - startedAt >= TWO_MINUTES_MS) {
-          setOnlyfansShowVpnWarning(true)
-        }
-        setTimeout(poll, 2000)
-      } catch {
-        if (Date.now() - startedAt >= TWO_MINUTES_MS) {
-          setOnlyfansShowVpnWarning(true)
-        }
-        setTimeout(poll, 2000)
-      }
-    }
-    poll()
-  }
 
   // ── Fansly ────────────────────────────────────────────────────────────────
 
@@ -571,7 +354,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   const handleConnect = (platformId: string) => {
     setError(null)
-    if (platformId === 'onlyfans') openOnlyfansDialog()
+    if (platformId === 'onlyfans') connectOnlyfansWithSdk()
     else if (platformId === 'fansly') openFanslyDialog()
     else setError(`${platformId} integration coming soon`)
   }
@@ -657,6 +440,20 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
   if (compact) {
     return (
       <>
+        {onlyfansSdkInProgress && (
+          <div
+            className="fixed inset-0 z-[9998] flex items-center justify-center bg-background/80 backdrop-blur-sm"
+            aria-hidden="false"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <div className="rounded-xl border border-border bg-card px-6 py-4 text-center shadow-xl">
+              <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary mb-3" />
+              <p className="font-medium text-foreground">Complete sign-in in the OnlyFans window</p>
+              <p className="text-sm text-muted-foreground mt-1">Secured by OnlyFansAPI.com</p>
+              <p className="text-xs text-muted-foreground mt-2">This page is paused until you finish or close the sign-in window.</p>
+            </div>
+          </div>
+        )}
         <Card className="overflow-hidden border-0 bg-gradient-to-br from-card via-card to-muted/20 shadow-xl">
           <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
             <div className="flex items-center justify-between">
@@ -793,23 +590,6 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
         </Card>
 
         <ConnectDialogs
-          onlyfansDialogOpen={onlyfansDialogOpen} setOnlyfansDialogOpen={setOnlyfansDialogOpen}
-          onlyfansEmail={onlyfansEmail} setOnlyfansEmail={setOnlyfansEmail}
-          onlyfansPassword={onlyfansPassword} setOnlyfansPassword={setOnlyfansPassword}
-          onlyfansAttemptId={onlyfansAttemptId}
-          onlyfans2FACode={onlyfans2FACode} setOnlyfans2FACode={setOnlyfans2FACode}
-          onlyfansLoading={onlyfansLoading}
-          onlyfansStatus={onlyfansStatus}
-          onlyfansShowVpnWarning={onlyfansShowVpnWarning}
-          onlyfansShowStuckHint={onlyfansShowStuckHint}
-          onlyfansProxyCountry={onlyfansProxyCountry}
-          setOnlyfansProxyCountry={setOnlyfansProxyCountry}
-          onlyfansFaceVerificationUrl={onlyfansFaceVerificationUrl}
-          onlyfansAuthMethod={onlyfansAuthMethod}
-          setOnlyfansAuthMethod={setOnlyfansAuthMethod}
-          startFreshOnlyfans={startFreshOnlyfans}
-          handleOnlyfansSdkAuth={handleOnlyfansSdkAuth}
-          handleOnlyfansLogin={handleOnlyfansLogin}
           fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
           fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
           fanslyPassword={fanslyPassword} setFanslyPassword={setFanslyPassword}
@@ -826,6 +606,20 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
   // ── Full layout (settings page) ───────────────────────────────────────────
   return (
     <>
+      {onlyfansSdkInProgress && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center bg-background/80 backdrop-blur-sm"
+          aria-hidden="false"
+          style={{ pointerEvents: 'auto' }}
+        >
+          <div className="rounded-xl border border-border bg-card px-6 py-4 text-center shadow-xl">
+            <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary mb-3" />
+            <p className="font-medium text-foreground">Complete sign-in in the OnlyFans window</p>
+            <p className="text-sm text-muted-foreground mt-1">Secured by OnlyFansAPI.com</p>
+            <p className="text-xs text-muted-foreground mt-2">This page is paused until you finish or close the sign-in window.</p>
+          </div>
+        </div>
+      )}
       <div className="space-y-6">
         <Alerts />
 
@@ -996,23 +790,6 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       </div>
 
       <ConnectDialogs
-        onlyfansDialogOpen={onlyfansDialogOpen} setOnlyfansDialogOpen={setOnlyfansDialogOpen}
-        onlyfansEmail={onlyfansEmail} setOnlyfansEmail={setOnlyfansEmail}
-        onlyfansPassword={onlyfansPassword} setOnlyfansPassword={setOnlyfansPassword}
-        onlyfansAttemptId={onlyfansAttemptId}
-        onlyfans2FACode={onlyfans2FACode} setOnlyfans2FACode={setOnlyfans2FACode}
-        onlyfansLoading={onlyfansLoading}
-        onlyfansStatus={onlyfansStatus}
-        onlyfansShowVpnWarning={onlyfansShowVpnWarning}
-        onlyfansShowStuckHint={onlyfansShowStuckHint}
-        onlyfansProxyCountry={onlyfansProxyCountry}
-        setOnlyfansProxyCountry={setOnlyfansProxyCountry}
-        onlyfansFaceVerificationUrl={onlyfansFaceVerificationUrl}
-        onlyfansAuthMethod={onlyfansAuthMethod}
-        setOnlyfansAuthMethod={setOnlyfansAuthMethod}
-        startFreshOnlyfans={startFreshOnlyfans}
-        handleOnlyfansSdkAuth={handleOnlyfansSdkAuth}
-        handleOnlyfansLogin={handleOnlyfansLogin}
         fanslyDialogOpen={fanslyDialogOpen} setFanslyDialogOpen={setFanslyDialogOpen}
         fanslyEmail={fanslyEmail} setFanslyEmail={setFanslyEmail}
         fanslyPassword={fanslyPassword} setFanslyPassword={setFanslyPassword}
@@ -1029,27 +806,6 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 // ── Shared Dialogs ─────────────────────────────────────────────────────────
 
 interface ConnectDialogsProps {
-  onlyfansDialogOpen: boolean
-  setOnlyfansDialogOpen: (v: boolean) => void
-  onlyfansEmail: string
-  setOnlyfansEmail: (v: string) => void
-  onlyfansPassword: string
-  setOnlyfansPassword: (v: string) => void
-  onlyfansAttemptId: string | null
-  onlyfans2FACode: string
-  setOnlyfans2FACode: (v: string) => void
-  onlyfansLoading: boolean
-  onlyfansStatus: string | null
-  onlyfansShowVpnWarning: boolean
-  onlyfansShowStuckHint: boolean
-  onlyfansProxyCountry: 'us' | 'uk'
-  setOnlyfansProxyCountry: (v: 'us' | 'uk') => void
-  onlyfansFaceVerificationUrl: string | null
-  onlyfansAuthMethod: 'choose' | 'sdk' | 'email'
-  setOnlyfansAuthMethod: (v: 'choose' | 'sdk' | 'email') => void
-  startFreshOnlyfans: () => void
-  handleOnlyfansSdkAuth: () => void
-  handleOnlyfansLogin: () => void
   fanslyDialogOpen: boolean
   setFanslyDialogOpen: (v: boolean) => void
   fanslyEmail: string
@@ -1065,16 +821,6 @@ interface ConnectDialogsProps {
 }
 
 function ConnectDialogs({
-  onlyfansDialogOpen, setOnlyfansDialogOpen,
-  onlyfansEmail, setOnlyfansEmail,
-  onlyfansPassword, setOnlyfansPassword,
-  onlyfansAttemptId,
-  onlyfans2FACode, setOnlyfans2FACode,
-  onlyfansLoading, onlyfansStatus, onlyfansShowVpnWarning,
-  onlyfansShowStuckHint, onlyfansProxyCountry, setOnlyfansProxyCountry,
-  onlyfansFaceVerificationUrl, onlyfansAuthMethod, setOnlyfansAuthMethod,
-  startFreshOnlyfans, handleOnlyfansSdkAuth,
-  handleOnlyfansLogin,
   fanslyDialogOpen, setFanslyDialogOpen,
   fanslyEmail, setFanslyEmail,
   fanslyPassword, setFanslyPassword,
@@ -1083,149 +829,8 @@ function ConnectDialogs({
   fanslyMaskedEmail, fanslyLoading,
   handleFanslyLogin,
 }: ConnectDialogsProps) {
-  const showOnlyfansChoice = onlyfansAuthMethod === 'choose' && !onlyfansAttemptId
-  const showOnlyfansForm = onlyfansAuthMethod === 'email' || !!onlyfansAttemptId
-
   return (
     <>
-      {/* OnlyFans Login Dialog */}
-      <Dialog open={onlyfansDialogOpen} onOpenChange={setOnlyfansDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: '#00AFF015', color: '#00AFF0' }}>
-                <OnlyFansLogo />
-              </div>
-              <div>
-                <DialogTitle>Connect OnlyFans</DialogTitle>
-                <DialogDescription>
-                  {onlyfansAttemptId && onlyfansStatus?.includes('2FA')
-                    ? 'Enter your 2FA code to complete authentication'
-                    : showOnlyfansChoice
-                    ? 'Choose how to sign in'
-                    : 'Sign in with your OnlyFans credentials'}
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {showOnlyfansChoice ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  Sign in with the OnlyFans modal (recommended) or use your email and password below.
-                </p>
-                <Button
-                  className="w-full"
-                  style={{ background: 'linear-gradient(135deg, #00AFF0, #0090C0)' }}
-                  onClick={handleOnlyfansSdkAuth}
-                  disabled={onlyfansLoading}
-                >
-                  {onlyfansLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Sign in with OnlyFans
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setOnlyfansAuthMethod('email')}
-                  className="text-sm text-muted-foreground hover:text-foreground underline w-full text-center"
-                >
-                  Sign in with email &amp; password instead
-                </button>
-              </>
-            ) : (
-              <>
-            <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 border border-border/50 p-3">
-              OnlyFans authentication can take up to a minute. If data doesn&apos;t load immediately, please wait — we&apos;ll keep checking until it&apos;s done.
-            </p>
-            {onlyfansStatus && (
-              <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-sm text-blue-400 flex items-center gap-2">
-                {onlyfansLoading && <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />}
-                {onlyfansStatus}
-              </div>
-            )}
-            {onlyfansShowStuckHint && (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-600 dark:text-amber-400 space-y-2">
-                <p>Login is stuck at the form step. Start a fresh attempt (you can switch proxy to UK if needed).</p>
-                <Button type="button" variant="outline" size="sm" onClick={startFreshOnlyfans} className="w-full border-amber-500/50">
-                  Start fresh login
-                </Button>
-              </div>
-            )}
-            {onlyfansShowVpnWarning && !onlyfansShowStuckHint && (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-600 dark:text-amber-400">
-                Authentication is taking longer than usual. If you&apos;re using a VPN, try disconnecting — or use &quot;Start fresh login&quot; and choose a different proxy (e.g. UK).
-              </div>
-            )}
-            {onlyfansFaceVerificationUrl && (
-              <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3 text-sm text-blue-600 dark:text-blue-400 space-y-2">
-                <p>{onlyfansStatus || 'OnlyFans requires a quick face verification.'}</p>
-                <a href={onlyfansFaceVerificationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 underline font-medium">
-                  Complete face verification →
-                </a>
-              </div>
-            )}
-
-            {!onlyfansAttemptId ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="of-proxy">Proxy region (if stuck, try switching)</Label>
-                  <select
-                    id="of-proxy"
-                    value={onlyfansProxyCountry}
-                    onChange={e => setOnlyfansProxyCountry(e.target.value as 'us' | 'uk')}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="us">US</option>
-                    <option value="uk">UK</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="of-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="of-email" type="email" placeholder="your@email.com" value={onlyfansEmail} onChange={e => setOnlyfansEmail(e.target.value)} className="pl-10" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="of-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="of-password" type="password" placeholder="Enter your password" value={onlyfansPassword} onChange={e => setOnlyfansPassword(e.target.value)} className="pl-10" />
-                  </div>
-                </div>
-              </>
-            ) : onlyfansStatus?.includes('2FA') ? (
-              <div className="space-y-2">
-                <Label htmlFor="of-2fa">Verification Code</Label>
-                <div className="relative">
-                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="of-2fa" type="text" placeholder="Enter 6-digit code" value={onlyfans2FACode} onChange={e => setOnlyfans2FACode(e.target.value)} className="pl-10 text-center text-lg tracking-widest" maxLength={6} />
-                </div>
-                <p className="text-xs text-muted-foreground">Check your email or authenticator app for the code</p>
-              </div>
-            ) : null}
-
-            {onlyfansAttemptId && !onlyfansStatus?.includes('2FA') && (
-              <Button type="button" variant="outline" size="sm" onClick={startFreshOnlyfans} className="w-full">
-                Start fresh login
-              </Button>
-            )}
-            <Button
-              className="w-full"
-              style={{ background: 'linear-gradient(135deg, #00AFF0, #0090C0)' }}
-              onClick={handleOnlyfansLogin}
-              disabled={onlyfansLoading || (!onlyfansAttemptId && (!onlyfansEmail || !onlyfansPassword))}
-            >
-              {onlyfansLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {onlyfansAttemptId && onlyfansStatus?.includes('2FA') ? 'Verify & Connect' : onlyfansAttemptId ? 'Processing...' : 'Connect OnlyFans'}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">Your credentials are securely encrypted and never stored locally</p>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Fansly Login Dialog */}
       <Dialog open={fanslyDialogOpen} onOpenChange={setFanslyDialogOpen}>
         <DialogContent className="sm:max-w-md">

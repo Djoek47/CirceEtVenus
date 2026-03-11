@@ -152,20 +152,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
     }
 
-    // Use Supabase identity for display_name (not the OnlyFans login email) so the account shows our service user
+    // Use Supabase username + email for display_name (not the OnlyFans login email)
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name')
       .eq('id', user.id)
       .single()
-    const creatorName = (profile as { full_name?: string } | null)?.full_name ?? ''
+    const fullName = (profile as { full_name?: string } | null)?.full_name?.trim() ?? ''
     const supabaseEmail = user.email ?? ''
-    const displayName =
-      creatorName.trim() !== ''
-        ? `Circe et Venus / ${creatorName} <${supabaseEmail}>`
-        : supabaseEmail
-        ? `Circe et Venus / ${supabaseEmail}`
-        : undefined
+    const supabaseUsername = fullName || user.user_metadata?.full_name || (supabaseEmail ? supabaseEmail.split('@')[0] : '') || 'user'
+    const displayName = supabaseEmail ? `${supabaseUsername} (${supabaseEmail})` : supabaseUsername
 
     const result = await api.startAuthentication(email, password, proxyCountry, displayName)
 
@@ -253,16 +249,18 @@ export async function GET() {
       }, { status: 500 })
     }
 
-    // Use the creator's preferred name from their profile if available; fall back to email
+    // Use Supabase username + email for display_name (not the OnlyFans login email)
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name')
       .eq('id', user.id)
       .single()
 
-    const creatorName = ((profile as any)?.full_name as string) || ''
-    const emailLabel = user.email || 'unknown-email'
-    const displayLabel = creatorName ? `${creatorName} <${emailLabel}>` : emailLabel
+    const fullName = ((profile as any)?.full_name as string)?.trim() || ''
+    const supabaseEmail = user.email || ''
+    const metaName = typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : ''
+    const supabaseUsername = fullName || metaName || (supabaseEmail ? supabaseEmail.split('@')[0] : '') || 'user'
+    const displayName = supabaseEmail ? `${supabaseUsername} (${supabaseEmail})` : supabaseUsername
 
     // Create a client session token via OnlyFans API
     const response = await fetch('https://app.onlyfansapi.com/api/client-sessions', {
@@ -272,8 +270,7 @@ export async function GET() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        // Show both the creator's chosen name and their unique email for easier management in OnlyFansAPI console
-        display_name: `Circe et Venus / ${displayLabel}`,
+        display_name: displayName,
         client_reference_id: user.id,
       }),
     })

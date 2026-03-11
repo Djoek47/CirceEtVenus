@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Shield, Key, Smartphone, Loader2, Trash2, Copy, Check } from 'lucide-react'
+import { Shield, Key, Loader2, Trash2, Copy, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface ApiKeyRow {
@@ -149,17 +149,6 @@ export function SecuritySettings() {
               {passwordLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Update Password
             </Button>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Smartphone className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Two-Factor Authentication</p>
-                <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
-              </div>
-            </div>
-            <Button variant="outline" disabled>Coming soon</Button>
           </div>
           <Separator />
           <div className="space-y-3">

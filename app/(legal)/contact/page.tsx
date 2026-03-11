@@ -16,6 +16,7 @@ export default function ContactPage() {
   const router = useRouter()
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -33,12 +34,35 @@ export default function ContactPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError(null)
     setSending(true)
-    // Simulate sending
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    setSending(false)
-    setSent(true)
-    setFormData({ name: '', email: '', subject: '', message: '' })
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setError(
+          data?.error ||
+            'We could not send your message right now. Please try again or email us directly.',
+        )
+      } else {
+        setSent(true)
+        setFormData({ name: '', email: '', subject: '', message: '' })
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'We could not send your message right now. Please try again or email us directly.',
+      )
+    } finally {
+      setSending(false)
+    }
   }
 
   const contactOptions = [
@@ -158,6 +182,11 @@ export default function ContactPage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && (
+                    <p className="text-sm text-destructive">
+                      {error}
+                    </p>
+                  )}
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="name">Name</Label>

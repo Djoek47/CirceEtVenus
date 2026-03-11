@@ -20,13 +20,30 @@ export async function POST() {
       return NextResponse.json({ success: true, disconnected: 0 })
     }
 
+    const userEmail = user.email ?? ''
+    const normalize = (raw: any) => {
+      const account = raw?.account ?? raw
+      const id = account?.id ?? raw?.id
+      const clientRef = raw?.client_reference_id ?? account?.client_reference_id
+      const displayName = (raw?.display_name ?? account?.display_name) ?? ''
+      const ofUsername = raw?.onlyfans_username ?? account?.onlyfans_username
+      const ofUserData = raw?.onlyfans_user_data ?? account?.onlyfans_user_data
+      return { id, clientRef, displayName, ofUsername, ofUserData }
+    }
+
     const pendingForUser = (accountsResult.accounts || [])
-      .filter((acc: any) => acc?.client_reference_id === user.id)
-      .filter((acc: any) => acc?.onlyfans_username == null && acc?.onlyfans_user_data == null)
+      .map(normalize)
+      .filter((acc) => acc.id != null)
+      .filter(
+        (acc) =>
+          acc.clientRef === user.id ||
+          (userEmail && acc.displayName && acc.displayName.includes(userEmail))
+      )
+      .filter((acc) => acc.ofUsername == null && acc.ofUserData == null)
 
     let disconnected = 0
     for (const acc of pendingForUser) {
-      const res = await api.deleteAccount(acc.id)
+      const res = await api.deleteAccount(acc.id!)
       if (res.success) disconnected += 1
     }
 

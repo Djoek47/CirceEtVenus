@@ -115,7 +115,7 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
           </div>
           <h3 className="text-lg font-medium">No Messages Yet</h3>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Your messages will appear here once fans start messaging you.
+            Your messages will appear here once fans start messaging you. (OnlyFans. Fansly support coming soon.)
           </p>
           <Button onClick={() => loadConversations(true)} className="mt-4" variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -147,7 +147,7 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
               {selectedConversation ? (selectedConversation.user.name || selectedConversation.user.username || 'Chat') : 'Messages'}
             </h2>
             <p className="text-sm text-muted-foreground truncate">
-              {selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations`}
+              {selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations · OnlyFans. Fansly coming soon.`}
             </p>
           </div>
         </div>

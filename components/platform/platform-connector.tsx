@@ -49,6 +49,7 @@ interface Platform {
   gradient: string
   description: string
   dataTypes: string[]
+  comingSoon?: boolean
 }
 
 import Image from 'next/image'
@@ -115,6 +116,7 @@ const PLATFORMS: Platform[] = [
     gradient: 'from-[#E91E63] to-[#C2185B]',
     description: 'Sync sales, fans, and video performance',
     dataTypes: ['Sales', 'Fans', 'Videos', 'Tips'],
+    comingSoon: true,
   },
 ]
 
@@ -297,6 +299,12 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     setOnlyfansSdkInProgress(true)
     setError(null)
     try {
+      // Clear any previous stuck "Authenticating..." entries for this user before starting a new one
+      try {
+        await fetch('/api/onlyfans/cancel-auth', { method: 'POST' })
+      } catch {
+        // best-effort; continue with new auth
+      }
       const res = await fetch('/api/onlyfans/auth')
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -415,9 +423,10 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   const handleConnect = (platformId: string) => {
     setError(null)
+    const platform = PLATFORMS.find(p => p.id === platformId)
+    if (platform?.comingSoon) return
     if (platformId === 'onlyfans') connectOnlyfansWithSdk()
     else if (platformId === 'fansly') openFanslyDialog()
-    else setError(`${platformId} integration coming soon`)
   }
 
   const handleSync = async (platformId: string) => {
@@ -574,6 +583,11 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm">{platform.name}</span>
+                        {platform.comingSoon && !connected && (
+                          <Badge className="text-[10px] px-1.5 py-0.5" variant="outline">
+                            Coming soon
+                          </Badge>
+                        )}
                         {connected && (
                           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
                             <Check className="h-3 w-3 text-white" />
@@ -582,6 +596,8 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
                       </div>
                       {connection?.platform_username ? (
                         <p className="text-xs text-muted-foreground">@{connection.platform_username}</p>
+                      ) : platform.comingSoon ? (
+                        <p className="text-xs text-muted-foreground">Integration in progress</p>
                       ) : (
                         <p className="text-xs text-muted-foreground">
                           {connected ? 'Connected' : 'Click to connect'}
@@ -627,6 +643,11 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+                  ) : platform.comingSoon ? (
+                    <Button size="sm" variant="outline" disabled className="opacity-70 cursor-not-allowed">
+                      <ExternalLink className="h-4 w-4" />
+                      Coming soon
+                    </Button>
                   ) : (
                     <Button
                       size="sm"

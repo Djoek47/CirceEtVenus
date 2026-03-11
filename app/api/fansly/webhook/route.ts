@@ -5,13 +5,25 @@ import { getPrefsForWebhook } from '@/lib/notification-preferences'
 // Fansly Webhook endpoint
 // Register this URL in your Fansly API Console: https://app.apifansly.com
 // URL: https://your-domain.com/api/fansly/webhook
+//
+// Pre-launch: Signature verification is not yet implemented. For production,
+// keep FANSLY_WEBHOOK_ENABLED=false until you implement verification, or
+// set it to true only in environments where you accept unverified webhooks.
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const webhookEnabled = process.env.FANSLY_WEBHOOK_ENABLED === 'true'
 
 export async function POST(request: NextRequest) {
   try {
-    // TODO: Verify webhook signature for security
+    if (!webhookEnabled) {
+      return NextResponse.json(
+        { received: false, error: 'Fansly webhook disabled on this environment.' },
+        { status: 403 },
+      )
+    }
+
+    // TODO: Verify webhook signature for security before enabling in production
     // const signature = request.headers.get('x-fansly-signature')
     // Verify signature using your webhook secret
     

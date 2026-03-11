@@ -274,8 +274,19 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       setOnlyfans2FACode('')
       setOnlyfansStatus(null)
       setOnlyfansShowVpnWarning(false)
+      setOnlyfansShowStuckHint(false)
+      setOnlyfansFaceVerificationUrl(null)
     }
     setOnlyfansDialogOpen(true)
+  }
+
+  const startFreshOnlyfans = () => {
+    setOnlyfansAttemptId(null)
+    setOnlyfansShowStuckHint(false)
+    setOnlyfansFaceVerificationUrl(null)
+    setOnlyfansShowVpnWarning(false)
+    if (typeof window !== 'undefined') window.localStorage.removeItem('onlyfans_auth_attempt')
+    setOnlyfansStatus('Start a fresh login below. You can change proxy (e.g. UK) and try again.')
   }
 
   const handleOnlyfansLogin = async () => {

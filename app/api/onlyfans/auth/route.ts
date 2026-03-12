@@ -15,6 +15,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Prevent double authentication: if user already has an OnlyFans connection, reject
+    const { data: existing } = await supabase
+      .from('platform_connections')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('platform', 'onlyfans')
+      .eq('is_connected', true)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: 'OnlyFans is already connected for this account. Disconnect in Settings to link a different account.',
+          code: 'ALREADY_CONNECTED',
+        },
+        { status: 409 }
+      )
+    }
+
     const apiKey = process.env.ONLYFANS_API_KEY
     if (!apiKey) {
       return NextResponse.json(

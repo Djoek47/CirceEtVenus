@@ -14,6 +14,14 @@ WHERE a.platform = b.platform
 
 -- 2. Add unique constraint so the same external account cannot be linked to multiple users.
 --    (Postgres allows multiple NULLs in unique columns, so rows with access_token IS NULL are unaffected.)
-ALTER TABLE public.platform_connections
-ADD CONSTRAINT platform_connections_platform_access_token_unique
-UNIQUE (platform, access_token);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'platform_connections_platform_access_token_unique'
+  ) THEN
+    ALTER TABLE public.platform_connections
+    ADD CONSTRAINT platform_connections_platform_access_token_unique
+    UNIQUE (platform, access_token);
+  END IF;
+END $$;

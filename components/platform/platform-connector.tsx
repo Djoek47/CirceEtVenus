@@ -247,6 +247,44 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
     }
   }, [onlyfansSdkInProgress])
 
+  // Recovery polling: if the user clicked Continue but onSuccess never fired (e.g. postMessage lost),
+  // poll check-connection so we still detect the connection and unblock the UI.
+  useEffect(() => {
+    if (!onlyfansSdkInProgress) return
+
+    let cancelled = false
+    const pollMs = 10_000
+
+    const check = async () => {
+      if (cancelled) return
+      try {
+        const res = await fetch('/api/onlyfans/check-connection')
+        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+        if (data.connected === true) {
+          await loadConnections()
+          setSuccess(`OnlyFans connected as @${data.username || 'user'}!`)
+          setOnlyfansSdkInProgress(false)
+          try {
+            await fetch('/api/onlyfans/sync', { method: 'POST' })
+            setTimeout(() => window.location.reload(), 1000)
+          } catch {
+            setTimeout(() => setSuccess(null), 3000)
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const interval = window.setInterval(check, pollMs)
+    check()
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [onlyfansSdkInProgress])
+
   const isConnected = (platformId: string) =>
     connections.some(c => c.platform === platformId && c.is_connected)
 
@@ -296,6 +334,11 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
   const connectOnlyfansWithSdk = async () => {
     if (onlyfansSdkInProgress) return
+    // Prevent double authentication: do not start if already connected
+    if (isConnected('onlyfans')) {
+      setError('OnlyFans is already connected. Disconnect in Settings if you want to link a different account.')
+      return
+    }
     setOnlyfansSdkInProgress(true)
     setError(null)
     try {
@@ -308,6 +351,12 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       const res = await fetch('/api/onlyfans/auth')
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
+        if (res.status === 409 && data?.code === 'ALREADY_CONNECTED') {
+          setError(data.error || 'OnlyFans is already connected.')
+          await loadConnections()
+          setOnlyfansSdkInProgress(false)
+          return
+        }
         throw new Error(data.error || 'Failed to get session')
       }
       const { token } = await res.json()
@@ -334,6 +383,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
               } else {
                 setError(err.error || err.message || 'Failed to save connection')
               }
+              setOnlyfansSdkInProgress(false)
               return
             }
             await loadConnections()
@@ -368,6 +418,10 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
   // ── Fansly ────────────────────────────────────────────────────────────────
 
   const openFanslyDialog = () => {
+    if (isConnected('fansly')) {
+      setError('Fansly is already connected. Disconnect in Settings if you want to link a different account.')
+      return
+    }
     setFanslyEmail('')
     setFanslyPassword('')
     setFansly2FAToken(null)
@@ -393,6 +447,14 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
       })
 
       const data = await response.json()
+
+      if (response.status === 409 && data?.code === 'ALREADY_CONNECTED') {
+        setFanslyDialogOpen(false)
+        setError(data.error || 'Fansly is already connected.')
+        await loadConnections()
+        setFanslyLoading(false)
+        return
+      }
 
       if (data.requires_2fa) {
         setFansly2FAToken(data.twoFactorToken)
@@ -526,6 +588,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
               <p className="font-medium text-foreground">Complete sign-in in the OnlyFans window</p>
               <p className="text-sm text-muted-foreground mt-1">Secured by OnlyFansAPI.com</p>
               <p className="text-xs text-muted-foreground mt-2">This page is paused until you finish or close the sign-in window.</p>
+              <p className="text-xs text-muted-foreground mt-1">Connection may take a minute. VPN or restricted networks can prevent connection—try disabling VPN or using a different network if it fails.</p>
             </div>
           </div>
         )}
@@ -704,6 +767,7 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
             <p className="font-medium text-foreground">Complete sign-in in the OnlyFans window</p>
             <p className="text-sm text-muted-foreground mt-1">Secured by OnlyFansAPI.com</p>
             <p className="text-xs text-muted-foreground mt-2">This page is paused until you finish or close the sign-in window.</p>
+            <p className="text-xs text-muted-foreground mt-1">Connection may take a minute. VPN or restricted networks can prevent connection—try disabling VPN or using a different network if it fails.</p>
           </div>
         </div>
       )}

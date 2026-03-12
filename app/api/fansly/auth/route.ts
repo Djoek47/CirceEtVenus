@@ -13,6 +13,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Prevent double authentication: reject if already connected
+    const { data: existing } = await supabase
+      .from('platform_connections')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('platform', 'fansly')
+      .eq('is_connected', true)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: 'Fansly is already connected for this account. Disconnect in Settings to link a different account.',
+          code: 'ALREADY_CONNECTED',
+        },
+        { status: 409 }
+      )
+    }
+
     const apiKey = process.env.FANSLY_API_KEY
     if (!apiKey) {
       return NextResponse.json({ 

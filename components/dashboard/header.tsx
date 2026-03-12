@@ -20,6 +20,7 @@ import type { User as SupabaseUser } from '@supabase/supabase-js'
 import type { Profile } from '@/lib/types'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Notifications } from '@/components/notifications'
+import { StartTourButton } from '@/components/tour/start-tour-button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { MobileSidebar } from '@/components/dashboard/mobile-sidebar'
 
@@ -106,6 +107,9 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
             className="w-48 bg-input pl-9 xl:w-64"
           />
         </div>
+
+        {/* Page tutorial */}
+        <StartTourButton className="hidden sm:flex" />
 
         {/* Theme Toggle */}
         <ThemeToggle />

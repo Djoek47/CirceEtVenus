@@ -1,18 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 import { getPrefsForWebhook } from '@/lib/notification-preferences'
 
-// Fansly Webhook endpoint
-// Register this URL in your Fansly API Console: https://app.apifansly.com
-// URL: https://your-domain.com/api/fansly/webhook
-//
-// Pre-launch: Signature verification is not yet implemented. For production,
-// keep FANSLY_WEBHOOK_ENABLED=false until you implement verification, or
-// set it to true only in environments where you accept unverified webhooks.
+// Fansly Webhook – register URL in Fansly API Console: https://your-domain.com/api/fansly/webhook
+// Set FANSLY_WEBHOOK_SECRET to verify signatures (header: x-fansly-signature, HMAC-SHA256 hex).
+// Set FANSLY_WEBHOOK_ENABLED=true to accept webhooks.
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const webhookEnabled = process.env.FANSLY_WEBHOOK_ENABLED === 'true'
+
+function verifySignature(payload: string, signature: string, secret: string): boolean {
+  const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected))
+  } catch {
+    return false
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,11 +29,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Verify webhook signature for security before enabling in production
-    // const signature = request.headers.get('x-fansly-signature')
-    // Verify signature using your webhook secret
-    
-    const payload = await request.json()
+    const rawBody = await request.text()
+    const signature = request.headers.get('x-fansly-signature')
+    const secret = process.env.FANSLY_WEBHOOK_SECRET
+    if (secret && signature && !verifySignature(rawBody, signature, secret)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+    }
+
+    const payload = JSON.parse(rawBody)
     
     console.log('[v0] Fansly webhook received:', payload.event_type)
     
@@ -78,32 +87,30 @@ export async function POST(request: NextRequest) {
 async function handleNewSubscription(supabase: ReturnType<typeof createClient>, payload: any) {
   const { account_id, subscriber } = payload.data
   
-  // Find the user who owns this Fansly account
   const { data: connection } = await supabase
     .from('platform_connections')
     .select('user_id')
     .eq('platform', 'fansly')
-    .eq('platform_user_id', account_id)
+    .eq('access_token', account_id)
     .single()
-  
   if (!connection) return
-  
-  await supabase
-    .from('fans')
-    .upsert({
+
+  await supabase.from('fans').upsert(
+    {
       user_id: connection.user_id,
       platform: 'fansly',
       platform_fan_id: subscriber.id,
       username: subscriber.username,
       display_name: subscriber.display_name || subscriber.username,
-      avatar_url: subscriber.avatar,
+      avatar_url: subscriber.avatar || null,
+      subscription_status: 'active',
       subscription_tier: subscriber.tier || 'subscriber',
       total_spent: subscriber.amount || 0,
-      is_active: true,
-      subscribed_at: new Date().toISOString(),
-    }, {
-      onConflict: 'user_id,platform,platform_fan_id'
-    })
+      first_subscribed_at: new Date().toISOString(),
+      last_interaction_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,platform,platform_fan_id' }
+  )
 
   const prefs = await getPrefsForWebhook(supabase, connection.user_id)
   if (prefs.notify_new_subscriber) {
@@ -127,17 +134,16 @@ async function handleSubscriptionRenewed(supabase: ReturnType<typeof createClien
     .from('platform_connections')
     .select('user_id')
     .eq('platform', 'fansly')
-    .eq('platform_user_id', account_id)
+    .eq('access_token', account_id)
     .single()
-  
   if (!connection) return
-  
-  // Update fan record
+
   await supabase
     .from('fans')
     .update({
-      is_active: true,
+      subscription_status: 'active',
       total_spent: subscriber.total_spent || 0,
+      last_interaction_at: new Date().toISOString(),
     })
     .eq('user_id', connection.user_id)
     .eq('platform', 'fansly')
@@ -151,13 +157,14 @@ async function handleSubscriptionExpired(supabase: ReturnType<typeof createClien
     .from('platform_connections')
     .select('user_id')
     .eq('platform', 'fansly')
-    .eq('platform_user_id', account_id)
+    .eq('access_token', account_id)
     .single()
-  
+  if (!connection) return
+
   const prefs = await getPrefsForWebhook(supabase, connection.user_id)
   await supabase
     .from('fans')
-    .update({ is_active: false })
+    .update({ subscription_status: 'expired' })
     .eq('user_id', connection.user_id)
     .eq('platform', 'fansly')
     .eq('platform_fan_id', subscriber.id)
@@ -177,61 +184,81 @@ async function handleSubscriptionExpired(supabase: ReturnType<typeof createClien
 
 async function handleNewMessage(supabase: ReturnType<typeof createClient>, payload: any) {
   const { account_id, message, sender } = payload.data
-  
+
   const { data: connection } = await supabase
     .from('platform_connections')
     .select('user_id')
     .eq('platform', 'fansly')
-    .eq('platform_user_id', account_id)
+    .eq('access_token', account_id)
     .single()
-  
   if (!connection) return
-  
-  // Find or create conversation
-  const { data: existingConvo } = await supabase
-    .from('conversations')
+
+  const { data: fanRow } = await supabase
+    .from('fans')
     .select('id')
     .eq('user_id', connection.user_id)
     .eq('platform', 'fansly')
-    .eq('fan_platform_id', sender.id)
-    .single()
-  
+    .eq('platform_fan_id', sender.id)
+    .maybeSingle()
+
+  let fanId = fanRow?.id
+  if (!fanId) {
+    const { data: newFan } = await supabase
+      .from('fans')
+      .insert({
+        user_id: connection.user_id,
+        platform: 'fansly',
+        platform_fan_id: sender.id,
+        username: sender.username,
+        display_name: sender.display_name || sender.username,
+        avatar_url: sender.avatar || null,
+        subscription_status: 'active',
+      })
+      .select('id')
+      .single()
+    fanId = newFan?.id
+  }
+  if (!fanId) return
+
+  const { data: existingConvo } = await supabase
+    .from('conversations')
+    .select('id, unread_count')
+    .eq('user_id', connection.user_id)
+    .eq('platform', 'fansly')
+    .eq('fan_id', fanId)
+    .maybeSingle()
+
   let conversationId = existingConvo?.id
-  
   if (!conversationId) {
     const { data: newConvo } = await supabase
       .from('conversations')
       .insert({
         user_id: connection.user_id,
         platform: 'fansly',
-        fan_platform_id: sender.id,
-        fan_username: sender.username,
-        fan_avatar: sender.avatar,
+        fan_id: fanId,
       })
       .select('id')
       .single()
-    
     conversationId = newConvo?.id
   }
-  
-  if (conversationId) {
-    await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        content: message.text,
-        is_from_fan: true,
-        platform_message_id: message.id,
-      })
+  if (!conversationId) return
 
-    await supabase
-      .from('conversations')
-      .update({
-        last_message: message.text,
-        last_message_at: new Date().toISOString(),
-        unread_count: supabase.rpc('increment_unread', { conv_id: conversationId })
-      })
-      .eq('id', conversationId)
+  await supabase.from('messages').insert({
+    conversation_id: conversationId,
+    sender_type: 'fan',
+    content: message?.text ?? '',
+    is_read: false,
+  })
+
+  const newUnread = (existingConvo?.unread_count ?? 0) + 1
+  await supabase
+    .from('conversations')
+    .update({
+      last_message_preview: (message?.text ?? '').slice(0, 200),
+      last_message_at: new Date().toISOString(),
+      unread_count: newUnread,
+    })
+    .eq('id', conversationId)
 
     const prefs = await getPrefsForWebhook(supabase, connection.user_id)
     if (prefs.notify_new_message) {
@@ -258,17 +285,24 @@ async function handleNewTip(supabase: ReturnType<typeof createClient>, payload: 
     .from('platform_connections')
     .select('user_id')
     .eq('platform', 'fansly')
-    .eq('platform_user_id', account_id)
+    .eq('access_token', account_id)
     .single()
-  
   if (!connection) return
-  
-  await supabase.rpc('increment_fan_spent', {
-    p_user_id: connection.user_id,
-    p_platform: 'fansly',
-    p_fan_id: sender.id,
-    p_amount: tip.amount
-  })
+
+  const { data: fan } = await supabase
+    .from('fans')
+    .select('total_spent')
+    .eq('user_id', connection.user_id)
+    .eq('platform', 'fansly')
+    .eq('platform_fan_id', sender.id)
+    .maybeSingle()
+  const newTotal = (Number(fan?.total_spent ?? 0)) + Number(tip?.amount ?? 0)
+  await supabase
+    .from('fans')
+    .update({ total_spent: newTotal, last_interaction_at: new Date().toISOString() })
+    .eq('user_id', connection.user_id)
+    .eq('platform', 'fansly')
+    .eq('platform_fan_id', sender.id)
 
   const prefs = await getPrefsForWebhook(supabase, connection.user_id)
   if (prefs.notify_new_tip && tip.amount >= 50) {
@@ -292,26 +326,22 @@ async function handleNewFollower(supabase: ReturnType<typeof createClient>, payl
     .from('platform_connections')
     .select('user_id')
     .eq('platform', 'fansly')
-    .eq('platform_user_id', account_id)
+    .eq('access_token', account_id)
     .single()
-  
   if (!connection) return
-  
-  // Add follower as potential fan (not subscribed yet)
-  await supabase
-    .from('fans')
-    .upsert({
+
+  await supabase.from('fans').upsert(
+    {
       user_id: connection.user_id,
       platform: 'fansly',
       platform_fan_id: follower.id,
       username: follower.username,
       display_name: follower.display_name || follower.username,
-      avatar_url: follower.avatar,
+      avatar_url: follower.avatar || null,
+      subscription_status: 'pending',
       subscription_tier: 'follower',
       total_spent: 0,
-      is_active: false,
-    }, {
-      onConflict: 'user_id,platform,platform_fan_id',
-      ignoreDuplicates: true
-    })
+    },
+    { onConflict: 'user_id,platform,platform_fan_id' }
+  )
 }

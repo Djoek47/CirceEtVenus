@@ -1,4 +1,5 @@
 import { streamText, convertToModelMessages, UIMessage } from 'ai'
+import { gateway } from '@ai-sdk/gateway'
 import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
     }
 
     const result = streamText({
-      model: 'openai/gpt-4o-mini',
+      model: gateway('openai/gpt-4o-mini'),
       system: BASE_SYSTEM_PROMPT + identityLine,
       messages: await convertToModelMessages(messages as UIMessage[]),
     })

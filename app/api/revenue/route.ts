@@ -50,7 +50,9 @@ export async function GET() {
     for (const connection of connections) {
       if (connection.platform === 'onlyfans') {
         try {
-          const api = createOnlyFansAPI(connection.platform_user_id)
+          const accountId = connection.access_token
+          if (!accountId) continue
+          const api = createOnlyFansAPI(accountId)
           
           // Fetch earnings
           const earnings = await api.getEarnings()
@@ -113,9 +115,25 @@ export async function GET() {
       }
     }
 
-    // Calculate revenue change (placeholder - would need historical data)
-    // For now, use a simple calculation based on this month vs estimate
-    if (result.stats.earnings.thisMonth > 0 && result.stats.earnings.total > 0) {
+    // Revenue change: this month vs last month from analytics_snapshots, or this month vs long-term average
+    const now = new Date()
+    const thisMonthPrefix = now.toISOString().slice(0, 7)
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const lastMonthPrefix = lastMonthDate.toISOString().slice(0, 7)
+    const { data: snapshots } = await supabase
+      .from('analytics_snapshots')
+      .select('date, revenue')
+      .eq('user_id', user.id)
+      .or(`date.like.${thisMonthPrefix}%,date.like.${lastMonthPrefix}%`)
+    let revThisMonth = 0
+    let revLastMonth = 0
+    for (const s of snapshots || []) {
+      if (s.date?.startsWith(thisMonthPrefix)) revThisMonth += Number(s.revenue ?? 0)
+      if (s.date?.startsWith(lastMonthPrefix)) revLastMonth += Number(s.revenue ?? 0)
+    }
+    if (revLastMonth > 0) {
+      result.stats.revenueChange = Math.round(((revThisMonth - revLastMonth) / revLastMonth) * 100)
+    } else if (result.stats.earnings.thisMonth > 0 && result.stats.earnings.total > 0) {
       const avgMonthly = result.stats.earnings.total / 12
       result.stats.revenueChange = Math.round(((result.stats.earnings.thisMonth - avgMonthly) / avgMonthly) * 100)
     }

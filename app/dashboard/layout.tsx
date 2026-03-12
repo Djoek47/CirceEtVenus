@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { DashboardSidebar } from '@/components/dashboard/sidebar'
 import { DashboardHeader } from '@/components/dashboard/header'
 import { OnboardingProvider } from '@/components/onboarding/onboarding-provider'
+import { TourProvider } from '@/components/tour/tour-provider'
 
 export default async function DashboardLayout({
   children,
@@ -40,6 +41,7 @@ export default async function DashboardLayout({
           </main>
         </div>
       </div>
+      </TourProvider>
     </OnboardingProvider>
   )
 }

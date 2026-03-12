@@ -1,4 +1,5 @@
 import { streamText, convertToModelMessages, UIMessage } from 'ai'
+import { gateway } from '@ai-sdk/gateway'
 import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
@@ -36,57 +37,67 @@ You also monitor and protect reputation:
 - Crisis management when needed`
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json()
-
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  let identityLine = ''
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('gender_identity, pronouns, pronouns_custom')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    const pronouns =
-      (profile as any)?.pronouns_custom || (profile as any)?.pronouns || null
-    const genderIdentity = (profile as any)?.gender_identity || null
-
-    if (pronouns || genderIdentity) {
-      identityLine = `\nCreator identity:\n- Pronouns: ${pronouns || 'not specified'}\n- Gender identity: ${
-        genderIdentity || 'not specified'
-      }\nAlways use these pronouns for the creator and never misgender them.`
-    }
-  }
-
-  const result = streamText({
-    model: 'openai/gpt-4o-mini',
-    system: VENUS_SYSTEM_PROMPT + identityLine,
-    messages: await convertToModelMessages(messages),
-  })
-
-  // Best-effort AI credit accounting for Venus chat
   try {
+    const body = await req.json().catch(() => ({}))
+    const messages = (body.messages ?? (body.message != null ? [body.message] : [])) as UIMessage[]
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return new Response(JSON.stringify({ error: 'Messages are required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    let identityLine = ''
     if (user) {
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('ai_credits_used')
-        .eq('user_id', user.id)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('gender_identity, pronouns, pronouns_custom')
+        .eq('id', user.id)
         .maybeSingle()
 
-      if (subscription) {
-        await supabase
-          .from('subscriptions')
-          .update({ ai_credits_used: (subscription.ai_credits_used || 0) + 1 })
-          .eq('user_id', user.id)
+      const pronouns = (profile as any)?.pronouns_custom || (profile as any)?.pronouns || null
+      const genderIdentity = (profile as any)?.gender_identity || null
+
+      if (pronouns || genderIdentity) {
+        identityLine = `\nCreator identity:\n- Pronouns: ${pronouns || 'not specified'}\n- Gender identity: ${
+          genderIdentity || 'not specified'
+        }\nAlways use these pronouns for the creator and never misgender them.`
       }
     }
-  } catch {
-    // ignore credit errors
-  }
 
-  return result.toUIMessageStreamResponse()
+    const result = streamText({
+      model: gateway('openai/gpt-4o-mini'),
+      system: VENUS_SYSTEM_PROMPT + identityLine,
+      messages: await convertToModelMessages(messages),
+    })
+
+    try {
+      if (user) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('ai_credits_used')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (subscription) {
+          await supabase
+            .from('subscriptions')
+            .update({ ai_credits_used: (subscription.ai_credits_used || 0) + 1 })
+            .eq('user_id', user.id)
+        }
+      }
+    } catch {
+      // ignore credit errors
+    }
+
+    return result.toUIMessageStreamResponse()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Venus chat failed'
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 }

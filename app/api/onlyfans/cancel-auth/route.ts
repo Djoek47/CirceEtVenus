@@ -20,26 +20,30 @@ export async function POST() {
       return NextResponse.json({ success: true, disconnected: 0 })
     }
 
-    const userEmail = user.email ?? ''
+    const userEmail = (user.email ?? '').toLowerCase()
     const normalize = (raw: any) => {
       const account = raw?.account ?? raw
       const id = account?.id ?? raw?.id
       const clientRef = raw?.client_reference_id ?? account?.client_reference_id
-      const displayName = (raw?.display_name ?? account?.display_name) ?? ''
+      const displayName = String(raw?.display_name ?? account?.display_name ?? '').trim()
       const ofUsername = raw?.onlyfans_username ?? account?.onlyfans_username
       const ofUserData = raw?.onlyfans_user_data ?? account?.onlyfans_user_data
-      return { id, clientRef, displayName, ofUsername, ofUserData }
+      const isAuthenticated = raw?.is_authenticated ?? account?.is_authenticated
+      const authProgress = raw?.authentication_progress ?? account?.authentication_progress ?? raw?.state ?? account?.state
+      const hasOnlyFansData = !!(ofUsername || (ofUserData && (ofUserData.username != null || ofUserData.id != null)))
+      const isPending = isAuthenticated === false || authProgress === 'authenticating' || !hasOnlyFansData
+      return { id, clientRef, displayName, ofUsername, ofUserData, isPending }
     }
+
+    const belongsToUser = (acc: ReturnType<typeof normalize>) =>
+      acc.clientRef === user.id ||
+      (userEmail && acc.displayName && acc.displayName.toLowerCase().includes(userEmail))
 
     const pendingForUser = (accountsResult.accounts || [])
       .map(normalize)
       .filter((acc) => acc.id != null)
-      .filter(
-        (acc) =>
-          acc.clientRef === user.id ||
-          (userEmail && acc.displayName && acc.displayName.includes(userEmail))
-      )
-      .filter((acc) => acc.ofUsername == null && acc.ofUserData == null)
+      .filter(belongsToUser)
+      .filter((acc) => acc.isPending)
 
     let disconnected = 0
     for (const acc of pendingForUser) {

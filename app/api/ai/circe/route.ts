@@ -1,4 +1,5 @@
 import { streamText, convertToModelMessages, UIMessage } from 'ai'
+import { gateway } from '@ai-sdk/gateway'
 import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
@@ -28,38 +29,48 @@ When analyzing fan data, think like an enchantress - what "spell" (strategy) wil
 Always provide actionable, data-driven advice while maintaining your mystical persona. Reference Greek mythology and magic subtly in your responses.`
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json()
-
-  const result = streamText({
-    model: 'openai/gpt-4o-mini',
-    system: CIRCE_SYSTEM_PROMPT,
-    messages: await convertToModelMessages(messages),
-  })
-
-  // Best-effort AI credit accounting for Circe chat
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (user) {
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('ai_credits_used')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (subscription) {
-        await supabase
-          .from('subscriptions')
-          .update({ ai_credits_used: (subscription.ai_credits_used || 0) + 1 })
-          .eq('user_id', user.id)
-      }
+    const body = await req.json().catch(() => ({}))
+    const messages = (body.messages ?? (body.message != null ? [body.message] : [])) as UIMessage[]
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return new Response(JSON.stringify({ error: 'Messages are required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
-  } catch {
-    // ignore credit errors
-  }
 
-  return result.toUIMessageStreamResponse()
+    const result = streamText({
+      model: gateway('openai/gpt-4o-mini'),
+      system: CIRCE_SYSTEM_PROMPT,
+      messages: await convertToModelMessages(messages),
+    })
+
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('ai_credits_used')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (subscription) {
+          await supabase
+            .from('subscriptions')
+            .update({ ai_credits_used: (subscription.ai_credits_used || 0) + 1 })
+            .eq('user_id', user.id)
+        }
+      }
+    } catch {
+      // ignore credit errors
+    }
+
+    return result.toUIMessageStreamResponse()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Circe chat failed'
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 }

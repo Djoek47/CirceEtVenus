@@ -316,15 +316,18 @@ class OnlyFansAPI {
 
       const data = await response.json()
 
-      if (Array.isArray(data)) {
-        return { success: true, accounts: data }
-      }
-      
-      if (data.accounts && Array.isArray(data.accounts)) {
-        return { success: true, accounts: data.accounts }
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.accounts)
+            ? data.accounts
+            : null
+      if (list?.length !== undefined) {
+        return { success: true, accounts: list }
       }
 
-      return { success: false, message: data.message || 'No accounts found' }
+      return { success: false, message: (data as any)?.message || 'No accounts found' }
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : 'Failed to list accounts' }
     }

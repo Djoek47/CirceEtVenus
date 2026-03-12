@@ -21,12 +21,12 @@ export async function POST(request: NextRequest) {
       .eq('is_connected', true)
       .single()
 
-    if (!connection || !connection.platform_user_id) {
+    const accountId = connection?.access_token ?? connection?.platform_user_id
+    if (!connection || !accountId) {
       return NextResponse.json({ error: 'Fansly not connected' }, { status: 400 })
     }
 
-    const api = createFanslyAPI()
-    const accountId = connection.platform_user_id
+    const api = createFanslyAPI(accountId)
 
     // Fetch all data from Fansly API - wrap in try/catch for each call
     let profile = { username: '', displayName: '', avatar: '', subscribersCount: 0, followersCount: 0 }
@@ -63,31 +63,30 @@ export async function POST(request: NextRequest) {
       messages_received: 0,
       messages_sent: 0,
     }, {
-      onConflict: 'user_id,platform,date'
+      onConflict: 'user_id,date,platform'
     })
 
     // Sync fans/subscribers
     let synced = 0
     if (fans.data && fans.data.length > 0) {
       for (const fan of fans.data) {
-        const { error } = await supabase.from('fans').upsert({
-          user_id: user.id,
-          platform: 'fansly',
-          platform_fan_id: fan.id,
-          username: fan.username,
-          display_name: fan.displayName || fan.username,
-          avatar_url: fan.avatar,
-          subscribed_at: fan.subscribedAt,
-          expires_at: fan.expiresAt,
-          total_spent: fan.totalSpent || 0,
-          subscription_price: fan.price || 0,
-          is_renewing: fan.renewing || false,
-          tier: (fan.totalSpent || 0) >= 500 ? 'vip' : (fan.totalSpent || 0) >= 100 ? 'whale' : 'regular',
-          last_activity_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,platform,platform_fan_id'
-        })
-        
+        const tier = (fan.totalSpent || 0) >= 500 ? 'vip' : (fan.totalSpent || 0) >= 100 ? 'whale' : 'regular'
+        const { error } = await supabase.from('fans').upsert(
+          {
+            user_id: user.id,
+            platform: 'fansly',
+            platform_fan_id: fan.id,
+            username: fan.username,
+            display_name: fan.displayName || fan.username,
+            avatar_url: fan.avatar || null,
+            subscription_status: 'active',
+            subscription_tier: tier,
+            total_spent: fan.totalSpent || 0,
+            first_subscribed_at: fan.subscribedAt || null,
+            last_interaction_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,platform,platform_fan_id' }
+        )
         if (!error) synced++
       }
     }
@@ -138,7 +137,7 @@ export async function GET() {
 
     const { data: connection } = await supabase
       .from('platform_connections')
-      .select('last_sync_at, is_connected, platform_username, platform_user_id')
+      .select('last_sync_at, is_connected, platform_username, access_token')
       .eq('user_id', user.id)
       .eq('platform', 'fansly')
       .single()
@@ -147,7 +146,7 @@ export async function GET() {
       connected: connection?.is_connected || false,
       lastSync: connection?.last_sync_at || null,
       username: connection?.platform_username || null,
-      accountId: connection?.platform_user_id || null,
+      accountId: connection?.access_token || null,
     })
   } catch (error) {
     console.error('Fansly status error:', error)

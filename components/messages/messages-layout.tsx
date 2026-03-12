@@ -30,7 +30,6 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
 
       const allConversations: Conversation[] = []
 
-      // Add OnlyFans conversations with platform tag
       if (onlyfansRes.ok && onlyfansData.conversations) {
         const ofConversations = onlyfansData.conversations.map((conv: any) => ({
           ...conv,
@@ -40,16 +39,16 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
         allConversations.push(...ofConversations)
       }
 
-      // TODO: Add Fansly conversations when API is available
-      // const fanslyRes = await fetch('/api/fansly/conversations')
-      // if (fanslyRes.ok) {
-      //   const fanslyData = await fanslyRes.json()
-      //   const fanslyConversations = fanslyData.conversations.map((conv: any) => ({
-      //     ...conv,
-      //     platform: 'fansly' as const,
-      //   }))
-      //   allConversations.push(...fanslyConversations)
-      // }
+      const fanslyRes = await fetch('/api/fansly/conversations')
+      const fanslyData = await fanslyRes.json()
+      if (fanslyRes.ok && fanslyData.conversations?.length) {
+        const fanslyConversations = fanslyData.conversations.map((conv: any) => ({
+          ...conv,
+          platform: 'fansly' as const,
+          chatId: conv.chatId || conv.user?.id,
+        }))
+        allConversations.push(...fanslyConversations)
+      }
 
       // Sort by most recent message
       allConversations.sort((a, b) => {
@@ -115,7 +114,7 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
           </div>
           <h3 className="text-lg font-medium">No Messages Yet</h3>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Your messages will appear here once fans start messaging you. (OnlyFans. Fansly support coming soon.)
+            Your messages will appear here once fans start messaging you. Connect OnlyFans or Fansly in Settings to see conversations.
           </p>
           <Button onClick={() => loadConversations(true)} className="mt-4" variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -147,7 +146,7 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
               {selectedConversation ? (selectedConversation.user.name || selectedConversation.user.username || 'Chat') : 'Messages'}
             </h2>
             <p className="text-sm text-muted-foreground truncate">
-              {selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations · OnlyFans. Fansly coming soon.`}
+              {selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations · OnlyFans & Fansly`}
             </p>
           </div>
         </div>

@@ -29,18 +29,19 @@ export default async function DashboardLayout({
       userName={profile?.full_name || undefined}
       onboardingCompleted={profile?.onboarding_completed || false}
     >
-      <div className="flex h-screen bg-background">
-        {/* Desktop sidebar - hidden on mobile */}
-        <div className="hidden md:block">
-          <DashboardSidebar user={user} profile={profile} />
+      <TourProvider>
+        <div className="flex h-screen bg-background">
+          {/* Desktop sidebar - hidden on mobile */}
+          <div className="hidden md:block">
+            <DashboardSidebar user={user} profile={profile} />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <DashboardHeader user={user} profile={profile} />
+            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+              {children}
+            </main>
+          </div>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <DashboardHeader user={user} profile={profile} />
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
-            {children}
-          </main>
-        </div>
-      </div>
       </TourProvider>
     </OnboardingProvider>
   )

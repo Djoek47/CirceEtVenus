@@ -258,23 +258,22 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient>, paylo
       last_message_at: new Date().toISOString(),
       unread_count: newUnread,
     })
-    .eq('id', conversationId)
+    .eq('id', conversationId);
 
-    const prefs = await getPrefsForWebhook(supabase, connection.user_id)
-    if (prefs.notify_new_message) {
-      const displayName = sender.display_name || sender.username ? `@${sender.username}` : 'a fan'
-      const preview = (message.text || '').trim().slice(0, 140)
-      await supabase.from('notifications').insert({
-        user_id: connection.user_id,
-        type: 'message',
-        title: `New message from ${displayName}`,
-        description: preview || 'Sent you a new message',
-        link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
-        read: false,
-        platform: 'fansly',
-        avatar_url: sender.avatar || undefined,
-      })
-    }
+  const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  if (prefs.notify_new_message) {
+    const displayName = sender.display_name || sender.username ? `@${sender.username}` : 'a fan'
+    const preview = (message.text || '').trim().slice(0, 140)
+    await supabase.from('notifications').insert({
+      user_id: connection.user_id,
+      type: 'message',
+      title: `New message from ${displayName}`,
+      description: preview || 'Sent you a new message',
+      link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
+      read: false,
+      platform: 'fansly',
+      avatar_url: sender.avatar || undefined,
+    })
   }
 }
 

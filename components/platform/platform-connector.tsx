@@ -364,6 +364,11 @@ export function PlatformConnector({ compact = false }: PlatformConnectorProps) {
 
       const { startOnlyFansAuthentication } = await import('@onlyfansapi/auth')
       startOnlyFansAuthentication(token, {
+        onContinue: () => {
+          // Temporary: help OnlyFans debug why flow stalls after Continue
+          // eslint-disable-next-line no-console
+          console.log('[OnlyFans SDK] onContinue fired')
+        },
         onSuccess: async (data: { accountId: string; username?: string }) => {
           try {
             const { data: { user } } = await supabase.auth.getUser()

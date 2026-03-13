@@ -81,6 +81,7 @@ export default function DivineManagerPage() {
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -240,6 +241,50 @@ export default function DivineManagerPage() {
       console.error(e)
     } finally {
       setVoiceLoading(false)
+    }
+  }
+
+  const handleResetDivineManager = async () => {
+    if (!userId || resetting) return
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm('Reset Divine Manager? This will clear its settings and tasks and reopen the setup wizard.')
+      : false
+    if (!confirmed) return
+    setResetting(true)
+    try {
+      const supabase = createClient()
+      await supabase.from('divine_manager_tasks').delete().eq('user_id', userId)
+      await supabase.from('divine_manager_settings').delete().eq('user_id', userId)
+      setSettings(null)
+      setTasks([])
+      setWizardStep(1)
+      setPersona({
+        tone: 'friendly',
+        flirtyLevel: 'mild',
+        boundaries: [],
+        examplePhrases: [],
+      })
+      setGoals({
+        qualitativeGoals: [],
+        targetSubscribers: undefined,
+        targetRetention: undefined,
+        targetARPU: undefined,
+      })
+      setAutomationRules({
+        autoPostSchedule: { enabled: false, maxPerDay: 2 },
+        autoWelcomeDm: { enabled: false, maxPerDay: 50 },
+        autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
+      })
+      setSelectedMode('suggest_only')
+      setManagerArchetype('hermes')
+      setNotifyLevel('daily_digest')
+      setBetaAcknowledged(false)
+      setVoiceScript(null)
+      setChatMessages([])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -559,6 +604,15 @@ export default function DivineManagerPage() {
               <SelectItem value="semi_auto">Semi-automatic</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={resetting}
+            onClick={handleResetDivineManager}
+          >
+            {resetting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+            Reset
+          </Button>
         </div>
       </div>
 

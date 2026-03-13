@@ -23,10 +23,40 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://circe-venus.vercel.app'),
   title: 'Circe et Venus - Divine Creator Management',
-  description: 'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction. Manage fans, content, analytics with divine precision.',
+  description:
+    'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction. Manage fans, content, analytics with divine precision.',
   generator: 'v0.app',
-  keywords: ['creator management', 'OnlyFans', 'MYM', 'Fansly', 'content creator', 'fan management', 'AI assistant', 'astrology', 'Circe', 'Venus'],
+  keywords: [
+    'creator management',
+    'OnlyFans',
+    'MYM',
+    'Fansly',
+    'content creator',
+    'fan management',
+    'AI assistant',
+    'astrology',
+    'Circe',
+    'Venus',
+  ],
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    title: 'Circe et Venus - Divine Creator Management',
+    description:
+      'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction.',
+    siteName: 'Circe et Venus',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Circe et Venus - Divine Creator Management',
+    description:
+      'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction.',
+  },
   icons: {
     icon: '/icon.svg',
     apple: '/icon.svg',
@@ -44,8 +74,28 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const gscVerification = process.env.NEXT_PUBLIC_GSC_VERIFICATION
+
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {gscVerification && (
+          <meta name="google-site-verification" content={gscVerification} />
+        )}
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'Circe et Venus',
+              url: 'https://circe-venus.vercel.app',
+              logo: 'https://circe-venus.vercel.app/icon.svg',
+            }),
+          }}
+        />
+      </head>
       <body className={`${cinzel.variable} ${dmSans.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"

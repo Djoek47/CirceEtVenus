@@ -115,7 +115,7 @@ export function CirceAssistant() {
     e.preventDefault()
     const text = input.trim()
     if (!text || isLoading) return
-    sendMessage({ text })
+    sendMessage(text)
     setInput('')
   }
   

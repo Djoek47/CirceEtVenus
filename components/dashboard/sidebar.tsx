@@ -20,6 +20,7 @@ import {
   Star,
   Share2,
   BookOpen,
+  Crown,
   LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -53,6 +54,7 @@ const venusNavigation: NavItem[] = [
 // Silver themed navigation
 const silverNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Divine Manager', href: '/dashboard/divine-manager', icon: Crown },
   { name: 'Content', href: '/dashboard/content', icon: Calendar },
   { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
   { name: 'Social', href: '/dashboard/social', icon: Share2 },

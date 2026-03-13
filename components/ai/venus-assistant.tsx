@@ -118,7 +118,7 @@ export function VenusAssistant() {
     e.preventDefault()
     const text = input.trim()
     if (!text || isLoading) return
-    sendMessage({ text })
+    sendMessage(text)
     setInput('')
   }
   

@@ -78,6 +78,9 @@ export default function DivineManagerPage() {
   const [voiceMode, setVoiceMode] = useState<'intro' | 'ongoing' | 'what_next' | null>(null)
   const [voiceLoading, setVoiceLoading] = useState(false)
   const [ongoingCoachEnabled, setOngoingCoachEnabled] = useState(false)
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -237,6 +240,33 @@ export default function DivineManagerPage() {
       console.error(e)
     } finally {
       setVoiceLoading(false)
+    }
+  }
+
+  const sendChat = async () => {
+    const trimmed = chatInput.trim()
+    if (!trimmed || chatLoading) return
+    const nextMessages = [...chatMessages, { role: 'user' as const, content: trimmed }]
+    setChatMessages(nextMessages)
+    setChatInput('')
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/ai/divine-manager-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
+        }),
+      })
+      if (!res.ok) throw new Error('Chat request failed')
+      const data = (await res.json()) as { reply?: string; error?: string }
+      if (data.reply) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply! }])
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setChatLoading(false)
     }
   }
 
@@ -697,6 +727,59 @@ export default function DivineManagerPage() {
                 {voiceScript}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {settings.beta_acknowledged && mode !== 'off' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Talk to your Manager
+            </CardTitle>
+            <CardDescription>
+              Ask questions about your fans, revenue, or which tasks to prioritize. Replies are based on your Divine Manager setup.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="h-48 w-full rounded-md border border-border bg-muted/30 p-2 overflow-y-auto space-y-2 text-sm">
+              {chatMessages.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Ask me about your fans, revenue, or which tasks to prioritize. I’ll answer based on your Divine Manager setup and plan.
+                </p>
+              ) : (
+                chatMessages.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className={`max-w-[80%] rounded-lg px-2 py-1 ${
+                      m.role === 'user'
+                        ? 'ml-auto bg-primary text-primary-foreground'
+                        : 'mr-auto bg-muted text-foreground'
+                    }`}
+                  >
+                    {m.content}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Type a question for your manager…"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    sendChat()
+                  }
+                }}
+                disabled={chatLoading}
+              />
+              <Button size="sm" disabled={chatLoading || !chatInput.trim()} onClick={sendChat}>
+                {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

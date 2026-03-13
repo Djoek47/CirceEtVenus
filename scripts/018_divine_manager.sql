@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS public.divine_manager_settings (
   persona JSONB DEFAULT '{}',
   goals JSONB DEFAULT '{}',
   automation_rules JSONB DEFAULT '{}',
+  manager_archetype TEXT DEFAULT 'hermes',
+  notification_settings JSONB DEFAULT '{"level": "daily_digest", "channel": "in_app"}',
+  beta_acknowledged BOOLEAN DEFAULT false,
   mode divine_manager_mode NOT NULL DEFAULT 'off',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -30,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.divine_manager_tasks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
+  category TEXT,
   status divine_manager_task_status NOT NULL DEFAULT 'suggested',
   payload JSONB DEFAULT '{}',
   source TEXT,

@@ -39,6 +39,13 @@ export interface DivineManagerSettingsRow {
   persona: DivineManagerPersona
   goals: DivineManagerGoals
   automation_rules: DivineManagerAutomationRules
+  manager_archetype: string
+  notification_settings: {
+    level?: 'none' | 'only_issues' | 'daily_digest' | 'all'
+    channel?: 'in_app' | 'email' | 'both'
+    [key: string]: unknown
+  }
+  beta_acknowledged?: boolean
   mode: DivineManagerMode
   created_at: string
   updated_at: string
@@ -56,6 +63,7 @@ export interface DivineManagerTaskRow {
   id: string
   user_id: string
   type: string
+  category?: string | null
   status: DivineManagerTaskStatus
   payload: DivineManagerTaskPayload
   source: string | null
@@ -69,6 +77,9 @@ export interface DivineManagerSettingsInsert {
   persona?: DivineManagerPersona
   goals?: DivineManagerGoals
   automation_rules?: DivineManagerAutomationRules
+  manager_archetype?: string
+  notification_settings?: DivineManagerSettingsRow['notification_settings']
+  beta_acknowledged?: boolean
   mode?: DivineManagerMode
 }
 

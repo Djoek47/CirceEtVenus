@@ -2,21 +2,33 @@ import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSettings, getTasks, createTask, updateTask, type DivineManagerSettingsRow, type DivineManagerTaskRow } from '@/lib/divine-manager'
+import { getArchetypeFlavor } from '@/lib/divine-manager-archetypes'
 
 /** Build system prompt for the Divine Manager brain. Preference hints from past approve/skip behavior. */
 function buildSystemPrompt(settings: DivineManagerSettingsRow, preferenceHint: string): string {
   const persona = settings.persona ?? {}
   const goals = settings.goals ?? {}
   const rules = settings.automation_rules ?? {}
+  const archetypeFlavor = getArchetypeFlavor(settings.manager_archetype)
+  const notify = settings.notification_settings ?? {}
   return `You are the Divine Manager (Big Pimping) for a creator. You coordinate posts, DMs, pricing, and growth using Circe & Venus tools. You never role-play as the creator; you always speak as their manager.
 
 Creator persona: tone ${persona.tone ?? 'friendly'}, flirty level ${persona.flirtyLevel ?? 'mild'}. Boundaries: ${(persona.boundaries ?? []).join('; ') || 'none specified'}.
 Goals: ${(goals.qualitativeGoals ?? []).join(', ') || 'general growth'}.
 Automation allowed: auto-post ${rules.autoPostSchedule?.enabled ? 'yes' : 'no'}, welcome DM ${rules.autoWelcomeDm?.enabled ? 'yes' : 'no'}, tip follow-up ${rules.autoFollowUpAfterTips?.enabled ? 'yes' : 'no'}.
+Notification preference: level=${notify.level ?? 'daily_digest'}, channel=${notify.channel ?? 'in_app'}.
+Archetype mode: ${settings.manager_archetype || 'hermes'}. ${archetypeFlavor}
 ${preferenceHint ? `Preference learning (prioritize types they often approve, avoid types they often dismiss): ${preferenceHint}` : ''}
 
 Given recent tasks and context, suggest 1-5 concrete next tasks. Types: post_suggestion, dm_welcome, dm_followup, pricing_change, content_idea, churn_review, engagement_reminder.
-Return a JSON object with a "tasks" array. Each task: type, summary, optional suggestedText, platform, source (e.g. "churn_predictor", "content_ideas", "manager").`
+Return ONLY JSON with a "tasks" array. Each task MUST have:
+- "type": one of the types above
+- "category": "dm" | "content" | "pricing" | "analytics"
+- "summary": short human-readable description
+- "suggestedText": optional DM or caption text, if applicable
+- "platform": "onlyfans" | "fansly" | null
+- "segment": optional short label like "dormant_high_spend" or "new_subs"
+- "source": e.g. "churn_predictor", "content_ideas", "manager".`
 }
 
 /**
@@ -51,7 +63,7 @@ export async function runDivineManagerBrain(
     .join('; ') || ''
 
   const systemPrompt = buildSystemPrompt(settings, preferenceHint)
-  const userPrompt = `Recent tasks:\n${recentSummary || 'None yet.'}\n\nSuggest the next 1-5 tasks as JSON: { "tasks": [ { "type": "...", "summary": "...", "suggestedText": "optional", "platform": "onlyfans|fansly", "source": "manager" } ] }`
+  const userPrompt = `Recent tasks:\n${recentSummary || 'None yet.'}\n\nSuggest the next 1-5 tasks as JSON as described in the system prompt.`
 
   const { text } = await generateText({
     model: gateway('openai/gpt-4o-mini'),
@@ -79,12 +91,16 @@ export async function runDivineManagerBrain(
     for (const t of tasks.slice(0, 5)) {
       const type = typeof t.type === 'string' ? t.type : 'content_idea'
       const summary = typeof t.summary === 'string' ? t.summary : ''
+      const category = typeof t.category === 'string' ? t.category : null
       const payload: Record<string, unknown> = { summary }
       if (typeof t.suggestedText === 'string') payload.suggestedText = t.suggestedText
+      if (typeof t.segment === 'string') payload.segment = t.segment
+      if (typeof t.platform === 'string') payload.platform = t.platform
       const status = isSemiAuto && ruleEnabled(type) ? 'scheduled' : 'suggested'
       const row = await createTask(supabase, {
         user_id: userId,
         type,
+        category,
         status,
         payload,
         source: typeof t.source === 'string' ? t.source : 'manager',
@@ -107,16 +123,35 @@ export async function executeScheduledTasksForUser(
 ): Promise<{ executed: number; failed: number }> {
   const { data: scheduled } = await supabase
     .from('divine_manager_tasks')
-    .select('id, type, payload')
+    .select('id, type, category, payload')
     .eq('user_id', userId)
     .eq('status', 'scheduled')
 
   let executed = 0
   let failed = 0
+
   for (const t of scheduled ?? []) {
     try {
-      // Placeholder: real execution would call OnlyFans/Fansly API to send DM or create post
-      await updateTask(supabase, t.id, { status: 'executed', executed_at: new Date().toISOString() })
+      const type = t.type as string
+      const category = (t.category as string | null) ?? null
+
+      // NOTE: For now we only mark as executed. Real implementations should:
+      // - For dm_welcome / dm_followup: call mass DM endpoints with safe caps
+      // - For post_suggestion: schedule posts using content APIs
+      // - For pricing_change: call pricing optimizer / apply bounded changes
+
+      await updateTask(supabase, t.id, {
+        status: 'executed',
+        executed_at: new Date().toISOString(),
+        payload: {
+          ...(t.payload ?? {}),
+          executorNote:
+            (category === 'dm' && 'DM auto-executed placeholder') ||
+            (category === 'content' && 'Content scheduling placeholder') ||
+            (category === 'pricing' && 'Pricing adjustment placeholder') ||
+            'Auto-executed placeholder',
+        } as any,
+      })
       executed += 1
     } catch {
       await updateTask(supabase, t.id, { status: 'failed' }).catch(() => {})

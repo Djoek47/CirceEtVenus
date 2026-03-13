@@ -71,6 +71,9 @@ export default function DivineManagerPage() {
     autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
   })
   const [selectedMode, setSelectedMode] = useState<DivineManagerMode>('suggest_only')
+  const [managerArchetype, setManagerArchetype] = useState<string>('hermes')
+  const [notifyLevel, setNotifyLevel] = useState<'none' | 'only_issues' | 'daily_digest' | 'all'>('daily_digest')
+  const [betaAcknowledged, setBetaAcknowledged] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -86,6 +89,13 @@ export default function DivineManagerPage() {
           setGoals(s.goals ?? {})
           setAutomationRules(s.automation_rules ?? {})
           setSelectedMode(s.mode)
+          setManagerArchetype(s.manager_archetype || 'hermes')
+          if (s.notification_settings?.level) {
+            setNotifyLevel(s.notification_settings.level as any)
+          }
+          if (typeof s.beta_acknowledged === 'boolean') {
+            setBetaAcknowledged(s.beta_acknowledged)
+          }
           const t = await getTasks(supabase, user.id, { limit: 20 })
           setTasks(t)
         }
@@ -107,6 +117,9 @@ export default function DivineManagerPage() {
         persona,
         goals,
         automation_rules: automationRules,
+        manager_archetype: managerArchetype,
+        notification_settings: { level: notifyLevel, channel: 'in_app' },
+        beta_acknowledged: betaAcknowledged,
         mode: selectedMode,
       })
       setSettings(row)
@@ -214,7 +227,7 @@ export default function DivineManagerPage() {
             <CardTitle>Setup wizard</CardTitle>
             <CardDescription>
               Step {wizardStep} of 4 — {wizardStep === 1 && 'Persona & boundaries'}
-              {wizardStep === 2 && 'Platforms & goals'}
+              {wizardStep === 2 && 'Archetype & notifications'}
               {wizardStep === 3 && 'Automation rules'}
               {wizardStep === 4 && 'Review & activate'}
             </CardDescription>
@@ -289,42 +302,33 @@ export default function DivineManagerPage() {
             {wizardStep === 2 && (
               <>
                 <p className="text-sm text-muted-foreground">
-                  We&apos;ll use your connected platforms (OnlyFans, Fansly) from Settings. Here, set your high-level goals.
+                  Choose your Divine Manager&apos;s style and how often it should ping you.
                 </p>
-                <div className="space-y-2">
-                  <Label>Goals (e.g. more subscribers, better retention, higher ARPU)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Add a goal..."
-                      value={goalInput}
-                      onChange={(e) => setGoalInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && goalInput.trim()) {
-                          setGoals((g) => ({ ...g, qualitativeGoals: [...(g.qualitativeGoals ?? []), goalInput.trim()] }))
-                          setGoalInput('')
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        if (goalInput.trim()) {
-                          setGoals((g) => ({ ...g, qualitativeGoals: [...(g.qualitativeGoals ?? []), goalInput.trim()] }))
-                          setGoalInput('')
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Manager archetype</Label>
+                    <Select value={managerArchetype} onValueChange={(v) => setManagerArchetype(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hermes">Hermes – Messages & money focus</SelectItem>
+                        <SelectItem value="hephaestus">Hephaestus – Systems & schedules</SelectItem>
+                        <SelectItem value="hestia">Hestia – Retention & VIP care</SelectItem>
+                        <SelectItem value="eros">Eros – Charm & script optimization</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {(goals.qualitativeGoals?.length ?? 0) > 0 && (
-                    <ul className="list-disc pl-4 text-sm text-muted-foreground">
-                      {goals.qualitativeGoals?.map((g, i) => (
-                        <li key={i}>{g}</li>
-                      ))}
-                    </ul>
-                  )}
+                  <div className="space-y-2">
+                    <Label>Notification level</Label>
+                    <Select value={notifyLevel} onValueChange={(v: any) => setNotifyLevel(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Never notify me</SelectItem>
+                        <SelectItem value="only_issues">Only if something breaks or needs approval</SelectItem>
+                        <SelectItem value="daily_digest">Daily summary of moves & money</SelectItem>
+                        <SelectItem value="all">Notify for every action</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </>
             )}
@@ -389,10 +393,22 @@ export default function DivineManagerPage() {
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
                   <p className="font-medium">Summary</p>
                   <p className="text-sm text-muted-foreground">Tone: {persona.tone}, Flirty: {persona.flirtyLevel}</p>
-                  <p className="text-sm text-muted-foreground">Goals: {goals.qualitativeGoals?.length ? goals.qualitativeGoals.join(', ') : 'None set'}</p>
+                  <p className="text-sm text-muted-foreground">Archetype: {managerArchetype}</p>
                   <p className="text-sm text-muted-foreground">
                     Automation: {[automationRules.autoPostSchedule?.enabled && 'Posts', automationRules.autoWelcomeDm?.enabled && 'Welcome DMs', automationRules.autoFollowUpAfterTips?.enabled && 'Tip follow-up'].filter(Boolean).join(', ') || 'None'}
                   </p>
+                  <p className="text-sm text-muted-foreground">
+                    Notifications: {notifyLevel === 'none' ? 'Never' : notifyLevel === 'only_issues' ? 'Only issues' : notifyLevel === 'daily_digest' ? 'Daily digest' : 'All actions'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Divine Manager is <span className="font-semibold">BETA</span>. It can make mistakes. You remain responsible for all actions.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={betaAcknowledged} onCheckedChange={setBetaAcknowledged} />
+                  <span className="text-xs text-muted-foreground">
+                    I understand this feature is beta and may make mistakes; I remain responsible for all actions.
+                  </span>
                 </div>
                 <div className="space-y-2">
                   <Label>Manager mode</Label>
@@ -438,10 +454,20 @@ export default function DivineManagerPage() {
     <div className="space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Crown className="h-7 w-7 text-amber-500" />
-            Divine Manager
-          </h1>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold">Divine Manager</h1>
+                <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                  BETA
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Archetype: {settings.manager_archetype || 'hermes'}
+              </p>
+            </div>
+          </div>
           <p className="text-muted-foreground mt-1">
             Your full-time AI manager orchestrating posts, messages, pricing, and growth using all Circe & Venus powers.
           </p>
@@ -495,8 +521,18 @@ export default function DivineManagerPage() {
                 <li key={t.id} className="rounded-lg border p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm capitalize">{t.type.replace(/_/g, ' ')}</p>
-                      <p className="text-xs text-muted-foreground">{t.source ?? 'Manager'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm capitalize">{t.type.replace(/_/g, ' ')}</p>
+                        {t.category && (
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {t.category}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {t.source ?? 'Manager'}
+                        {t.payload?.segment ? ` · Segment: ${String(t.payload.segment)}` : null}
+                      </p>
                       {editingTaskId === t.id ? (
                         <div className="mt-2">
                           <Label className="text-xs">Edit message / details</Label>
@@ -576,7 +612,8 @@ export default function DivineManagerPage() {
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
           <p><span className="font-medium text-foreground">Tone:</span> {String(settings.persona?.tone ?? '—')} · Flirty: {String(settings.persona?.flirtyLevel ?? '—')}</p>
-          <p><span className="font-medium text-foreground">Goals:</span> {settings.goals?.qualitativeGoals?.length ? settings.goals.qualitativeGoals.join(', ') : '—'}</p>
+          <p><span className="font-medium text-foreground">Archetype:</span> {settings.manager_archetype || 'hermes'}</p>
+          <p><span className="font-medium text-foreground">Notifications:</span> {settings.notification_settings?.level ?? 'daily_digest'}</p>
           <p><span className="font-medium text-foreground">Rules:</span> Auto-post {settings.automation_rules?.autoPostSchedule?.enabled ? 'on' : 'off'}, Welcome DM {settings.automation_rules?.autoWelcomeDm?.enabled ? 'on' : 'off'}, Tip follow-up {settings.automation_rules?.autoFollowUpAfterTips?.enabled ? 'on' : 'off'}</p>
         </CardContent>
       </Card>

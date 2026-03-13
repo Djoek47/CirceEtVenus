@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getSettings,
@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil } from 'lucide-react'
+import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff } from 'lucide-react'
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -82,6 +82,11 @@ export default function DivineManagerPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [realtimeError, setRealtimeError] = useState<string | null>(null)
+  const realtimePcRef = useRef<RTCPeerConnection | null>(null)
+  const realtimeAudioRef = useRef<HTMLAudioElement | null>(null)
+  const realtimeStreamRef = useRef<MediaStream | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -314,6 +319,72 @@ export default function DivineManagerPage() {
       setChatLoading(false)
     }
   }
+
+  const startRealtimeVoice = async () => {
+    if (realtimeStatus === 'connecting' || realtimeStatus === 'connected') return
+    setRealtimeError(null)
+    setRealtimeStatus('connecting')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      realtimeStreamRef.current = stream
+      const pc = new RTCPeerConnection()
+      realtimePcRef.current = pc
+
+      const audioEl = document.createElement('audio')
+      audioEl.autoplay = true
+      audioEl.playsInline = true
+      realtimeAudioRef.current = audioEl
+      pc.ontrack = (e) => {
+        if (e.streams[0]) audioEl.srcObject = e.streams[0]
+      }
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      pc.createDataChannel('oai-events')
+
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+
+      const res = await fetch('/api/ai/divine-manager-realtime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/sdp' },
+        body: offer.sdp ?? '',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || `Session failed ${res.status}`)
+      }
+      const answerSdp = await res.text()
+      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
+      setRealtimeStatus('connected')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to start voice call'
+      setRealtimeError(msg)
+      setRealtimeStatus('error')
+      endRealtimeVoice()
+    }
+  }
+
+  const endRealtimeVoice = () => {
+    const pc = realtimePcRef.current
+    if (pc) {
+      pc.close()
+      realtimePcRef.current = null
+    }
+    const stream = realtimeStreamRef.current
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop())
+      realtimeStreamRef.current = null
+    }
+    realtimeAudioRef.current = null
+    setRealtimeStatus('idle')
+    setRealtimeError(null)
+  }
+
+  useEffect(() => {
+    return () => {
+      endRealtimeVoice()
+    }
+  }, [])
 
   if (loading) {
     return (
@@ -780,6 +851,50 @@ export default function DivineManagerPage() {
               <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground max-h-40 overflow-y-auto">
                 {voiceScript}
               </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {settings.beta_acknowledged && mode !== 'off' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mic className="h-5 w-5" />
+              Live voice (full-duplex)
+            </CardTitle>
+            <CardDescription>
+              Talk to your Divine Manager in real time. Speak and get spoken replies; you can interrupt anytime. Uses OpenAI Realtime.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {realtimeStatus !== 'connected' ? (
+                <Button
+                  size="sm"
+                  variant="default"
+                  disabled={realtimeStatus === 'connecting'}
+                  onClick={startRealtimeVoice}
+                >
+                  {realtimeStatus === 'connecting' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Mic className="h-3 w-3" />
+                  )}
+                  {realtimeStatus === 'connecting' ? 'Connecting…' : 'Start voice call'}
+                </Button>
+              ) : (
+                <Button size="sm" variant="destructive" onClick={endRealtimeVoice}>
+                  <PhoneOff className="h-3 w-3" />
+                  End call
+                </Button>
+              )}
+            </div>
+            {realtimeStatus === 'connected' && (
+              <p className="text-xs text-muted-foreground">You’re live. Speak to your manager; they’ll respond with voice.</p>
+            )}
+            {realtimeError && (
+              <p className="text-xs text-destructive">{realtimeError}</p>
             )}
           </CardContent>
         </Card>

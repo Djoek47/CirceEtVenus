@@ -74,6 +74,10 @@ export default function DivineManagerPage() {
   const [managerArchetype, setManagerArchetype] = useState<string>('hermes')
   const [notifyLevel, setNotifyLevel] = useState<'none' | 'only_issues' | 'daily_digest' | 'all'>('daily_digest')
   const [betaAcknowledged, setBetaAcknowledged] = useState(false)
+  const [voiceScript, setVoiceScript] = useState<string | null>(null)
+  const [voiceMode, setVoiceMode] = useState<'intro' | 'ongoing' | 'what_next' | null>(null)
+  const [voiceLoading, setVoiceLoading] = useState(false)
+  const [ongoingCoachEnabled, setOngoingCoachEnabled] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -197,6 +201,42 @@ export default function DivineManagerPage() {
       console.error(e)
     } finally {
       setActionLoadingId(null)
+    }
+  }
+
+  const speak = (text: string) => {
+    if (typeof window === 'undefined') return
+    if (!('speechSynthesis' in window)) {
+      // eslint-disable-next-line no-console
+      console.warn('Speech synthesis not supported in this browser')
+      return
+    }
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.rate = 1
+    utterance.pitch = 1
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const runVoiceMode = async (mode: 'intro' | 'ongoing' | 'what_next') => {
+    setVoiceLoading(true)
+    setVoiceMode(mode)
+    try {
+      const res = await fetch('/api/ai/divine-manager-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
+      if (!res.ok) throw new Error('Failed to get voice script')
+      const data = (await res.json()) as { script?: string; error?: string }
+      if (data.script) {
+        setVoiceScript(data.script)
+        speak(data.script)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setVoiceLoading(false)
     }
   }
 
@@ -601,6 +641,65 @@ export default function DivineManagerPage() {
           )}
         </CardContent>
       </Card>
+
+      {settings.beta_acknowledged && mode !== 'off' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Voice companion
+            </CardTitle>
+            <CardDescription>
+              Let your Divine Manager speak a short briefing or tell you what to do next.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={voiceLoading}
+                onClick={() => runVoiceMode('intro')}
+              >
+                {voiceLoading && voiceMode === 'intro' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                Play intro briefing
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={voiceLoading}
+                onClick={() => runVoiceMode('what_next')}
+              >
+                {voiceLoading && voiceMode === 'what_next' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                What next, Divine Manager?
+              </Button>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={ongoingCoachEnabled}
+                  onCheckedChange={setOngoingCoachEnabled}
+                  disabled={voiceLoading}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Ongoing coach while this page is open
+                </span>
+              </div>
+            </div>
+            {voiceScript && (
+              <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground max-h-40 overflow-y-auto">
+                {voiceScript}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

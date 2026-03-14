@@ -19,17 +19,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Prefer Vercel AI Gateway base URL + key if set (e.g. custom proxy or future gateway Realtime support).
-    // Note: Vercel AI Gateway does not yet support OpenAI Realtime (WebRTC); use OPENAI_* when using OpenAI directly.
+    // Realtime API requires an OpenAI API key (sk-...). Do NOT use Vercel AI Gateway key (vck_...) here —
+    // the gateway does not support Realtime; OpenAI will reject non-OpenAI keys.
     const baseUrl =
-      process.env.AI_GATEWAY_OPENAI_BASE_URL?.replace(/\/$/, '') ||
-      process.env.OPENAI_BASE_URL?.replace(/\/$/, '') ||
-      'https://api.openai.com'
-    const apiKey =
-      process.env.AI_GATEWAY_API_KEY || process.env.OPENAI_API_KEY
-    if (!apiKey) {
+      process.env.OPENAI_BASE_URL?.replace(/\/$/, '') || 'https://api.openai.com'
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey || !apiKey.startsWith('sk-')) {
       return NextResponse.json(
-        { error: 'Realtime not configured (set OPENAI_API_KEY or AI_GATEWAY_API_KEY)' },
+        {
+          error:
+            'Realtime requires OPENAI_API_KEY (OpenAI key starting with sk-). Do not use the Vercel AI Gateway key here.',
+        },
         { status: 503 }
       )
     }

@@ -87,6 +87,8 @@ export default function DivineManagerPage() {
   const realtimePcRef = useRef<RTCPeerConnection | null>(null)
   const realtimeAudioRef = useRef<HTMLAudioElement | null>(null)
   const realtimeStreamRef = useRef<MediaStream | null>(null)
+  const [remoteVoiceStream, setRemoteVoiceStream] = useState<MediaStream | null>(null)
+  const voiceVizRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -237,9 +239,19 @@ export default function DivineManagerPage() {
         body: JSON.stringify({ mode }),
       })
       if (!res.ok) throw new Error('Failed to get voice script')
-      const data = (await res.json()) as { script?: string; error?: string }
-      if (data.script) {
-        setVoiceScript(data.script)
+      const data = (await res.json()) as { script?: string; audio?: string; error?: string }
+      if (data.script) setVoiceScript(data.script)
+      if (data.audio) {
+        const binary = atob(data.audio)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const blob = new Blob([bytes], { type: 'audio/mpeg' })
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        audio.onended = () => URL.revokeObjectURL(url)
+        audio.onerror = () => URL.revokeObjectURL(url)
+        await audio.play()
+      } else if (data.script) {
         speak(data.script)
       }
     } catch (e) {
@@ -332,10 +344,13 @@ export default function DivineManagerPage() {
 
       const audioEl = document.createElement('audio')
       audioEl.autoplay = true
-      audioEl.playsInline = true
+      audioEl.setAttribute('playsinline', 'true')
       realtimeAudioRef.current = audioEl
       pc.ontrack = (e) => {
-        if (e.streams[0]) audioEl.srcObject = e.streams[0]
+        if (e.streams[0]) {
+          audioEl.srcObject = e.streams[0]
+          setRemoteVoiceStream(e.streams[0])
+        }
       }
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
@@ -376,6 +391,7 @@ export default function DivineManagerPage() {
       realtimeStreamRef.current = null
     }
     realtimeAudioRef.current = null
+    setRemoteVoiceStream(null)
     setRealtimeStatus('idle')
     setRealtimeError(null)
   }
@@ -386,10 +402,57 @@ export default function DivineManagerPage() {
     }
   }, [])
 
+  // Voice waveform visualization (Sesame-style) when we have the remote stream
+  useEffect(() => {
+    if (!remoteVoiceStream || !voiceVizRef.current) return
+    const canvas = voiceVizRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    try {
+      const audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(remoteVoiceStream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 64
+      analyser.smoothingTimeConstant = 0.7
+      source.connect(analyser)
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      let rafId: number
+      const draw = () => {
+        rafId = requestAnimationFrame(draw)
+        analyser.getByteFrequencyData(dataArray)
+        const w = canvas.width
+        const h = canvas.height
+        ctx.fillStyle = 'transparent'
+        ctx.fillRect(0, 0, w, h)
+        const barCount = 24
+        const barW = w / barCount
+        const gap = 2
+        for (let i = 0; i < barCount; i++) {
+          const v = dataArray[Math.floor((i / barCount) * dataArray.length)] ?? 0
+          const barH = Math.max(4, (v / 255) * h * 0.7)
+          const x = i * barW + gap / 2
+          const y = (h - barH) / 2
+          ctx.fillStyle = `rgba(168, 85, 247, ${0.4 + (v / 255) * 0.6})`
+          ctx.beginPath()
+          ctx.roundRect(x, y, barW - gap, barH, 4)
+          ctx.fill()
+        }
+      }
+      draw()
+      return () => {
+        cancelAnimationFrame(rafId)
+        audioContext.close()
+      }
+    } catch {
+      return undefined
+    }
+  }, [remoteVoiceStream])
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="divine-page-bg flex flex-col items-center justify-center min-h-[40vh] gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading your Divine Manager…</p>
       </div>
     )
   }
@@ -397,26 +460,46 @@ export default function DivineManagerPage() {
   // First-run wizard: no settings row yet
   if (!settings) {
     return (
-      <div className="max-w-2xl mx-auto space-y-8 pb-12">
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <Crown className="h-7 w-7 text-amber-500" />
-            Divine Manager
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Your full-time AI manager orchestrating posts, messages, pricing, and growth using all Circe & Venus powers.
-          </p>
-        </div>
+      <div className="divine-page-bg min-h-full">
+        <div className="divine-fade-in max-w-3xl mx-auto space-y-8 pb-12 px-4 pt-2">
+          <div>
+            <h1 className="font-serif text-3xl font-semibold tracking-tight flex items-center gap-2">
+              <Crown className="h-8 w-8 text-primary divine-shine" />
+              Set up your Divine Manager
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Four steps to a manager that speaks your brand.
+            </p>
+          </div>
 
-        <Card>
+          <Card className="divine-card">
           <CardHeader>
-            <CardTitle>Setup wizard</CardTitle>
-            <CardDescription>
-              Step {wizardStep} of 4 — {wizardStep === 1 && 'Persona & boundaries'}
-              {wizardStep === 2 && 'Archetype & notifications'}
-              {wizardStep === 3 && 'Automation rules'}
-              {wizardStep === 4 && 'Review & activate'}
-            </CardDescription>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2" role="group" aria-label="Setup progress">
+                {([1, 2, 3, 4] as const).map((step) => (
+                  <div key={step} className="flex flex-1 items-center last:flex-none">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-medium transition-colors ${
+                        wizardStep > step
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : wizardStep === step
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-muted-foreground/30 bg-transparent text-muted-foreground'
+                      }`}
+                    >
+                      {wizardStep > step ? <Check className="h-4 w-4" /> : step}
+                    </div>
+                    {step < 4 && <div className="mx-1 h-0.5 flex-1 bg-border" />}
+                  </div>
+                ))}
+              </div>
+              <CardDescription className="text-sm">
+                {wizardStep === 1 && 'Persona & boundaries'}
+                {wizardStep === 2 && 'Archetype & notifications'}
+                {wizardStep === 3 && 'Automation rules'}
+                {wizardStep === 4 && 'Review and activate'}
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {wizardStep === 1 && (
@@ -435,7 +518,7 @@ export default function DivineManagerPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Comfort level with flirty tone</Label>
-                  <Select value={persona.flirtyLevel ?? 'mild'} onValueChange={(v: DivineManagerPersona['flirtyLevel']) => setPersona((p) => ({ ...p, flirtyLevel: v }))}>
+                  <Select value={persona.flirtyLevel ?? 'mild'} onValueChange={(v) => setPersona((p) => ({ ...p, flirtyLevel: v as DivineManagerPersona['flirtyLevel'] }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
@@ -576,9 +659,9 @@ export default function DivineManagerPage() {
 
             {wizardStep === 4 && (
               <>
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <p className="font-medium">Summary</p>
-                  <p className="text-sm text-muted-foreground">Tone: {persona.tone}, Flirty: {persona.flirtyLevel}</p>
+                <p className="font-serif text-sm font-medium text-foreground">Review and activate</p>
+                <div className="rounded-xl border border-border bg-muted/20 p-5 space-y-3">
+                  <p className="text-sm text-muted-foreground">Tone: {persona.tone} · Flirty: {persona.flirtyLevel}</p>
                   <p className="text-sm text-muted-foreground">Archetype: {managerArchetype}</p>
                   <p className="text-sm text-muted-foreground">
                     Automation: {[automationRules.autoPostSchedule?.enabled && 'Posts', automationRules.autoWelcomeDm?.enabled && 'Welcome DMs', automationRules.autoFollowUpAfterTips?.enabled && 'Tip follow-up'].filter(Boolean).join(', ') || 'None'}
@@ -586,7 +669,7 @@ export default function DivineManagerPage() {
                   <p className="text-sm text-muted-foreground">
                     Notifications: {notifyLevel === 'none' ? 'Never' : notifyLevel === 'only_issues' ? 'Only issues' : notifyLevel === 'daily_digest' ? 'Daily digest' : 'All actions'}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground pt-2 border-t border-border">
                     Divine Manager is <span className="font-semibold">BETA</span>. It can make mistakes. You remain responsible for all actions.
                   </p>
                 </div>
@@ -627,6 +710,7 @@ export default function DivineManagerPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
@@ -637,65 +721,74 @@ export default function DivineManagerPage() {
   const todayTasks = tasks.filter((t) => t.scheduled_for?.startsWith(today) || (t.status === 'suggested' && !t.scheduled_for))
 
   return (
-    <div className="space-y-6 pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Crown className="h-7 w-7 text-amber-500" />
+    <div className="divine-page-bg min-h-full">
+      <div className="divine-fade-in max-w-4xl mx-auto space-y-10 pb-12 px-4 pt-2">
+        <div className="mb-10">
+          <div className="flex items-center gap-3">
+            <Crown className="h-9 w-9 text-primary divine-shine" />
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-semibold">Divine Manager</h1>
-                <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-3xl font-semibold tracking-tight">Divine Manager</h1>
+                <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-primary/40 text-primary">
                   BETA
                 </Badge>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Early access</span>
               </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your full-time AI manager orchestrating growth with Circe and Venus.
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Archetype: {settings.manager_archetype || 'hermes'}
+                Reserved for creators who run the show. Archetype: {settings.manager_archetype || 'hermes'}
               </p>
             </div>
           </div>
-          <p className="text-muted-foreground mt-1">
-            Your full-time AI manager orchestrating posts, messages, pricing, and growth using all Circe & Venus powers.
-          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={mode === 'off' ? 'secondary' : mode === 'semi_auto' ? 'default' : 'outline'} className="text-sm">
-            {MODE_LABELS[mode]}
-          </Badge>
+
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" aria-hidden />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5" role="group" aria-label="Manager mode">
+            {(['off', 'suggest_only', 'semi_auto'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleUpdateMode(m)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === m
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            ))}
+          </div>
           {mode !== 'off' && (
             <Button variant="ghost" size="sm" onClick={() => handleUpdateMode('off')}>
               <Pause className="h-4 w-4 mr-1" /> Pause
             </Button>
           )}
-          <Select value={mode} onValueChange={(v: DivineManagerMode) => handleUpdateMode(v)}>
-            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="off">Off</SelectItem>
-              <SelectItem value="suggest_only">Suggest only</SelectItem>
-              <SelectItem value="semi_auto">Semi-automatic</SelectItem>
-            </SelectContent>
-          </Select>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             disabled={resetting}
             onClick={handleResetDivineManager}
+            className="text-muted-foreground"
           >
             {resetting && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
             Reset
           </Button>
         </div>
-      </div>
 
-      <Card>
+      <Card className="divine-card">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
+              <CardTitle className="font-serif text-lg flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
                 Today&apos;s Plan
               </CardTitle>
-              <CardDescription>Suggested and scheduled tasks for today. Run the manager to generate suggestions.</CardDescription>
+              <CardDescription>Curated tasks for today. Run the manager to generate suggestions.</CardDescription>
             </div>
             {mode !== 'off' && (
               <Button variant="outline" size="sm" onClick={handleRunManager} disabled={runningBrain}>
@@ -707,13 +800,13 @@ export default function DivineManagerPage() {
         </CardHeader>
         <CardContent>
           {todayTasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">
-              No tasks yet. Enable Suggest only or Semi-automatic and the manager will start generating suggestions.
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              Your plan will appear here once the manager runs.
             </p>
           ) : (
             <ul className="space-y-3">
               {todayTasks.slice(0, 10).map((t) => (
-                <li key={t.id} className="rounded-lg border p-3 space-y-2">
+                <li key={t.id} className="rounded-lg border border-border/80 pl-4 py-3 pr-3 space-y-2 border-l-4 border-l-primary/50">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -798,14 +891,14 @@ export default function DivineManagerPage() {
       </Card>
 
       {settings.beta_acknowledged && mode !== 'off' && (
-        <Card>
+        <Card className="divine-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
+            <CardTitle className="font-serif text-lg flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
               Voice companion
             </CardTitle>
             <CardDescription>
-              Let your Divine Manager speak a short briefing or tell you what to do next.
+              Your manager can brief you by voice.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -857,17 +950,33 @@ export default function DivineManagerPage() {
       )}
 
       {settings.beta_acknowledged && mode !== 'off' && (
-        <Card>
+        <Card className="divine-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mic className="h-5 w-5" />
+            <CardTitle className="font-serif text-lg flex items-center gap-2">
+              <Mic className="h-5 w-5 text-primary" />
               Live voice (full-duplex)
             </CardTitle>
             <CardDescription>
-              Talk to your Divine Manager in real time. Speak and get spoken replies; you can interrupt anytime. Uses OpenAI Realtime.
+              Real-time conversation with your manager.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {realtimeStatus === 'connected' && (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-gradient-to-b from-violet-500/10 to-transparent p-4">
+                <div className="relative flex items-center justify-center">
+                  <div className="absolute h-20 w-20 rounded-full bg-violet-500/30 animate-ping [animation-duration:2s]" />
+                  <div className="relative h-16 w-16 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-500 shadow-lg shadow-violet-500/30 animate-pulse [animation-duration:2s]" />
+                </div>
+                <canvas
+                  ref={voiceVizRef}
+                  width={240}
+                  height={32}
+                  className="h-8 w-full max-w-[240px] rounded-full opacity-90"
+                  style={{ background: 'transparent' }}
+                />
+                <p className="text-xs text-muted-foreground">Listening and speaking…</p>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               {realtimeStatus !== 'connected' ? (
                 <Button
@@ -890,9 +999,6 @@ export default function DivineManagerPage() {
                 </Button>
               )}
             </div>
-            {realtimeStatus === 'connected' && (
-              <p className="text-xs text-muted-foreground">You’re live. Speak to your manager; they’ll respond with voice.</p>
-            )}
             {realtimeError && (
               <p className="text-xs text-destructive">{realtimeError}</p>
             )}
@@ -901,18 +1007,18 @@ export default function DivineManagerPage() {
       )}
 
       {settings.beta_acknowledged && mode !== 'off' && (
-        <Card>
+        <Card className="divine-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
+            <CardTitle className="font-serif text-lg flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
               Talk to your Manager
             </CardTitle>
             <CardDescription>
-              Ask questions about your fans, revenue, or which tasks to prioritize. Replies are based on your Divine Manager setup.
+              Ask about your fans, revenue, or which tasks to prioritize. Replies use your Divine Manager setup.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="h-48 w-full rounded-md border border-border bg-muted/30 p-2 overflow-y-auto space-y-2 text-sm">
+            <div className="h-48 w-full rounded-md border border-border bg-muted/20 p-2 overflow-y-auto space-y-2 text-sm">
               {chatMessages.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   Ask me about your fans, revenue, or which tasks to prioritize. I’ll answer based on your Divine Manager setup and plan.
@@ -953,13 +1059,13 @@ export default function DivineManagerPage() {
         </Card>
       )}
 
-      <Card>
+      <Card className="divine-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings2 className="h-5 w-5" />
-            Configuration
+          <CardTitle className="font-serif text-lg flex items-center gap-2">
+            <Settings2 className="h-5 w-5 text-primary" />
+            Your preferences
           </CardTitle>
-          <CardDescription>Persona, goals, and automation rules from your setup. Edit in a future update.</CardDescription>
+          <CardDescription>Persona, goals, and automation. Editable in a future update.</CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
           <p><span className="font-medium text-foreground">Tone:</span> {String(settings.persona?.tone ?? '—')} · Flirty: {String(settings.persona?.flirtyLevel ?? '—')}</p>
@@ -968,6 +1074,7 @@ export default function DivineManagerPage() {
           <p><span className="font-medium text-foreground">Rules:</span> Auto-post {settings.automation_rules?.autoPostSchedule?.enabled ? 'on' : 'off'}, Welcome DM {settings.automation_rules?.autoWelcomeDm?.enabled ? 'on' : 'off'}, Tip follow-up {settings.automation_rules?.autoFollowUpAfterTips?.enabled ? 'on' : 'off'}</p>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

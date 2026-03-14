@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateText } from 'ai'
-import { gateway } from '@ai-sdk/gateway'
+import { generateTextWithOpenAI } from '@/lib/divine-openai'
 import { createClient } from '@/lib/supabase/server'
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string }
@@ -100,8 +99,7 @@ When answering, ground your advice in this context. Refer to concrete task types
     // Use only the last ~10 messages from the conversation to keep prompts small
     const history = messages.slice(-10)
 
-    const { text } = await generateText({
-      model: gateway('openai/gpt-4o-mini'),
+    const { text } = await generateTextWithOpenAI({
       system,
       messages: [
         { role: 'user', content: userContext },

@@ -1,5 +1,4 @@
-import { generateText } from 'ai'
-import { gateway } from '@ai-sdk/gateway'
+import { generateTextWithOpenAI } from '@/lib/divine-openai'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSettings, getTasks, createTask, updateTask, type DivineManagerSettingsRow, type DivineManagerTaskRow } from '@/lib/divine-manager'
 import { getArchetypeFlavor } from '@/lib/divine-manager-archetypes'
@@ -65,8 +64,7 @@ export async function runDivineManagerBrain(
   const systemPrompt = buildSystemPrompt(settings, preferenceHint)
   const userPrompt = `Recent tasks:\n${recentSummary || 'None yet.'}\n\nSuggest the next 1-5 tasks as JSON as described in the system prompt.`
 
-  const { text } = await generateText({
-    model: gateway('openai/gpt-4o-mini'),
+  const { text } = await generateTextWithOpenAI({
     system: systemPrompt,
     prompt: userPrompt,
     maxTokens: 1500,

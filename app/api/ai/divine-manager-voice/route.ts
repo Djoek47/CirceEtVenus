@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateText } from 'ai'
-import { gateway } from '@ai-sdk/gateway'
+import { generateTextWithOpenAI } from '@/lib/divine-openai'
 import { createClient } from '@/lib/supabase/server'
 
 type VoiceMode = 'intro' | 'ongoing' | 'what_next'
@@ -105,8 +104,7 @@ ${modeLine}
 
 Speak directly to the creator, but in second person (\"you\"). Keep it actionable but advisory, not absolute. Do not read raw JSON or bullet syntax; speak like a human manager.`
 
-    const { text } = await generateText({
-      model: gateway('openai/gpt-4o-mini'),
+    const { text } = await generateTextWithOpenAI({
       system,
       prompt: userPrompt,
       maxTokens: 400,
@@ -114,8 +112,32 @@ Speak directly to the creator, but in second person (\"you\"). Keep it actionabl
     })
 
     const script = text.trim()
+    if (!script) return NextResponse.json({ script: '', error: 'Empty script' }, { status: 500 })
 
-    return NextResponse.json({ script })
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) return NextResponse.json({ script, error: 'TTS not configured' }, { status: 200 })
+
+    const ttsInput = script.slice(0, 4096)
+    const ttsRes = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini-tts',
+        voice: 'shimmer',
+        input: ttsInput,
+      }),
+    })
+    if (!ttsRes.ok) {
+      const errText = await ttsRes.text()
+      console.error('[divine-manager-voice] TTS error:', ttsRes.status, errText)
+      return NextResponse.json({ script, error: 'TTS failed' }, { status: 200 })
+    }
+    const audioBuffer = await ttsRes.arrayBuffer()
+    const audioBase64 = Buffer.from(audioBuffer).toString('base64')
+    return NextResponse.json({ script, audio: audioBase64 })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Divine Manager voice failed'
     return NextResponse.json({ error: message }, { status: 500 })

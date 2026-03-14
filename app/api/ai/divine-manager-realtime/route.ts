@@ -19,10 +19,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const apiKey = process.env.OPENAI_API_KEY
+    // Prefer Vercel AI Gateway base URL + key if set (e.g. custom proxy or future gateway Realtime support).
+    // Note: Vercel AI Gateway does not yet support OpenAI Realtime (WebRTC); use OPENAI_* when using OpenAI directly.
+    const baseUrl =
+      process.env.AI_GATEWAY_OPENAI_BASE_URL?.replace(/\/$/, '') ||
+      process.env.OPENAI_BASE_URL?.replace(/\/$/, '') ||
+      'https://api.openai.com'
+    const apiKey =
+      process.env.AI_GATEWAY_API_KEY || process.env.OPENAI_API_KEY
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OpenAI Realtime is not configured (OPENAI_API_KEY)' },
+        { error: 'Realtime not configured (set OPENAI_API_KEY or AI_GATEWAY_API_KEY)' },
         { status: 503 }
       )
     }
@@ -105,7 +112,8 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
     formData.set('sdp', sdp)
     formData.set('session', JSON.stringify(sessionConfig))
 
-    const res = await fetch('https://api.openai.com/v1/realtime/calls', {
+    const realtimeUrl = `${baseUrl}/v1/realtime/calls`
+    const res = await fetch(realtimeUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,

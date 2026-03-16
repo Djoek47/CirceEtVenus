@@ -85,12 +85,18 @@ export async function POST(
 
     const body = await request.json()
     const { text, mediaIds, price } = body
+    const hasText = typeof text === 'string' && text.trim().length > 0
+    const hasMedia = Array.isArray(mediaIds) && mediaIds.length > 0
 
-    if (!text && (!mediaIds || mediaIds.length === 0)) {
+    if (!hasText && !hasMedia) {
       return NextResponse.json({ error: 'Message text or media required' }, { status: 400 })
     }
 
-    const result = await api.sendMessage(fanId, { text, mediaIds, price })
+    const result = await api.sendMessage(fanId, {
+      text: (text && String(text).trim()) || '',
+      mediaFiles: hasMedia ? mediaIds : undefined,
+      price: typeof price === 'number' && price >= 0 ? price : undefined,
+    })
 
     return NextResponse.json({
       success: true,

@@ -27,11 +27,23 @@ export interface AutomationRule {
   [key: string]: unknown
 }
 
+/** Per-intent voice automation: when true, Divine can execute without asking. Analytics (get_stats) is always safe and never requires confirmation. */
+export interface DivineManagerVoiceAuto {
+  mass_dm?: boolean
+  pricing_changes?: boolean
+  content_publish?: boolean
+  /** Analytics-only intents (e.g. get_stats) are always allowed; this flag is for future use. */
+  analytics_only?: boolean
+  [key: string]: boolean | undefined
+}
+
 export interface DivineManagerAutomationRules {
   autoPostSchedule?: AutomationRule
   autoWelcomeDm?: AutomationRule
   autoFollowUpAfterTips?: AutomationRule
-  [key: string]: AutomationRule | undefined
+  /** Voice control: allow auto-execute for these intents (otherwise requires confirmation). */
+  voice_auto?: DivineManagerVoiceAuto
+  [key: string]: AutomationRule | DivineManagerVoiceAuto | undefined
 }
 
 export interface DivineManagerSettingsRow {
@@ -43,6 +55,8 @@ export interface DivineManagerSettingsRow {
   notification_settings: {
     level?: 'none' | 'only_issues' | 'daily_digest' | 'all'
     channel?: 'in_app' | 'email' | 'both'
+    /** OpenAI TTS/Realtime voice id (e.g. marin, cedar, shimmer). Default: marin. */
+    voice?: string
     [key: string]: unknown
   }
   beta_acknowledged?: boolean
@@ -81,6 +95,28 @@ export interface DivineManagerSettingsInsert {
   notification_settings?: DivineManagerSettingsRow['notification_settings']
   beta_acknowledged?: boolean
   mode?: DivineManagerMode
+}
+
+/** OpenAI TTS/Realtime voice IDs. Default: marin. */
+export const DIVINE_VOICES = [
+  'marin',
+  'cedar',
+  'shimmer',
+  'alloy',
+  'ash',
+  'ballad',
+  'coral',
+  'echo',
+  'sage',
+  'verse',
+] as const
+
+export type DivineVoiceId = (typeof DIVINE_VOICES)[number]
+
+/** Resolve stored voice preference to a valid OpenAI voice; default marin. */
+export function getDivineVoice(stored: string | undefined): DivineVoiceId {
+  if (stored && DIVINE_VOICES.includes(stored as DivineVoiceId)) return stored as DivineVoiceId
+  return 'marin'
 }
 
 export interface DivineManagerTaskInsert {

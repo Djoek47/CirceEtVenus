@@ -7,6 +7,8 @@ import {
   upsertSettings,
   getTasks,
   updateTask,
+  DIVINE_VOICES,
+  getDivineVoice,
   type DivineManagerSettingsRow,
   type DivineManagerMode,
   type DivineManagerPersona,
@@ -28,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff } from 'lucide-react'
+import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff, ImagePlus } from 'lucide-react'
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -69,6 +71,7 @@ export default function DivineManagerPage() {
     autoPostSchedule: { enabled: false, maxPerDay: 2 },
     autoWelcomeDm: { enabled: false, maxPerDay: 50 },
     autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
+    voice_auto: { mass_dm: false, pricing_changes: false, content_publish: false },
   })
   const [selectedMode, setSelectedMode] = useState<DivineManagerMode>('suggest_only')
   const [managerArchetype, setManagerArchetype] = useState<string>('hermes')
@@ -89,6 +92,22 @@ export default function DivineManagerPage() {
   const realtimeStreamRef = useRef<MediaStream | null>(null)
   const [remoteVoiceStream, setRemoteVoiceStream] = useState<MediaStream | null>(null)
   const voiceVizRef = useRef<HTMLCanvasElement | null>(null)
+  const [intentLog, setIntentLog] = useState<{ id: string; intent_type: string; status: string; result_summary?: string; created_at: string }[]>([])
+  const [intentLogLoading, setIntentLogLoading] = useState(false)
+  const [pendingIntentId, setPendingIntentId] = useState<string | null>(null)
+  const [pendingIntentSummary, setPendingIntentSummary] = useState<string | null>(null)
+  const [confirmingIntent, setConfirmingIntent] = useState(false)
+  const [intentInProgress, setIntentInProgress] = useState(false)
+  const [sessionPhotoDataUrl, setSessionPhotoDataUrl] = useState<string | null>(null)
+  const sessionPhotoRef = useRef<string | null>(null)
+  const [lastAIToolResult, setLastAIToolResult] = useState<string | null>(null)
+  const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closeAfterActionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const resetIdleRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    sessionPhotoRef.current = sessionPhotoDataUrl
+  }, [sessionPhotoDataUrl])
 
   useEffect(() => {
     const supabase = createClient()
@@ -133,7 +152,7 @@ export default function DivineManagerPage() {
         goals,
         automation_rules: automationRules,
         manager_archetype: managerArchetype,
-        notification_settings: { level: notifyLevel, channel: 'in_app' },
+        notification_settings: { ...(settings?.notification_settings ?? {}), level: notifyLevel, channel: 'in_app' },
         beta_acknowledged: betaAcknowledged,
         mode: selectedMode,
       })
@@ -354,7 +373,66 @@ export default function DivineManagerPage() {
       }
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
-      pc.createDataChannel('oai-events')
+      const dc = pc.createDataChannel('oai-events')
+      dc.onmessage = (event) => {
+        resetIdleRef.current?.()
+        try {
+          const payload = JSON.parse(event.data as string) as {
+            type?: string
+            tool_calls?: Array<{ name?: string; arguments?: string }>
+            response?: { output?: Array<{ type?: string; name?: string; arguments?: string }> }
+          }
+          const runTool = (name: string, args: Record<string, unknown>) => {
+            if (!name) return
+            if (name === 'analyze_content' || name === 'generate_caption' || name === 'predict_viral' || name === 'get_retention_insights' || name === 'get_whale_advice') {
+              runAITool(name, args)
+            } else {
+              runDivineIntent(name, args)
+            }
+          }
+          // Format 1: direct tool_calls array
+          const toolCalls =
+            payload?.tool_calls ??
+            (payload as { tool_calls?: Array<{ name?: string; arguments?: string }> })?.tool_calls
+          if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+            for (const tc of toolCalls) {
+              const name = tc.name
+              const args =
+                typeof tc.arguments === 'string'
+                  ? (() => {
+                      try {
+                        return JSON.parse(tc.arguments!)
+                      } catch {
+                        return {}
+                      }
+                    })()
+                  : (tc.arguments ?? {}) as Record<string, unknown>
+              runTool(name!, args)
+            }
+            return
+          }
+          // Format 2: response.done with output items of type function_call
+          if (payload?.type === 'response.done' && Array.isArray(payload.response?.output)) {
+            for (const item of payload.response.output) {
+              if (item?.type === 'function_call' && item.name) {
+                const args =
+                  typeof item.arguments === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(item.arguments!)
+                        } catch {
+                          return {}
+                        }
+                      })()
+                    : {}
+                runTool(item.name, args as Record<string, unknown>)
+              }
+            }
+          }
+        } catch {
+          // ignore non-JSON or unexpected format
+        }
+      }
 
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
@@ -380,6 +458,15 @@ export default function DivineManagerPage() {
   }
 
   const endRealtimeVoice = () => {
+    if (idleTimeoutRef.current) {
+      clearTimeout(idleTimeoutRef.current)
+      idleTimeoutRef.current = null
+    }
+    if (closeAfterActionRef.current) {
+      clearTimeout(closeAfterActionRef.current)
+      closeAfterActionRef.current = null
+    }
+    resetIdleRef.current = null
     const pc = realtimePcRef.current
     if (pc) {
       pc.close()
@@ -401,6 +488,167 @@ export default function DivineManagerPage() {
       endRealtimeVoice()
     }
   }, [])
+
+  const IDLE_MS = 2.5 * 60 * 1000
+  const CLOSE_AFTER_ACTION_MS = 5 * 1000
+
+  useEffect(() => {
+    if (realtimeStatus !== 'connected') return
+    const resetIdle = () => {
+      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current)
+      idleTimeoutRef.current = setTimeout(() => {
+        idleTimeoutRef.current = null
+        endRealtimeVoice()
+      }, IDLE_MS)
+    }
+    resetIdleRef.current = resetIdle
+    resetIdle()
+    return () => {
+      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current)
+      idleTimeoutRef.current = null
+      resetIdleRef.current = null
+    }
+  }, [realtimeStatus])
+
+  const fetchIntentLog = async () => {
+    if (!userId) return
+    setIntentLogLoading(true)
+    try {
+      const res = await fetch('/api/divine/intent?limit=10')
+      if (res.ok) {
+        const data = (await res.json()) as { intents?: { id: string; intent_type: string; status: string; result_summary?: string; created_at: string }[] }
+        setIntentLog(data.intents ?? [])
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIntentLogLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (userId && settings?.beta_acknowledged) fetchIntentLog()
+  }, [userId, settings?.beta_acknowledged])
+
+  const handleConfirmPendingIntent = async () => {
+    if (!pendingIntentId) return
+    setConfirmingIntent(true)
+    try {
+      const res = await fetch('/api/divine/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent_id: pendingIntentId, confirm: true }),
+      })
+      const data = (await res.json()) as { status?: string; summary?: string; error?: string }
+      if (data.status === 'executed' || data.status === 'already_handled') {
+        setPendingIntentId(null)
+        setPendingIntentSummary(null)
+        await fetchIntentLog()
+      }
+      if (data.error && res.ok === false) {
+        console.error(data.error)
+      }
+    } finally {
+      setConfirmingIntent(false)
+    }
+  }
+
+  const handleCancelPendingIntent = () => {
+    setPendingIntentId(null)
+    setPendingIntentSummary(null)
+  }
+
+  /** Run an AI Studio tool (analyze_content, generate_caption, predict_viral, get_retention_insights, get_whale_advice). Used so Divine can analyze photo, generate captions, retention/whale advice, etc. from voice only. */
+  const runAITool = async (
+    toolName: string,
+    args: Record<string, unknown>
+  ): Promise<void> => {
+    const toolIdMap: Record<string, string> = {
+      analyze_content: 'standard-of-attraction',
+      generate_caption: 'caption-generator',
+      predict_viral: 'viral-predictor',
+      get_retention_insights: 'churn-predictor',
+      get_whale_advice: 'whale-whisperer',
+    }
+    const toolId = toolIdMap[toolName]
+    if (!toolId) return
+    setIntentInProgress(true)
+    setLastAIToolResult(null)
+    try {
+      const params = { ...args }
+      if (toolName === 'analyze_content' && sessionPhotoRef.current) {
+        (params as Record<string, unknown>).image = sessionPhotoRef.current
+      }
+      const res = await fetch('/api/divine/run-ai-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, params }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data.result) {
+        const r = data.result as Record<string, unknown>
+        if (typeof r.score === 'number') {
+          setLastAIToolResult(`Score ${r.score}/10. ${String(r.verdict ?? '').slice(0, 120)}`)
+        } else if (r.captions && Array.isArray(r.captions)) {
+          const first = (r.captions as { text?: string }[])[0]
+          setLastAIToolResult(first?.text ? `Caption: ${first.text.slice(0, 150)}…` : 'Captions generated.')
+        } else if (typeof r.viralScore === 'number') {
+          setLastAIToolResult(`Viral score ${r.viralScore}/100. ${String(r.content ?? '').slice(0, 100)}`)
+        } else if (typeof r.content === 'string') {
+          setLastAIToolResult(r.content.slice(0, 400))
+        } else {
+          setLastAIToolResult(JSON.stringify(r).slice(0, 200))
+        }
+      }
+    } catch {
+      setLastAIToolResult('Tool failed.')
+    } finally {
+      setIntentInProgress(false)
+    }
+  }
+
+  /** Call the intent API; if response is requires_confirmation, sets pending state. Returns the API response. */
+  const runDivineIntent = async (
+    intentType: string,
+    params: Record<string, unknown>
+  ): Promise<{ status: string; intent_id?: string; summary?: string; message?: string }> => {
+    resetIdleRef.current?.()
+    setIntentInProgress(true)
+    try {
+      // Keep intent type (e.g. create_task) distinct from tool params (e.g. task subtype in payload)
+      const body =
+        intentType === 'create_task'
+          ? {
+              type: 'create_task',
+              summary: (params.summary as string) ?? '',
+              payload: { type: (params.type as string) || 'content_idea' },
+            }
+          : { type: intentType, ...params }
+      const res = await fetch('/api/divine/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = (await res.json()) as {
+        status?: string
+        intent_id?: string
+        message?: string
+        summary?: string
+      }
+      if (data.status === 'requires_confirmation' && data.intent_id) {
+        setPendingIntentId(data.intent_id)
+        setPendingIntentSummary(data.message ?? data.summary ?? 'Confirm this action.')
+      }
+      if (data.status === 'executed') {
+        fetchIntentLog()
+        if (closeAfterActionRef.current) clearTimeout(closeAfterActionRef.current)
+        closeAfterActionRef.current = setTimeout(() => endRealtimeVoice(), CLOSE_AFTER_ACTION_MS)
+      }
+      return data as { status: string; intent_id?: string; summary?: string; message?: string }
+    } finally {
+      setIntentInProgress(false)
+    }
+  }
 
   // Voice waveform visualization (Sesame-style) when we have the remote stream
   useEffect(() => {
@@ -653,6 +901,55 @@ export default function DivineManagerPage() {
                       }
                     />
                   </div>
+                  <p className="text-sm font-medium text-foreground pt-2">Voice automation</p>
+                  <p className="text-xs text-muted-foreground pb-2">When using voice control, choose what Divine can do without asking you to confirm.</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <p className="font-medium">Allow auto-send mass DMs</p>
+                        <p className="text-xs text-muted-foreground">Divine can send mass messages by voice without confirmation</p>
+                      </div>
+                      <Switch
+                        checked={automationRules.voice_auto?.mass_dm ?? false}
+                        onCheckedChange={(c) =>
+                          setAutomationRules((r) => ({
+                            ...r,
+                            voice_auto: { ...r.voice_auto, mass_dm: c },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <p className="font-medium">Allow auto-change prices</p>
+                        <p className="text-xs text-muted-foreground">Divine can apply pricing changes by voice without confirmation</p>
+                      </div>
+                      <Switch
+                        checked={automationRules.voice_auto?.pricing_changes ?? false}
+                        onCheckedChange={(c) =>
+                          setAutomationRules((r) => ({
+                            ...r,
+                            voice_auto: { ...r.voice_auto, pricing_changes: c },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <p className="font-medium">Allow auto-publish posts</p>
+                        <p className="text-xs text-muted-foreground">Divine can publish content by voice without confirmation</p>
+                      </div>
+                      <Switch
+                        checked={automationRules.voice_auto?.content_publish ?? false}
+                        onCheckedChange={(c) =>
+                          setAutomationRules((r) => ({
+                            ...r,
+                            voice_auto: { ...r.voice_auto, content_publish: c },
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -745,6 +1042,24 @@ export default function DivineManagerPage() {
         </div>
 
         <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" aria-hidden />
+
+        {pendingIntentId && (
+          <Card className="divine-card border-primary/40 bg-primary/5">
+            <CardContent className="pt-4">
+              <p className="text-sm font-medium text-foreground">Action requires your confirmation</p>
+              <p className="text-xs text-muted-foreground mt-1">{pendingIntentSummary ?? 'Divine wants to run an action. Confirm to proceed.'}</p>
+              <div className="flex gap-2 mt-3">
+                <Button size="sm" onClick={handleConfirmPendingIntent} disabled={confirmingIntent}>
+                  {confirmingIntent && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                  Confirm
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleCancelPendingIntent} disabled={confirmingIntent}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5" role="group" aria-label="Manager mode">
@@ -952,15 +1267,93 @@ export default function DivineManagerPage() {
       {settings.beta_acknowledged && mode !== 'off' && (
         <Card className="divine-card">
           <CardHeader>
-            <CardTitle className="font-serif text-lg flex items-center gap-2">
-              <Mic className="h-5 w-5 text-primary" />
-              Live voice (full-duplex)
-            </CardTitle>
-            <CardDescription>
-              Real-time conversation with your manager.
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <CardTitle className="font-serif text-lg flex items-center gap-2">
+                  <Mic className="h-5 w-5 text-primary" />
+                  Voice Control
+                </CardTitle>
+                <CardDescription>
+                  Upload a photo, then talk. Divine will analyze it, write captions, create posts, and message fans—no typing, just voice.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline" className="text-[10px] font-normal">
+                  {intentInProgress && 'Executing action'}
+                  {!intentInProgress && realtimeStatus === 'connected' && pendingIntentId && 'Needs confirmation'}
+                  {!intentInProgress && realtimeStatus === 'idle' && 'Idle'}
+                  {!intentInProgress && realtimeStatus === 'connecting' && 'Connecting…'}
+                  {!intentInProgress && realtimeStatus === 'connected' && !pendingIntentId && 'Listening'}
+                  {!intentInProgress && realtimeStatus === 'error' && 'Error'}
+                </Badge>
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] font-normal"
+                  title="Voice automation: what Divine can do without confirmation"
+                >
+                  {settings.automation_rules?.voice_auto?.mass_dm ||
+                  settings.automation_rules?.voice_auto?.pricing_changes ||
+                  settings.automation_rules?.voice_auto?.content_publish
+                    ? (settings.automation_rules?.voice_auto?.mass_dm &&
+                        settings.automation_rules?.voice_auto?.pricing_changes &&
+                        settings.automation_rules?.voice_auto?.content_publish
+                        ? 'Full Auto'
+                        : 'Rules')
+                    : 'Safe'}
+                </Badge>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border border-dashed border-border p-3 space-y-2">
+              <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <ImagePlus className="h-3.5 w-3.5" />
+                Photo for Divine (optional)
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Upload one photo. Then start the call and say e.g. &quot;rate this&quot;, &quot;write a caption&quot;, or &quot;post this and send to my fans&quot;. Divine handles the rest.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  className="max-w-[200px] text-xs"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                      const dataUrl = reader.result as string
+                      setSessionPhotoDataUrl(dataUrl)
+                    }
+                    reader.readAsDataURL(file)
+                  }}
+                />
+                {sessionPhotoDataUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-7"
+                    onClick={() => { setSessionPhotoDataUrl(null); setLastAIToolResult(null) }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+              {sessionPhotoDataUrl && (
+                <div className="flex items-center gap-2">
+                  <img src={sessionPhotoDataUrl} alt="Session" className="h-14 w-14 rounded object-cover border border-border" />
+                  <span className="text-[11px] text-muted-foreground">Photo ready. Start the call and ask Divine to analyze or use it.</span>
+                </div>
+              )}
+            </div>
+            {lastAIToolResult && (
+              <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground max-h-24 overflow-y-auto">
+                <span className="font-medium text-foreground">Result: </span>
+                {lastAIToolResult}
+              </div>
+            )}
             {realtimeStatus === 'connected' && (
               <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-gradient-to-b from-violet-500/10 to-transparent p-4">
                 <div className="relative flex items-center justify-center">
@@ -1002,6 +1395,33 @@ export default function DivineManagerPage() {
             {realtimeError && (
               <p className="text-xs text-destructive">{realtimeError}</p>
             )}
+            <div className="border-t border-border pt-3">
+              <p className="text-xs font-medium text-foreground mb-2">Recent actions</p>
+              {intentLogLoading ? (
+                <p className="text-xs text-muted-foreground">Loading…</p>
+              ) : intentLog.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No voice actions yet. Start a call and ask Divine to send a mass DM, get stats, or add a task.</p>
+              ) : (
+                <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {intentLog.map((entry) => (
+                    <li key={entry.id} className="flex items-start gap-2 text-xs">
+                      <Badge variant={entry.status === 'executed' ? 'default' : entry.status === 'proposed' ? 'secondary' : 'outline'} className="shrink-0 text-[10px]">
+                        {entry.status}
+                      </Badge>
+                      <span className="text-muted-foreground shrink-0">{entry.intent_type.replace(/_/g, ' ')}</span>
+                      <span className="text-muted-foreground truncate min-w-0">
+                        {entry.result_summary ?? new Date(entry.created_at).toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {intentLog.length > 0 && (
+                <Button variant="ghost" size="sm" className="mt-1 text-xs h-7" onClick={fetchIntentLog}>
+                  Refresh
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1071,7 +1491,80 @@ export default function DivineManagerPage() {
           <p><span className="font-medium text-foreground">Tone:</span> {String(settings.persona?.tone ?? '—')} · Flirty: {String(settings.persona?.flirtyLevel ?? '—')}</p>
           <p><span className="font-medium text-foreground">Archetype:</span> {settings.manager_archetype || 'hermes'}</p>
           <p><span className="font-medium text-foreground">Notifications:</span> {settings.notification_settings?.level ?? 'daily_digest'}</p>
+          <p className="font-medium text-foreground">AI voice</p>
+          <Select
+            value={getDivineVoice(settings.notification_settings?.voice)}
+            onValueChange={async (v) => {
+              if (!userId) return
+              const supabase = createClient()
+              await upsertSettings(supabase, userId, {
+                ...settings,
+                notification_settings: { ...settings.notification_settings, voice: v },
+              })
+              const s = await getSettings(supabase, userId)
+              if (s) setSettings(s)
+            }}
+          >
+            <SelectTrigger className="max-w-[200px]"><SelectValue placeholder="Marin" /></SelectTrigger>
+            <SelectContent>
+              {DIVINE_VOICES.map((id) => (
+                <SelectItem key={id} value={id}>{id.charAt(0).toUpperCase() + id.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p><span className="font-medium text-foreground">Rules:</span> Auto-post {settings.automation_rules?.autoPostSchedule?.enabled ? 'on' : 'off'}, Welcome DM {settings.automation_rules?.autoWelcomeDm?.enabled ? 'on' : 'off'}, Tip follow-up {settings.automation_rules?.autoFollowUpAfterTips?.enabled ? 'on' : 'off'}</p>
+          <p className="font-medium text-foreground pt-2">Voice automation</p>
+          <p className="text-xs text-muted-foreground pb-1">What Divine can do by voice without asking you to confirm.</p>
+          <div className="flex flex-wrap gap-4 pt-1">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={settings.automation_rules?.voice_auto?.mass_dm ?? false}
+                onCheckedChange={async (c) => {
+                  if (!userId) return
+                  const supabase = createClient()
+                  await upsertSettings(supabase, userId, {
+                    ...settings,
+                    automation_rules: { ...settings.automation_rules, voice_auto: { ...settings.automation_rules?.voice_auto, mass_dm: c } },
+                  })
+                  const s = await getSettings(supabase, userId)
+                  if (s) setSettings(s)
+                }}
+              />
+              <span className="text-sm">Mass DMs</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={settings.automation_rules?.voice_auto?.pricing_changes ?? false}
+                onCheckedChange={async (c) => {
+                  if (!userId) return
+                  const supabase = createClient()
+                  await upsertSettings(supabase, userId, {
+                    ...settings,
+                    automation_rules: { ...settings.automation_rules, voice_auto: { ...settings.automation_rules?.voice_auto, pricing_changes: c } },
+                  })
+                  const s = await getSettings(supabase, userId)
+                  if (s) setSettings(s)
+                }}
+              />
+              <span className="text-sm">Pricing changes</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={settings.automation_rules?.voice_auto?.content_publish ?? false}
+                onCheckedChange={async (c) => {
+                  if (!userId) return
+                  const supabase = createClient()
+                  await upsertSettings(supabase, userId, {
+                    ...settings,
+                    automation_rules: { ...settings.automation_rules, voice_auto: { ...settings.automation_rules?.voice_auto, content_publish: c } },
+                  })
+                  const s = await getSettings(supabase, userId)
+                  if (s) setSettings(s)
+                }}
+              />
+              <span className="text-sm">Publish posts</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
       </div>

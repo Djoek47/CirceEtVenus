@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateTextWithOpenAI } from '@/lib/divine-openai'
 import { createClient } from '@/lib/supabase/server'
+import { getDivineVoice } from '@/lib/divine-manager'
 
 type VoiceMode = 'intro' | 'ongoing' | 'what_next'
 
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
     const system = `You are the Divine Manager, a Jarvis-style voice companion for a creator.
 Speak as a calm, confident manager. Never role-play as the creator, and never claim to have already sent messages or changed prices.
 You only describe what you see and what you recommend. Respect boundaries, niches, and platform safety rules.
-Avoid explicit or illegal content entirely.`
+Avoid explicit or illegal content entirely. The creator may have OnlyFans and/or Fansly connected; when referring to platforms, subscribers, or messages, use these names (OnlyFans, Fansly) so the creator knows which platform you mean.`
 
     const userPrompt = `Creator persona:
 - Tone: ${persona.tone ?? 'friendly'}
@@ -117,6 +118,7 @@ Speak directly to the creator, but in second person (\"you\"). Keep it actionabl
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) return NextResponse.json({ script, error: 'TTS not configured' }, { status: 200 })
 
+    const voice = getDivineVoice(settings?.notification_settings?.voice)
     const ttsInput = script.slice(0, 4096)
     const ttsRes = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
@@ -126,7 +128,7 @@ Speak directly to the creator, but in second person (\"you\"). Keep it actionabl
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini-tts',
-        voice: 'shimmer',
+        voice,
         input: ttsInput,
       }),
     })

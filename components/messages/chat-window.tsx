@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -118,6 +118,10 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [circeSuggestions, setCirceSuggestions] = useState<string[] | null>(null)
   const [venusSuggestions, setVenusSuggestions] = useState<string[] | null>(null)
   const [flirtSuggestions, setFlirtSuggestions] = useState<string[] | null>(null)
+  const [ppvPrice, setPpvPrice] = useState<string>('')
+  const [attachedMediaIds, setAttachedMediaIds] = useState<string[]>([])
+  const [uploadingMedia, setUploadingMedia] = useState(false)
+  const chatFileInputRef = useRef<HTMLInputElement>(null)
   const [activePanel, setActivePanel] = useState<'circe' | 'venus' | 'flirt' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -340,38 +344,65 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     }
   }, [conversation?.user?.id])
 
+  const handleChatFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length || conversation?.platform !== 'onlyfans') return
+    setUploadingMedia(true)
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const formData = new FormData()
+        formData.append('file', files[i])
+        const res = await fetch('/api/onlyfans/media/upload', { method: 'POST', body: formData })
+        if (!res.ok) throw new Error('Upload failed')
+        const data = (await res.json()) as { id: string }
+        if (data.id) setAttachedMediaIds((prev) => [...prev, data.id])
+      }
+    } catch {
+      setError('Failed to upload media')
+    } finally {
+      setUploadingMedia(false)
+      e.target.value = ''
+    }
+  }, [conversation?.platform])
+
   const handleSendMessage = async () => {
     if (!message.trim() || !conversation || sending) return
-    
+
     setSending(true)
     const messageText = message
     setMessage('')
-    
+    const mediaIdsToSend = [...attachedMediaIds]
+    const priceToSend = ppvPrice.trim() ? parseFloat(ppvPrice) : undefined
+    setAttachedMediaIds([])
+    setPpvPrice('')
+
     try {
+      const body: { text: string; mediaIds?: string[]; price?: number } = { text: messageText }
+      if (mediaIdsToSend.length > 0) body.mediaIds = mediaIdsToSend
+      if (priceToSend != null && !Number.isNaN(priceToSend) && priceToSend >= 0) body.price = priceToSend
+
       const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: messageText }),
+        body: JSON.stringify(body),
       })
-      
+
       const data = await res.json()
-      
+
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send message')
       }
-      
-      // Add the sent message to the list
+
       if (data.message) {
         setMessages(prev => normalizeAndSortMessages([...prev, data.message]))
-        // After sending, force scroll to bottom
         setTimeout(() => scrollToBottom(), 0)
       }
-      
-      // Notify parent to refresh conversation list
       onMessageSent?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message')
-      setMessage(messageText) // Restore message on error
+      setMessage(messageText)
+      setAttachedMediaIds(mediaIdsToSend)
+      if (priceToSend != null) setPpvPrice(String(priceToSend))
     } finally {
       setSending(false)
     }
@@ -750,13 +781,55 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
           </div>
         ) : null}
 
+        <input
+          ref={chatFileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          onChange={handleChatFileUpload}
+        />
+        <div className="flex flex-col gap-1.5 w-full">
+          {(attachedMediaIds.length > 0 || ppvPrice) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {attachedMediaIds.length > 0 && (
+                <span className="text-muted-foreground">
+                  {attachedMediaIds.length} attachment{attachedMediaIds.length > 1 ? 's' : ''}
+                </span>
+              )}
+              {ppvPrice && (
+                <Badge className="bg-chart-4/20 text-chart-4">
+                  <DollarSign className="mr-1 h-3 w-3" />
+                  PPV ${ppvPrice}
+                </Badge>
+              )}
+            </div>
+          )}
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="flex-shrink-0">
-            <Paperclip className="h-5 w-5" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="flex-shrink-0"
+            disabled={conversation?.platform !== 'onlyfans' || uploadingMedia}
+            onClick={() => chatFileInputRef.current?.click()}
+            title={conversation?.platform === 'onlyfans' ? 'Attach photo or video (PPV)' : 'Media only for OnlyFans'}
+          >
+            {uploadingMedia ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
           </Button>
-          <Button variant="ghost" size="icon" className="flex-shrink-0">
-            <DollarSign className="h-5 w-5" />
-          </Button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Input
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="PPV $"
+              value={ppvPrice}
+              onChange={(e) => setPpvPrice(e.target.value)}
+              className="w-16 h-8 text-xs"
+              title="Optional price for paid content"
+            />
+          </div>
           <div className="relative flex-1">
             <Input
               placeholder="Type a message..."
@@ -765,7 +838,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
               className="bg-input pr-10"
               disabled={sending}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && message.trim()) {
+                if (e.key === 'Enter' && !e.shiftKey && (message.trim() || attachedMediaIds.length > 0)) {
                   e.preventDefault()
                   handleSendMessage()
                 }
@@ -779,9 +852,9 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
               />
             </div>
           </div>
-          <Button 
-            size="icon" 
-            disabled={!message.trim() || sending}
+          <Button
+            size="icon"
+            disabled={(!message.trim() && attachedMediaIds.length === 0) || sending}
             onClick={handleSendMessage}
           >
             {sending ? (
@@ -791,6 +864,10 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
             )}
           </Button>
         </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          You can send paid (PPV) content: set a price and/or attach media so the fan pays to unlock.
+        </p>
       </div>
     </Card>
   )

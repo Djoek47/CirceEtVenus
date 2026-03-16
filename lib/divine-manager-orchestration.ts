@@ -19,6 +19,8 @@ Notification preference: level=${notify.level ?? 'daily_digest'}, channel=${noti
 Archetype mode: ${settings.manager_archetype || 'hermes'}. ${archetypeFlavor}
 ${preferenceHint ? `Preference learning (prioritize types they often approve, avoid types they often dismiss): ${preferenceHint}` : ''}
 
+The creator's connected platforms are OnlyFans and Fansly; use "onlyfans" or "fansly" for the platform field when relevant.
+
 Given recent tasks and context, suggest 1-5 concrete next tasks. Types: post_suggestion, dm_welcome, dm_followup, pricing_change, content_idea, churn_review, engagement_reminder.
 Return ONLY JSON with a "tasks" array. Each task MUST have:
 - "type": one of the types above

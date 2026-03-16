@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getArchetypeFlavor } from '@/lib/divine-manager-archetypes'
+import { getDivineVoice } from '@/lib/divine-manager'
 
 export const maxDuration = 30
 
@@ -99,13 +100,188 @@ ${taskSummary}
 Recent analytics:
 ${analyticsSummary}
 
-Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation.`
+Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation.
 
+The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). When they say "write a caption", "caption this", or "what should I say", use generate_caption. When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice. You can create in-app reminders with send_notification. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
+
+    const tools = [
+      {
+        type: 'function' as const,
+        name: 'analyze_content',
+        description:
+          'Rate the creator\'s uploaded photo for commercial appeal (score 1-10, strengths, improvements). Use when they say "how does this look", "rate this", "analyze my photo", or "will this sell". The app sends their photo automatically.',
+        parameters: {
+          type: 'object',
+          properties: {
+            description: { type: 'string', description: 'Optional short description of the content if the creator said something' },
+            niche: { type: 'string', description: 'Optional niche e.g. fitness, cosplay' },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'], description: 'Platform context' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'generate_caption',
+        description:
+          'Generate captions, hashtags, and teaser/PPV copy for the creator\'s content. Use when they say "write a caption", "caption this", "what should I say for this post", or before posting. Describe the content if they mentioned it.',
+        parameters: {
+          type: 'object',
+          properties: {
+            contentType: { type: 'string', description: 'e.g. photo, video, photoset' },
+            contentDescription: { type: 'string', description: 'What the content is about' },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+          },
+          required: ['contentDescription'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'predict_viral',
+        description:
+          'Predict viral potential (score 0-100) and engagement tips for content. Use when they ask "will this do well", "viral potential", or "how will this perform".',
+        parameters: {
+          type: 'object',
+          properties: {
+            contentDescription: { type: 'string', description: 'What the content is' },
+            contentType: { type: 'string', description: 'e.g. photo, video' },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+          },
+          required: ['contentDescription'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_retention_insights',
+        description:
+          'Get churn risk and retention advice for subscribers. Use when the creator asks about keeping fans, who might leave, at-risk subs, or retention.',
+        parameters: {
+          type: 'object',
+          properties: {
+            fanData: { type: 'string', description: 'Optional summary of fan or segment' },
+            recentActivity: { type: 'string', description: 'Optional recent activity' },
+            subscriptionLength: { type: 'string', description: 'Optional e.g. 3 months' },
+            spendingHistory: { type: 'string', description: 'Optional spending summary' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_whale_advice',
+        description:
+          'Get advice for engaging high-value (whale) fans. Use when they ask about top spenders, VIPs, or maximizing tips from best fans.',
+        parameters: {
+          type: 'object',
+          properties: {
+            context: { type: 'string', description: 'Optional context e.g. segment or goal' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'mass_dm',
+        description:
+          'Send a mass message to subscribers on one or more platforms (OnlyFans, Fansly). Messages can include paid (PPV) content: optional price and/or media IDs so fans pay to unlock. Use when the creator asks to send a message to fans, subs, or a segment. Describe the action and recipient count before calling.',
+        parameters: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', description: 'The message text to send' },
+            platforms: {
+              type: 'array',
+              items: { type: 'string', enum: ['onlyfans', 'fansly'] },
+              description: 'Platforms to send to',
+            },
+            segment: { type: 'string', description: 'Optional segment e.g. active, renewing, expired' },
+            filter: { type: 'string', enum: ['all', 'active', 'expired', 'renewing'], description: 'Subscriber filter' },
+            price: { type: 'number', description: 'Optional PPV price (e.g. 4.99) so fans pay to unlock this message' },
+            mediaIds: { type: 'array', items: { type: 'string' }, description: 'Optional media IDs (photos/videos) attached to the message' },
+          },
+          required: ['message'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_stats',
+        description:
+          'Get analytics summary: revenue, fans, and platform breakdown for the creator. Use when they ask how they are doing, revenue, stats, or analytics.',
+        parameters: {
+          type: 'object',
+          properties: {
+            period: { type: 'string', description: 'Optional e.g. last_7_days' },
+            platform: { type: 'string', description: 'Optional platform filter' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'content_publish',
+        description:
+          'Publish or schedule a post to OnlyFans/Fansly. Use when the creator asks to post or publish content. Describe what will be published before calling.',
+        parameters: {
+          type: 'object',
+          properties: {
+            content: { type: 'string', description: 'Post text/content' },
+            platforms: {
+              type: 'array',
+              items: { type: 'string', enum: ['onlyfans', 'fansly'] },
+            },
+            scheduledFor: { type: 'string', description: 'Optional ISO date for scheduling' },
+          },
+          required: ['content', 'platforms'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'create_task',
+        description:
+          'Create a Divine Manager task (suggestion) for the creator. Use when they ask to add something to their plan or task list.',
+        parameters: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', description: 'Task type e.g. content_idea, dm_welcome, post_suggestion' },
+            summary: { type: 'string', description: 'Short description of the task' },
+          },
+          required: ['summary'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'adjust_price',
+        description:
+          'Request or suggest a pricing change. Currently returns guidance; actual price changes are applied by the creator in platform settings.',
+        parameters: {
+          type: 'object',
+          properties: {
+            platform: { type: 'string' },
+            tier: { type: 'string' },
+            new_price: { type: 'number' },
+            delta: { type: 'number', description: 'Price change amount' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'send_notification',
+        description:
+          'Create an in-app notification (reminder) for the creator. Use when you want to leave a reminder they will see in the app (e.g. "Check your OnlyFans DMs tomorrow", "Review pricing suggestions").',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Short title for the notification' },
+            description: { type: 'string', description: 'Body or reminder text' },
+            link: { type: 'string', description: 'Optional app link e.g. /dashboard/divine-manager' },
+          },
+          required: ['title', 'description'],
+        },
+      },
+    ]
+
+    const voice = getDivineVoice(notify?.voice)
     const sessionConfig = {
       type: 'realtime',
       model: 'gpt-realtime',
       instructions,
-      audio: { output: { voice: 'shimmer' as const } },
+      audio: { output: { voice } },
+      tools,
     }
 
     const formData = new FormData()

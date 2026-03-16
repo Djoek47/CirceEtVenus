@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Send, Loader2, Check, AlertCircle, Users, Megaphone } from 'lucide-react'
+import { Send, Loader2, Check, AlertCircle, Users, Megaphone, DollarSign, Paperclip, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface ConnectedPlatform {
@@ -36,12 +37,16 @@ export function MassMessageDialog() {
   const [platforms, setPlatforms] = useState<string[]>([])
   const [connectedPlatforms, setConnectedPlatforms] = useState<ConnectedPlatform[]>([])
   const [filter, setFilter] = useState<'all' | 'active' | 'expired' | 'renewing'>('all')
+  const [price, setPrice] = useState<string>('')
+  const [mediaIds, setMediaIds] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isSending, setIsSending] = useState(false)
   const [results, setResults] = useState<{
     success: boolean
     totalSent: number
     totalFailed: number
-    results: Record<string, { success: boolean; sent?: number; error?: string }>
+    results: Record<string, { success: boolean; sent?: number; failed?: number; error?: string }>
   } | null>(null)
   
   const supabase = createClient()
@@ -66,6 +71,8 @@ export function MassMessageDialog() {
       loadPlatforms()
       setResults(null)
       setMessage('')
+      setPrice('')
+      setMediaIds([])
     }
   }, [open])
 
@@ -77,53 +84,76 @@ export function MassMessageDialog() {
     )
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    setUploading(true)
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const formData = new FormData()
+        formData.append('file', files[i])
+        const res = await fetch('/api/onlyfans/media/upload', { method: 'POST', body: formData })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error((err as { error?: string }).error || 'Upload failed')
+        }
+        const data = (await res.json()) as { id: string }
+        if (data.id) setMediaIds((prev) => [...prev, data.id])
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
   const handleSend = async () => {
     if (!message || platforms.length === 0) return
 
     setIsSending(true)
     setResults(null)
 
-    const results: Record<string, { success: boolean; sent?: number; error?: string }> = {}
-    let totalSent = 0
-    let totalFailed = 0
-
-    // Send to each platform
-    for (const platform of platforms) {
-      try {
-        const endpoint = platform === 'onlyfans' 
-          ? '/api/onlyfans/messages/mass'
-          : `/api/${platform}/messages/mass`
-        
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: message,
-            // Map filter to targetLists if needed
-          }),
-        })
-
-        const data = await response.json()
-        
-        if (response.ok && data.success) {
-          results[platform] = { success: true, sent: data.sent || 0 }
-          totalSent += data.sent || 0
-        } else {
-          results[platform] = { success: false, error: data.error || 'Failed' }
-          totalFailed++
-        }
-      } catch (error) {
-        results[platform] = { success: false, error: 'Network error' }
-        totalFailed++
-      }
+    const priceNum = price.trim() ? parseFloat(price) : undefined
+    const body: { message: string; platforms: string[]; filter?: string; price?: number; mediaIds?: string[] } = {
+      message,
+      platforms,
+      filter,
     }
+    if (priceNum != null && !Number.isNaN(priceNum) && priceNum >= 0) body.price = priceNum
+    if (mediaIds.length > 0) body.mediaIds = mediaIds
 
-    setResults({
-      success: totalFailed === 0,
-      totalSent,
-      totalFailed,
-      results
-    })
+    try {
+      const response = await fetch('/api/messages/mass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await response.json()
+
+      if (response.ok && data.success !== false) {
+        setResults({
+          success: data.success !== false,
+          totalSent: data.totalSent ?? 0,
+          totalFailed: data.totalFailed ?? 0,
+          results: data.results ?? {},
+        })
+      } else {
+        setResults({
+          success: false,
+          totalSent: data.totalSent ?? 0,
+          totalFailed: 1,
+          results: { error: data.error || 'Failed to send' },
+        })
+      }
+    } catch {
+      setResults({
+        success: false,
+        totalSent: 0,
+        totalFailed: platforms.length,
+        results: { error: 'Network error' },
+      })
+    }
     setIsSending(false)
   }
 
@@ -147,7 +177,7 @@ export function MassMessageDialog() {
             Send Mass Message
           </DialogTitle>
           <DialogDescription>
-            Send a message to all your subscribers across platforms
+            Send a message to subscribers. OnlyFans and Fansly support paid (PPV) content: attach photos or videos and set a price so fans pay to unlock.
           </DialogDescription>
         </DialogHeader>
 
@@ -164,6 +194,61 @@ export function MassMessageDialog() {
             <p className="text-xs text-muted-foreground">
               {message.length} characters
             </p>
+          </div>
+
+          {/* Payable content: price + media */}
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-xs font-medium text-foreground">Optional: paid (PPV) content</p>
+            <p className="text-xs text-muted-foreground">
+              Attach media and/or set a price so fans pay to unlock this message. Leave price empty for a free message.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="Price (e.g. 4.99)"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="w-28"
+                />
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={uploading || !platforms.includes('onlyfans')}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                {uploading ? 'Uploading…' : 'Attach media (OF)'}
+              </Button>
+            </div>
+            {mediaIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                {mediaIds.map((id) => (
+                  <Badge key={id} variant="secondary" className="gap-1">
+                    {id.slice(0, 8)}…
+                    <button type="button" aria-label="Remove" onClick={() => setMediaIds((p) => p.filter((x) => x !== id))}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            {!platforms.includes('onlyfans') && platforms.length > 0 && (
+              <p className="text-xs text-muted-foreground">Media upload is available when OnlyFans is selected. Fansly media can be added when supported.</p>
+            )}
           </div>
 
           {/* Platform Selection */}

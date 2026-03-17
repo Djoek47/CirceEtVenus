@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -42,7 +43,9 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ conversations, selectedId, onSelect }: ConversationListProps) {
-  const [searchQuery, setSearchQuery] = useState('')
+  const searchParams = useSearchParams()
+  const initialQuery = searchParams.get('search') ?? ''
+  const [searchQuery, setSearchQuery] = useState(initialQuery)
 
   const filteredConversations = conversations.filter((conv) =>
     conv.user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||

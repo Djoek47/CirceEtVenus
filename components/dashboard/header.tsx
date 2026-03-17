@@ -46,6 +46,7 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     setMounted(true)
@@ -106,6 +107,17 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
           <Input
             placeholder="Search fans, content..."
             className="w-48 bg-input pl-9 xl:w-64"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const q = searchQuery.trim()
+                if (!q) return
+                // For now, global search lands on Messages with the query,
+                // where the conversation list will pre-filter by ?search=
+                router.push(`/dashboard/messages?search=${encodeURIComponent(q)}`)
+              }
+            }}
           />
         </div>
 

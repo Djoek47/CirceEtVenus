@@ -637,9 +637,10 @@ class OnlyFansAPI {
         method: 'POST',
         body: JSON.stringify({
           text: data.text,
-          mediaIds: data.mediaIds,
+          // OnlyFans API accepts mediaFiles; allow callers to pass either mediaIds or mediaFiles.
+          mediaFiles: data.mediaFiles ?? data.mediaIds,
           price: data.price,
-          scheduleAt: data.schedule,
+          scheduledDate: data.schedule,
         }),
       })
       return { success: true, postId: result.id }

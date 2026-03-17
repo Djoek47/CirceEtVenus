@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff, ImagePlus } from 'lucide-react'
+import { useDivinePanel } from '@/components/divine/divine-panel-context'
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -328,7 +329,8 @@ export default function DivineManagerPage() {
       setNotifyLevel('daily_digest')
       setBetaAcknowledged(false)
       setVoiceScript(null)
-      setChatMessages([])
+      if (panelCtx) panelCtx.setChatMessages([])
+      else setChatMessages([])
     } catch (e) {
       console.error(e)
     } finally {
@@ -1584,9 +1586,9 @@ export default function DivineManagerPage() {
                   )}
                   {lastToolName === 'get_dm_conversations' && (
                     <ul className="space-y-1 text-xs">
-                      {(lastToolResult.conversations as Array<{ username: string; fanId: string; lastMessage?: string; unreadCount?: number }> ?? []).slice(0, 15).map((c, i) => (
+                      {(lastToolResult.conversations as Array<{ username: string; fanId: string; name?: string | null; lastMessage?: string; unreadCount?: number }> ?? []).slice(0, 15).map((c, i) => (
                         <li key={i} className="flex justify-between gap-2">
-                          <span className="font-medium">@{c.username}</span>
+                          <span className="font-medium">{c.name ? `${c.name} (@${c.username})` : `@${c.username}`}</span>
                           {c.unreadCount ? <Badge variant="secondary" className="text-[10px]">{c.unreadCount}</Badge> : null}
                           {c.lastMessage && <span className="text-muted-foreground truncate">{String(c.lastMessage).slice(0, 40)}…</span>}
                         </li>
@@ -1708,12 +1710,12 @@ export default function DivineManagerPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="h-48 w-full rounded-md border border-border bg-muted/20 p-2 overflow-y-auto space-y-2 text-sm">
-              {chatMessages.length === 0 ? (
+              {(panelCtx ? panelCtx.chatMessages : chatMessages).length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Ask me about your fans, revenue, or which tasks to prioritize. I’ll answer based on your Divine Manager setup and plan.
+                  Ask me about your fans, revenue, or which tasks to prioritize. I’ll answer based on your Divine Manager setup and plan. Same chat stays open in the Divine panel when you switch pages.
                 </p>
               ) : (
-                chatMessages.map((m, idx) => (
+                (panelCtx ? panelCtx.chatMessages : chatMessages).map((m, idx) => (
                   <div
                     key={idx}
                     className={`max-w-[80%] rounded-lg px-2 py-1 ${
@@ -1730,18 +1732,18 @@ export default function DivineManagerPage() {
             <div className="flex items-center gap-2">
               <Input
                 placeholder="Type a question for your manager…"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
+                value={panelCtx ? panelCtx.chatInput : chatInput}
+                onChange={(e) => (panelCtx ? panelCtx.setChatInput(e.target.value) : setChatInput(e.target.value))}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    sendChat()
+                    ;(panelCtx ? panelCtx.sendChat : sendChat)()
                   }
                 }}
-                disabled={chatLoading}
+                disabled={panelCtx ? panelCtx.chatLoading : chatLoading}
               />
-              <Button size="sm" disabled={chatLoading || !chatInput.trim()} onClick={sendChat}>
-                {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
+              <Button size="sm" disabled={(panelCtx ? panelCtx.chatLoading : chatLoading) || !(panelCtx ? panelCtx.chatInput : chatInput).trim()} onClick={panelCtx ? panelCtx.sendChat : sendChat}>
+                {(panelCtx ? panelCtx.chatLoading : chatLoading) ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
               </Button>
             </div>
           </CardContent>

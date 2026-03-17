@@ -97,6 +97,73 @@ const CHAT_TOOLS: Array<{
   {
     type: 'function',
     function: {
+      name: 'get_dm_conversations',
+      description: 'List recent DM conversations with fan names, usernames, and fanIds (OnlyFans). Use when the creator asks who messaged, recent chats, or to find a fan by name so you can scan their thread or send a DM.',
+      parameters: {
+        type: 'object',
+        properties: { limit: { type: 'number', description: 'Max conversations (default 20)' } },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_dm_thread',
+      description: 'Scan and read the full message thread with a specific fan. Use fanId from get_dm_conversations. Use when they want to see the chat history or before suggesting a reply.',
+      parameters: {
+        type: 'object',
+        properties: { fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' } },
+        required: ['fanId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_reply_suggestions',
+      description: 'Scan the thread and get Circe, Venus, and Flirt reply suggestions for a fan. Returns Scan insights, recommendation (Circe/Venus/Flirt), and three reply options. Use with fanId from get_dm_conversations after reading the thread if needed.',
+      parameters: {
+        type: 'object',
+        properties: { fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' } },
+        required: ['fanId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_message',
+      description: 'Send a direct message to a specific fan. Use fanId from get_dm_conversations (or from get_dm_thread/get_reply_suggestions). You can send to a user by name by first calling get_dm_conversations to find their fanId.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fanId: { type: 'string', description: 'Fan ID from conversations list' },
+          message: { type: 'string', description: 'Message text to send' },
+          platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+          price: { type: 'number' },
+          mediaIds: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['fanId', 'message'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_content',
+      description: 'List the creator\'s content (schedule, drafts, published).',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number' },
+          status: { type: 'string', enum: ['draft', 'scheduled', 'published'] },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'mass_dm',
       description: 'Send a mass message to subscribers. Use when they ask to message fans or send a DM. May require confirmation.',
       parameters: {
@@ -221,6 +288,81 @@ async function runAITool(
   return { success: true, result: (data as { result?: unknown }).result }
 }
 
+async function runContextTool(
+  name: string,
+  args: Record<string, unknown>,
+  cookie: string
+): Promise<string> {
+  const base = getBaseUrl()
+  const headers = { Cookie: cookie }
+  try {
+    if (name === 'get_dm_conversations') {
+      const limit = typeof args.limit === 'number' ? args.limit : 20
+      const res = await fetch(`${base}/api/divine/dm-conversations?limit=${limit}`, { headers })
+      const data = (await res.json().catch(() => ({}))) as { conversations?: Array<{ fanId: string; username: string; name?: string | null; lastMessage?: string; unreadCount?: number }>; error?: string }
+      if (data.error || !res.ok) return data.error ?? 'Failed to fetch conversations.'
+      const list = (data.conversations ?? []).slice(0, 15).map((c) => {
+        const label = c.name ? `${c.name} (@${c.username})` : `@${c.username}`
+        return `${label} [id: ${c.fanId}]${c.unreadCount ? ` [${c.unreadCount} unread]` : ''}: ${(c.lastMessage ?? '').slice(0, 60)}`
+      })
+      return list.length ? `Recent conversations (name, username, fanId, last message):\n${list.join('\n')}` : 'No recent conversations.'
+    }
+    if (name === 'get_dm_thread') {
+      const fanId = args.fanId
+      if (!fanId) return 'fanId is required.'
+      const res = await fetch(`${base}/api/divine/dm-thread`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ fanId }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { thread?: Array<{ from: string; text: string; createdAt: string }>; error?: string }
+      if (data.error || !res.ok) return data.error ?? 'Failed to fetch thread.'
+      const thread = (data.thread ?? []).slice(-25).map((m) => `${m.from}: ${m.text.slice(0, 200)}`)
+      return thread.length ? `Thread:\n${thread.join('\n')}` : 'No messages in thread.'
+    }
+    if (name === 'get_reply_suggestions') {
+      const fanId = args.fanId
+      if (!fanId) return 'fanId is required.'
+      const res = await fetch(`${base}/api/divine/dm-reply-suggestions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ fanId }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        scan?: { insights?: string[]; riskFlags?: string[] };
+        circeSuggestions?: string[];
+        venusSuggestions?: string[];
+        flirtSuggestions?: string[];
+        recommendation?: string;
+        recommendationReason?: string;
+        fan?: { username?: string };
+        error?: string;
+      }
+      if (data.error || !res.ok) return data.error ?? 'Failed to get reply suggestions.'
+      const rec = data.recommendation ? `Recommendation: ${data.recommendation.toUpperCase()}. ${data.recommendationReason ?? ''}` : ''
+      const circe = (data.circeSuggestions ?? [])[0] ? `Circe: ${(data.circeSuggestions![0]).slice(0, 150)}...` : ''
+      const venus = (data.venusSuggestions ?? [])[0] ? `Venus: ${(data.venusSuggestions![0]).slice(0, 150)}...` : ''
+      const flirt = (data.flirtSuggestions ?? [])[0] ? `Flirt: ${(data.flirtSuggestions![0]).slice(0, 150)}...` : ''
+      const scanLine = data.scan?.insights?.length ? `Scan: ${data.scan.insights.slice(0, 2).join('; ')}` : ''
+      return [scanLine, rec, circe, venus, flirt].filter(Boolean).join('\n') || 'No suggestions generated.'
+    }
+    if (name === 'list_content') {
+      const limit = typeof args.limit === 'number' ? args.limit : 20
+      const status = typeof args.status === 'string' ? args.status : ''
+      const q = new URLSearchParams({ limit: String(limit) })
+      if (status) q.set('status', status)
+      const res = await fetch(`${base}/api/divine/content-list?${q}`, { headers })
+      const data = (await res.json().catch(() => ({}))) as { content?: Array<{ id: string; title: string; status: string; scheduled_at?: string }>; error?: string }
+      if (data.error || !res.ok) return data.error ?? 'Failed to fetch content.'
+      const list = (data.content ?? []).map((c) => `[${c.status}] ${c.title}${c.scheduled_at ? ` (${c.scheduled_at})` : ''}`)
+      return list.length ? `Content:\n${list.join('\n')}` : 'No content found.'
+    }
+  } catch (e) {
+    return (e instanceof Error ? e.message : 'Request failed')
+  }
+  return 'Unknown context tool.'
+}
+
 async function runIntent(
   type: string,
   args: Record<string, unknown>,
@@ -314,7 +456,8 @@ You know their tasks, rules, and analytics. Speak as a manager, not as the creat
 Never claim you have already sent messages, changed prices, or executed actions. You may only recommend or suggest actions or rule changes.
 Respect the creator's boundaries, niches, and all platform safety rules.
 Avoid explicit or illegal content entirely. Use clear, practical language.
-You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, mass_dm, get_stats, content_publish, create_task, send_notification. Use them when the creator's request fits; then summarize the result. For mass_dm and content_publish the app may ask them to confirm—tell them to confirm in the app or say yes if so.`
+You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification. Use them when the creator's request fits; then summarize the result. For mass_dm and content_publish the app may ask them to confirm.
+You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options for that chat. send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.`
 
     const userContext = `Creator persona:
 - Tone: ${persona.tone ?? 'friendly'}
@@ -402,6 +545,7 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
       }
 
       const isAITool = name in AI_TOOL_NAME_TO_ID
+      const isContextTool = ['get_dm_conversations', 'get_dm_thread', 'get_reply_suggestions', 'list_content'].includes(name)
       if (isAITool) {
         const out = await runAITool(name, args, cookie)
         const summary = out.success
@@ -410,6 +554,9 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
               : JSON.stringify(out.result).slice(0, 500))
           : (out.error ?? 'Tool failed')
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary })
+      } else if (isContextTool) {
+        const summary = await runContextTool(name, args, cookie)
+        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary.slice(0, 1000) })
       } else {
         let intentBody: Record<string, unknown> = { ...args }
         if (name === 'content_publish' && args.platforms) {
@@ -417,6 +564,13 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
         }
         if (name === 'mass_dm' && args.platforms) {
           intentBody.platforms = Array.isArray(args.platforms) ? args.platforms : [args.platforms]
+        }
+        if (name === 'send_message') {
+          intentBody.fanId = args.fanId
+          intentBody.message = args.message
+          intentBody.platform = args.platform ?? 'onlyfans'
+          intentBody.price = args.price
+          intentBody.mediaIds = args.mediaIds
         }
         if (name === 'create_task') {
           intentBody = {

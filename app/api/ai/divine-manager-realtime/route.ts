@@ -111,6 +111,8 @@ ${analyticsTotals ? `\n${analyticsTotals}` : ''}
 
 You have access to the creator's analytics: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth.
 
+You have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options (the creator will see three buttons to choose while you read). send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.
+
 Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation.
 
 The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). When they say "write a caption", "caption this", or "what should I say", use generate_caption. When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice. You can create in-app reminders with send_notification. When the creator is done or says goodbye, or after you have completed their request and they have nothing else, say a brief goodbye and call end_call to end the voice call. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
@@ -184,6 +186,74 @@ The creator only uploads one photo and talks to you—no typing. You manage ever
           type: 'object',
           properties: {
             context: { type: 'string', description: 'Optional context e.g. segment or goal' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_dm_conversations',
+        description:
+          'List recent DM conversations with fan names, usernames, and fanIds (OnlyFans). Use when the creator asks who messaged, recent chats, or to find a fan by name so you can scan their thread or send a DM.',
+        parameters: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', description: 'Max conversations to return (default 20)' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_dm_thread',
+        description:
+          'Scan and read the full message thread with a specific fan. Use fanId from get_dm_conversations. Use when the creator wants to see the chat or before suggesting a reply.',
+        parameters: {
+          type: 'object',
+          properties: {
+            fanId: { type: 'string', description: 'Fan id from get_dm_conversations' },
+          },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_reply_suggestions',
+        description:
+          'Scan the thread and get Circe, Venus, and Flirt reply suggestions for a fan. Returns Scan insights, recommendation, and three reply options. The creator will see three buttons to pick one while you read. Use fanId from get_dm_conversations.',
+        parameters: {
+          type: 'object',
+          properties: {
+            fanId: { type: 'string', description: 'Fan id from get_dm_conversations' },
+          },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'send_message',
+        description:
+          'Send a direct message to a specific fan. Use fanId from get_dm_conversations. You can find the user by name with get_dm_conversations first, then send_message to that fanId.',
+        parameters: {
+          type: 'object',
+          properties: {
+            fanId: { type: 'string', description: 'Fan id from conversations list' },
+            message: { type: 'string', description: 'Message text to send' },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'], description: 'Platform' },
+            price: { type: 'number', description: 'Optional PPV price' },
+            mediaIds: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['fanId', 'message'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_content',
+        description:
+          'List the creator\'s content (posts, schedule). Use when they ask what is scheduled, content calendar, or upcoming posts.',
+        parameters: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', description: 'Max items (default 20)' },
+            status: { type: 'string', enum: ['draft', 'scheduled', 'published'], description: 'Filter by status' },
           },
         },
       },

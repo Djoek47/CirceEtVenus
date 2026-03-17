@@ -4,6 +4,9 @@ import { DashboardSidebar } from '@/components/dashboard/sidebar'
 import { DashboardHeader } from '@/components/dashboard/header'
 import { OnboardingProvider } from '@/components/onboarding/onboarding-provider'
 import { TourProvider } from '@/components/tour/tour-provider'
+import { DivinePanelWrapper } from '@/components/divine/divine-panel-wrapper'
+import { VoiceSessionProvider } from '@/components/divine/voice-session-context'
+import { VoiceControlPopup } from '@/components/divine/voice-control-popup'
 
 export default async function DashboardLayout({
   children,
@@ -30,18 +33,23 @@ export default async function DashboardLayout({
       onboardingCompleted={profile?.onboarding_completed || false}
     >
       <TourProvider>
-        <div className="flex h-screen bg-background">
-          {/* Desktop sidebar - hidden on mobile */}
-          <div className="hidden md:block">
-            <DashboardSidebar user={user} profile={profile} />
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <DashboardHeader user={user} profile={profile} />
-            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
-              {children}
-            </main>
-          </div>
-        </div>
+        <VoiceSessionProvider>
+          <DivinePanelWrapper user={user}>
+            <div className="flex h-screen bg-background">
+              {/* Desktop sidebar - hidden on mobile */}
+              <div className="hidden md:block">
+                <DashboardSidebar user={user} profile={profile} />
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <DashboardHeader user={user} profile={profile} />
+                <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+                  {children}
+                </main>
+              </div>
+            </div>
+            <VoiceControlPopup />
+          </DivinePanelWrapper>
+        </VoiceSessionProvider>
       </TourProvider>
     </OnboardingProvider>
   )

@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/select'
 import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff, ImagePlus } from 'lucide-react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
+import { useVoiceSession } from '@/components/divine/voice-session-context'
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -43,6 +44,7 @@ const MODE_LABELS: Record<DivineManagerMode, string> = {
 
 export default function DivineManagerPage() {
   const panelCtx = useDivinePanel()
+  const voiceSession = useVoiceSession()
   const [loading, setLoading] = useState(true)
   const [settings, setSettings] = useState<DivineManagerSettingsRow | null>(null)
   const [tasks, setTasks] = useState<DivineManagerTaskRow[]>([])
@@ -88,13 +90,10 @@ export default function DivineManagerPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [resetting, setResetting] = useState(false)
-  const [realtimeStatus, setRealtimeStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
-  const [realtimeError, setRealtimeError] = useState<string | null>(null)
-  const realtimePcRef = useRef<RTCPeerConnection | null>(null)
-  const realtimeAudioRef = useRef<HTMLAudioElement | null>(null)
-  const realtimeStreamRef = useRef<MediaStream | null>(null)
-  const [remoteVoiceStream, setRemoteVoiceStream] = useState<MediaStream | null>(null)
-  const voiceVizRef = useRef<HTMLCanvasElement | null>(null)
+  const realtimeStatus = voiceSession?.status ?? 'idle'
+  const realtimeError = voiceSession?.error ?? null
+  const remoteVoiceStream = voiceSession?.remoteVoiceStream ?? null
+  const voiceVizRef = voiceSession?.voiceVizRef ?? useRef<HTMLCanvasElement | null>(null)
   const [intentLog, setIntentLog] = useState<{ id: string; intent_type: string; status: string; result_summary?: string; created_at: string }[]>([])
   const [intentLogLoading, setIntentLogLoading] = useState(false)
   const [pendingIntentId, setPendingIntentId] = useState<string | null>(null)
@@ -367,6 +366,10 @@ export default function DivineManagerPage() {
   }
 
   const startRealtimeVoice = async () => {
+    if (voiceSession) {
+      await voiceSession.startVoiceCall()
+      return
+    }
     if (realtimeStatus === 'connecting' || realtimeStatus === 'connected') return
     setRealtimeError(null)
     setLastAIToolResult(null)
@@ -500,6 +503,10 @@ export default function DivineManagerPage() {
   }
 
   const endRealtimeVoice = useCallback(() => {
+    if (voiceSession) {
+      voiceSession.endVoiceCall()
+      return
+    }
     if (idleTimeoutRef.current) {
       clearTimeout(idleTimeoutRef.current)
       idleTimeoutRef.current = null
@@ -509,27 +516,7 @@ export default function DivineManagerPage() {
       closeAfterActionRef.current = null
     }
     resetIdleRef.current = null
-    const pc = realtimePcRef.current
-    if (pc) {
-      pc.close()
-      realtimePcRef.current = null
-    }
-    const stream = realtimeStreamRef.current
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop())
-      realtimeStreamRef.current = null
-    }
-    realtimeAudioRef.current = null
-    setRemoteVoiceStream(null)
-    setRealtimeStatus('idle')
-    setRealtimeError(null)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      endRealtimeVoice()
-    }
-  }, [])
+  }, [voiceSession])
 
   const IDLE_MS = 2.5 * 60 * 1000
   const CLOSE_AFTER_ACTION_MS = 5 * 1000
@@ -551,7 +538,7 @@ export default function DivineManagerPage() {
       idleTimeoutRef.current = null
       resetIdleRef.current = null
     }
-  }, [realtimeStatus])
+  }, [realtimeStatus, endRealtimeVoice])
 
   const fetchIntentLog = async () => {
     if (!userId) return

@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
         : ''
 
     const focusedFanLine = focusedFan?.id
-      ? `\n\nFocused DM fan (from UI): id=${focusedFan.id}, username=${focusedFan.username ?? 'unknown'}, name=${focusedFan.name ?? 'unknown'}.\nWhen using DM tools (get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message), treat this fan as the default target unless the creator clearly asks for someone else. Prefer using this fan over running a broad DM search when they are already in this chat.`
+      ? `\n\nFocused DM fan (from UI): id=${focusedFan.id}, username=${focusedFan.username ?? 'unknown'}, name=${focusedFan.name ?? 'unknown'}.\nIf a focused fan is provided, assume all DM questions refer to this fan unless the creator names someone else. Do not run a broad search first. When using DM tools (get_dm_thread, get_reply_suggestions, send_message), use this fan's id directly unless the creator clearly asks for someone else. Prefer this fan over running get_dm_conversations when they are already in this chat.`
       : ''
 
     const instructions = `You are the Divine Manager, a Jarvis-style voice companion for a creator. You speak in real time over voice. Be a calm, confident manager. Never role-play as the creator; never claim to have already sent messages or changed prices. You only describe what you see and what you recommend. Respect boundaries and platform safety. Avoid explicit or illegal content.

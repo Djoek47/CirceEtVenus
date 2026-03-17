@@ -99,13 +99,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           const payload = JSON.parse(event.data as string) as {
             type?: string
             tool_calls?: Array<{ name?: string; arguments?: string }>
-            response?: { output?: Array<{ type?: string; name?: string; arguments?: string }> }
+            response?: {
+              output?: Array<{ id?: string; type?: string; name?: string; arguments?: string }>
+            }
           }
-          const runTool = async (name: string, args: Record<string, unknown>) => {
-            if (!name) return
+          const runTool = async (
+            name: string,
+            args: Record<string, unknown>,
+          ): Promise<string | null> => {
+            if (!name) return null
             if (name === 'end_call') {
               endVoiceCall()
-              return
+              return 'Call ended.'
             }
             if (name === 'get_dm_conversations') {
               const limit = typeof args.limit === 'number' ? args.limit : 20
@@ -113,23 +118,80 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 typeof args.query === 'string' && args.query.trim().length
                   ? `&query=${encodeURIComponent(args.query.trim())}`
                   : ''
-              await fetch(`/api/divine/dm-conversations?limit=${limit}${queryParam}`)
+              try {
+                const res = await fetch(
+                  `/api/divine/dm-conversations?limit=${limit}${queryParam}`,
+                )
+                const data = await res.json().catch(() => ({}))
+                if (!res.ok) {
+                  const msg = (data as { error?: string }).error
+                  return msg ? `Error loading conversations: ${msg}` : 'Failed to load conversations.'
+                }
+                const conversations = (data as { conversations?: any[] }).conversations ?? []
+                const preview = conversations.slice(0, 5).map((c) => {
+                  const username = c?.username ?? 'unknown'
+                  const name = c?.name ?? null
+                  const fanId = c?.fanId ?? c?.id ?? 'unknown'
+                  const unread = c?.unreadCount ?? 0
+                  const label = name ? `${name} (@${username})` : `@${username}`
+                  return `${label} id=${fanId} unread=${unread}`
+                })
+                const suffix = preview.length ? ` Top: ${preview.join('; ')}.` : ''
+                return `Loaded ${conversations.length} DM conversations.${suffix}`
+              } catch {
+                return 'Failed to load conversations.'
+              }
             } else if (name === 'get_dm_thread') {
               const fanId = (args as { fanId?: unknown }).fanId
-              if (!fanId || typeof fanId !== 'string') return
-              await fetch('/api/divine/dm-thread', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fanId }),
-              })
+              if (!fanId || typeof fanId !== 'string') return 'fanId is required for get_dm_thread.'
+              try {
+                const res = await fetch('/api/divine/dm-thread', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fanId }),
+                })
+                const data = await res.json().catch(() => ({}))
+                if (!res.ok) {
+                  const msg = (data as { error?: string }).error
+                  return msg ? `Error loading thread: ${msg}` : 'Failed to load thread.'
+                }
+                const thread = (data as { thread?: any[] }).thread ?? []
+                const last = thread[thread.length - 1]
+                const lastSnippet =
+                  last && last.text
+                    ? ` Last message: ${String(last.text).slice(0, 120)}`
+                    : ''
+                return `Loaded DM thread with ${thread.length} messages.${lastSnippet}`
+              } catch {
+                return 'Failed to load thread.'
+              }
             } else if (name === 'get_reply_suggestions') {
               const fanId = (args as { fanId?: unknown }).fanId
-              if (!fanId || typeof fanId !== 'string') return
-              await fetch('/api/divine/dm-reply-suggestions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fanId }),
-              })
+              if (!fanId || typeof fanId !== 'string') {
+                return 'fanId is required for get_reply_suggestions.'
+              }
+              try {
+                const res = await fetch('/api/divine/dm-reply-suggestions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fanId }),
+                })
+                const data = await res.json().catch(() => ({}))
+                if (!res.ok) {
+                  const msg = (data as { error?: string }).error
+                  return msg
+                    ? `Error loading reply suggestions: ${msg}`
+                    : 'Failed to load reply suggestions.'
+                }
+                const rec = (data as { recommendation?: string }).recommendation
+                const suggestions = (data as { suggestions?: string[] }).suggestions ?? []
+                const firstSuggestion =
+                  suggestions.length > 0 ? ` Suggestion: ${suggestions[0]}` : ''
+                const recText = rec ? `Recommendation: ${rec}.` : ''
+                return recText || (firstSuggestion ? `Reply suggestion ready.${firstSuggestion}` : 'Reply suggestions ready.')
+              } catch {
+                return 'Failed to load reply suggestions.'
+              }
             } else if (name === 'list_content') {
               const limit = typeof args.limit === 'number' ? args.limit : 20
               const status = typeof (args as { status?: unknown }).status === 'string'
@@ -137,8 +199,22 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 : ''
               const q = new URLSearchParams({ limit: String(limit) })
               if (status) q.set('status', status)
-              await fetch(`/api/divine/content-list?${q.toString()}`)
+              try {
+                const res = await fetch(`/api/divine/content-list?${q.toString()}`)
+                const data = await res.json().catch(() => ({}))
+                if (!res.ok) {
+                  const msg = (data as { error?: string }).error
+                  return msg
+                    ? `Error loading content list: ${msg}`
+                    : 'Failed to load content list.'
+                }
+                const content = (data as { content?: any[] }).content ?? []
+                return `Loaded ${content.length} content items.`
+              } catch {
+                return 'Failed to load content list.'
+              }
             }
+            return null
           }
           const toolCalls =
             payload?.tool_calls ??
@@ -171,9 +247,21 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                         } catch {
                           return {}
                         }
-                      })()
+                    })()
                     : {}
-                await runTool(item.name, args as Record<string, unknown>)
+                const summary = await runTool(item.name, args as Record<string, unknown>)
+                if (summary) {
+                  const eventPayload = {
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      // call_id links this output to the original function_call if present.
+                      call_id: item.id,
+                      output: summary,
+                    },
+                  }
+                  dc.send(JSON.stringify(eventPayload))
+                }
               }
             }
           }

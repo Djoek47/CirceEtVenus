@@ -412,7 +412,10 @@ export default function DivineManagerPage() {
             if (name === 'analyze_content' || name === 'generate_caption' || name === 'predict_viral' || name === 'get_retention_insights' || name === 'get_whale_advice') {
               runAITool(name, args)
             } else if (name === 'get_dm_conversations' || name === 'get_dm_thread' || name === 'get_reply_suggestions' || name === 'list_content') {
-              runDivineDataTool(name, args)
+              // When tools are invoked via tool_calls without a response output item id,
+              // we still run them for side-effects/UI but do not send a function_call_output
+              // back to the model (no call_id to attach to).
+              void runDivineDataTool(name, args)
             } else if (name === 'content_publish' && sessionPhotoRef.current) {
               const platforms = (Array.isArray(args.platforms) ? args.platforms : args.platform ? [args.platform] : ['onlyfans', 'fansly']) as string[]
               const params = { ...args, platforms }
@@ -470,7 +473,30 @@ export default function DivineManagerPage() {
                         }
                       })()
                     : {}
-                await runTool(item.name, args as Record<string, unknown>)
+                if (
+                  item.name === 'get_dm_conversations' ||
+                  item.name === 'get_dm_thread' ||
+                  item.name === 'get_reply_suggestions' ||
+                  item.name === 'list_content'
+                ) {
+                  const summary = await runDivineDataTool(
+                    item.name,
+                    args as Record<string, unknown>,
+                  )
+                  if (summary) {
+                    const eventPayload = {
+                      type: 'conversation.item.create',
+                      item: {
+                        type: 'function_call_output',
+                        call_id: item.id,
+                        output: summary,
+                      },
+                    }
+                    dc.send(JSON.stringify(eventPayload))
+                  }
+                } else {
+                  await runTool(item.name, args as Record<string, unknown>)
+                }
               }
             }
           }
@@ -588,8 +614,11 @@ export default function DivineManagerPage() {
     setPendingIntentSummary(null)
   }
 
-  /** Run DM/content context tools (get_dm_conversations, get_dm_thread, get_reply_suggestions, list_content). Fetches from Divine APIs and shows result in tool panel. */
-  const runDivineDataTool = async (toolName: string, args: Record<string, unknown>) => {
+  /** Run DM/content context tools (get_dm_conversations, get_dm_thread, get_reply_suggestions, list_content). Fetches from Divine APIs and shows result in tool panel, and returns a short summary string suitable for feeding back into the Realtime model. */
+  const runDivineDataTool = async (
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<string | null> => {
     setIntentInProgress(true)
     setLastAIToolResult(null)
     setLastToolName(null)
@@ -603,38 +632,70 @@ export default function DivineManagerPage() {
             : ''
         const res = await fetch(`/api/divine/dm-conversations?limit=${limit}${queryParam}`)
         const data = await res.json().catch(() => ({}))
-        if (data.error && !res.ok) {
-          setLastAIToolResult(data.error)
-          return
+        if ((data as { error?: string }).error && !res.ok) {
+          const msg = (data as { error?: string }).error
+          setLastAIToolResult(msg)
+          return msg ? `Error loading conversations: ${msg}` : 'Failed to load conversations.'
         }
         setLastToolName(toolName)
         setLastToolResult(data)
-        setLastAIToolResult(`${(data.conversations ?? []).length} conversations loaded.`)
+        const conversations = (data as { conversations?: any[] }).conversations ?? []
+        setLastAIToolResult(`${conversations.length} conversations loaded.`)
+        const preview = conversations.slice(0, 5).map((c) => {
+          const username = c?.username ?? 'unknown'
+          const name = c?.name ?? null
+          const fanId = c?.fanId ?? c?.id ?? 'unknown'
+          const unread = c?.unreadCount ?? 0
+          const label = name ? `${name} (@${username})` : `@${username}`
+          return `${label} id=${fanId} unread=${unread}`
+        })
+        const suffix = preview.length ? ` Top: ${preview.join('; ')}.` : ''
+        return `Loaded ${conversations.length} DM conversations.${suffix}`
       } else if (toolName === 'get_dm_thread') {
         const fanId = args.fanId
-        if (!fanId) { setLastAIToolResult('fanId required'); return }
+        if (!fanId) {
+          setLastAIToolResult('fanId required')
+          return 'fanId required for get_dm_thread.'
+        }
         const res = await fetch('/api/divine/dm-thread', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fanId }) })
         const data = await res.json().catch(() => ({}))
-        if (data.error && !res.ok) {
-          setLastAIToolResult(data.error)
-          return
+        if ((data as { error?: string }).error && !res.ok) {
+          const msg = (data as { error?: string }).error
+          setLastAIToolResult(msg)
+          return msg ? `Error loading thread: ${msg}` : 'Failed to load thread.'
         }
         setLastToolName(toolName)
         setLastToolResult(data)
-        setLastAIToolResult(`Thread: ${(data.thread ?? []).length} messages.`)
+        const thread = (data as { thread?: any[] }).thread ?? []
+        setLastAIToolResult(`Thread: ${thread.length} messages.`)
+        const last = thread[thread.length - 1]
+        const lastSnippet =
+          last && last.text ? ` Last message: ${String(last.text).slice(0, 120)}` : ''
+        return `Loaded DM thread with ${thread.length} messages.${lastSnippet}`
       } else if (toolName === 'get_reply_suggestions') {
         const fanId = args.fanId
-        if (!fanId) { setLastAIToolResult('fanId required'); return }
+        if (!fanId) {
+          setLastAIToolResult('fanId required')
+          return 'fanId required for get_reply_suggestions.'
+        }
         const res = await fetch('/api/divine/dm-reply-suggestions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fanId }) })
         const data = await res.json().catch(() => ({}))
-        if (data.error && !res.ok) {
-          setLastAIToolResult(data.error)
-          return
+        if ((data as { error?: string }).error && !res.ok) {
+          const msg = (data as { error?: string }).error
+          setLastAIToolResult(msg)
+          return msg
+            ? `Error loading reply suggestions: ${msg}`
+            : 'Failed to load reply suggestions.'
         }
         setLastToolName(toolName)
         setLastToolResult(data)
-        const rec = data.recommendation ? `Recommendation: ${data.recommendation}` : ''
+        const rec = (data as { recommendation?: string }).recommendation
         setLastAIToolResult(rec || 'Circe, Venus, and Flirt suggestions ready. Pick one below.')
+        const suggestions = (data as { suggestions?: string[] }).suggestions ?? []
+        const firstSuggestion =
+          suggestions.length > 0 ? ` Suggestion: ${suggestions[0]}` : ''
+        const recText = rec ? `Recommendation: ${rec}.` : ''
+        return recText || (firstSuggestion ? `Reply suggestion ready.${firstSuggestion}` : 'Reply suggestions ready.')
       } else if (toolName === 'list_content') {
         const limit = typeof args.limit === 'number' ? args.limit : 20
         const status = typeof args.status === 'string' ? args.status : ''
@@ -642,16 +703,21 @@ export default function DivineManagerPage() {
         if (status) q.set('status', status)
         const res = await fetch(`/api/divine/content-list?${q}`)
         const data = await res.json().catch(() => ({}))
-        if (data.error && !res.ok) {
-          setLastAIToolResult(data.error)
-          return
+        if ((data as { error?: string }).error && !res.ok) {
+          const msg = (data as { error?: string }).error
+          setLastAIToolResult(msg)
+          return msg ? `Error loading content list: ${msg}` : 'Failed to load content list.'
         }
         setLastToolName(toolName)
         setLastToolResult(data)
-        setLastAIToolResult(`${(data.content ?? []).length} content items.`)
+        const content = (data as { content?: any[] }).content ?? []
+        setLastAIToolResult(`${content.length} content items.`)
+        return `Loaded ${content.length} content items.`
       }
+      return null
     } catch {
       setLastAIToolResult('Request failed.')
+      return 'Request failed.'
     } finally {
       setIntentInProgress(false)
     }

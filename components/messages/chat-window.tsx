@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
+import { useVoiceSession } from '@/components/divine/voice-session-context'
 import { cn } from '@/lib/utils'
 import { stripHtml } from '@/lib/html-utils'
 import type { NormalizedChatMessage } from '@/lib/ai/message-suggestions'
@@ -136,6 +137,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [creatorPronouns, setCreatorPronouns] = useState<string | null>(null)
   const [creatorGenderIdentity, setCreatorGenderIdentity] = useState<string | null>(null)
   const divinePanel = useDivinePanel()
+  const voiceSession = useVoiceSession()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -210,6 +212,18 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       createdAt: m.createdAt,
     }))
   }
+
+  // When a conversation becomes active, automatically focus that fan for Divine + voice.
+  useEffect(() => {
+    if (!conversation || !divinePanel) return
+    const fan = {
+      id: String(conversation.user.id),
+      username: conversation.user.username,
+      name: conversation.user.name,
+    }
+    divinePanel.setFocusedFan(fan)
+    voiceSession?.setFocusedFanForVoice(fan)
+  }, [conversation, divinePanel, voiceSession])
 
   const callSuggestionApi = async (mode: 'scan' | 'circe' | 'venus' | 'flirt') => {
     if (!conversation) return
@@ -370,7 +384,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
 
   const handleSendMessage = async () => {
     if (!message.trim() || !conversation || sending) return
-
+    
     setSending(true)
     const messageText = message
     setMessage('')
@@ -378,7 +392,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     const priceToSend = ppvPrice.trim() ? parseFloat(ppvPrice) : undefined
     setAttachedMediaIds([])
     setPpvPrice('')
-
+    
     try {
       const body: { text: string; mediaIds?: string[]; price?: number } = { text: messageText }
       if (mediaIdsToSend.length > 0) body.mediaIds = mediaIdsToSend
@@ -389,13 +403,13 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-
+      
       const data = await res.json()
-
+      
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send message')
       }
-
+      
       if (data.message) {
         setMessages(prev => normalizeAndSortMessages([...prev, data.message]))
         setTimeout(() => scrollToBottom(), 0)
@@ -456,6 +470,12 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                 />
                 {conversation.platform === 'onlyfans' ? 'OnlyFans' : 'Fansly'}
               </span>
+              {divinePanel?.focusedFan &&
+                String(divinePanel.focusedFan.id) === String(conversation.user.id) && (
+                  <span className="inline-flex items-center rounded-full border border-primary/40 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    Divine focused here
+                  </span>
+                )}
             </div>
             <span className="text-xs text-muted-foreground">@{fan.username}</span>
           </div>
@@ -470,11 +490,13 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
             {divinePanel && (
               <DropdownMenuItem
                 onClick={() => {
-                  divinePanel.setFocusedFan({
+                  const fan = {
                     id: String(conversation.user.id),
                     username: conversation.user.username,
                     name: conversation.user.name,
-                  })
+                  }
+                  divinePanel.setFocusedFan(fan)
+                  voiceSession?.setFocusedFanForVoice(fan)
                   divinePanel.setPanelCollapsed(false)
                   divinePanel.setPanelOpen(true)
                 }}
@@ -829,7 +851,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                 </Badge>
               )}
             </div>
-          )}
+        )}
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -877,8 +899,8 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
               />
             </div>
           </div>
-          <Button
-            size="icon"
+          <Button 
+            size="icon" 
             disabled={(!message.trim() && attachedMediaIds.length === 0) || sending}
             onClick={handleSendMessage}
           >

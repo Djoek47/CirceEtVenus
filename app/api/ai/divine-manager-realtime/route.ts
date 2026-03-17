@@ -5,9 +5,13 @@ import { getDivineVoice } from '@/lib/divine-manager'
 
 export const maxDuration = 30
 
+type FocusedFan = { id?: string; username?: string | null; name?: string | null }
+
 /**
  * POST: create a full-duplex Realtime (WebRTC) session with Divine Manager context.
- * Body: raw SDP string (Content-Type: application/sdp or text/plain).
+ *
+ * Body (preferred): JSON { sdp: string, focusedFan?: { id, username?, name? } }
+ * Also supports legacy: raw SDP string (Content-Type: application/sdp or text/plain).
  * Returns: SDP answer string for the client to setRemoteDescription.
  */
 export async function POST(req: NextRequest) {
@@ -31,11 +35,24 @@ export async function POST(req: NextRequest) {
           error:
             'Realtime requires OPENAI_API_KEY (OpenAI key starting with sk-). Do not use the Vercel AI Gateway key here.',
         },
-        { status: 503 }
+        { status: 503 },
       )
     }
 
-    const sdp = await req.text()
+    let focusedFan: FocusedFan | undefined
+    let sdp: string | undefined
+    const contentType = req.headers.get('content-type') || ''
+    if (contentType.startsWith('application/json')) {
+      const body = (await req.json().catch(() => ({}))) as {
+        sdp?: string
+        focusedFan?: FocusedFan
+      }
+      sdp = body.sdp
+      focusedFan = body.focusedFan
+    } else {
+      sdp = await req.text()
+    }
+
     if (!sdp?.trim()) {
       return NextResponse.json({ error: 'Missing SDP body' }, { status: 400 })
     }
@@ -94,6 +111,10 @@ export async function POST(req: NextRequest) {
           })()
         : ''
 
+    const focusedFanLine = focusedFan?.id
+      ? `\n\nFocused DM fan (from UI): id=${focusedFan.id}, username=${focusedFan.username ?? 'unknown'}, name=${focusedFan.name ?? 'unknown'}.\nWhen using DM tools (get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message), treat this fan as the default target unless the creator clearly asks for someone else. Prefer using this fan over running a broad DM search when they are already in this chat.`
+      : ''
+
     const instructions = `You are the Divine Manager, a Jarvis-style voice companion for a creator. You speak in real time over voice. Be a calm, confident manager. Never role-play as the creator; never claim to have already sent messages or changed prices. You only describe what you see and what you recommend. Respect boundaries and platform safety. Avoid explicit or illegal content.
 
 Creator persona: tone ${persona.tone ?? 'friendly'}, flirty level ${persona.flirtyLevel ?? 'mild'}. Boundaries: ${(persona.boundaries ?? []).join('; ') || 'none specified'}.
@@ -111,7 +132,7 @@ ${analyticsTotals ? `\n${analyticsTotals}` : ''}
 
 You have access to the creator's analytics: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth.
 
-You have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options (the creator will see three buttons to choose while you read). send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.
+You have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options (the creator will see three buttons to choose while you read). send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.${focusedFanLine}
 
 Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation.
 

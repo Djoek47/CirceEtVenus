@@ -226,8 +226,8 @@ export async function getSubscriptionStatus() {
         const subs = await stripe.subscriptions.list({
           customer: customerId,
           status: 'all',
-          limit: 1,
-        })
+    limit: 1,
+  })
 
         const sub = subs.data[0]
         if (sub) {

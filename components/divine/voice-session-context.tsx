@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import type { FocusedFan } from '@/components/divine/divine-panel-context'
 
 type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -19,6 +20,8 @@ type VoiceSessionContextValue = {
   endVoiceCall: () => void
   remoteVoiceStream: MediaStream | null
   voiceVizRef: React.RefObject<HTMLCanvasElement>
+  focusedFanForVoice: FocusedFan | null
+  setFocusedFanForVoice: (fan: FocusedFan | null) => void
 }
 
 const VoiceSessionContext = createContext<VoiceSessionContextValue | null>(null)
@@ -32,6 +35,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [remoteVoiceStream, setRemoteVoiceStream] = useState<MediaStream | null>(null)
   const voiceVizRef = useRef<HTMLCanvasElement | null>(null)
+  const [focusedFanForVoice, setFocusedFanForVoice] = useState<FocusedFan | null>(null)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -98,8 +102,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
       const res = await fetch('/api/ai/divine-manager-realtime', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/sdp' },
-        body: offer.sdp ?? '',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sdp: offer.sdp ?? '',
+          focusedFan: focusedFanForVoice,
+        }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -193,6 +200,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     endVoiceCall,
     remoteVoiceStream,
     voiceVizRef,
+    focusedFanForVoice,
+    setFocusedFanForVoice,
   }
 
   return (

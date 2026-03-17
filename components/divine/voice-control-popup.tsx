@@ -29,7 +29,7 @@ export function VoiceControlPopup() {
         <div className="flex flex-col">
           <span className="text-xs font-medium">
             {status === 'idle' && 'Voice control idle'}
-            {status === 'connecting' && 'Connecting voice…'}
+            {status === 'connecting' && 'Divine is connecting…'}
             {status === 'connected' && 'Divine is listening'}
             {status === 'error' && 'Voice error'}
           </span>

@@ -167,16 +167,16 @@ export async function POST(request: NextRequest) {
       const tier = fan.totalSpent >= 500 ? 'vip' : fan.totalSpent >= 100 ? 'whale' : 'regular'
       const { error } = await supabase.from('fans').upsert(
         {
-          user_id: user.id,
-          platform: 'onlyfans',
-          platform_fan_id: fan.id,
-          username: fan.username,
-          display_name: fan.name,
+        user_id: user.id,
+        platform: 'onlyfans',
+        platform_fan_id: fan.id,
+        username: fan.username,
+        display_name: fan.name,
           avatar_url: fan.avatar || null,
           first_subscribed_at: fan.subscribedAt || null,
-          total_spent: fan.totalSpent,
+        total_spent: fan.totalSpent,
           subscription_tier: tier,
-          last_interaction_at: new Date().toISOString(),
+        last_interaction_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,platform,platform_fan_id' }
       )

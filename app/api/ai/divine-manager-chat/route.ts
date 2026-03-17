@@ -98,10 +98,18 @@ const CHAT_TOOLS: Array<{
     type: 'function',
     function: {
       name: 'get_dm_conversations',
-      description: 'List recent DM conversations with fan names, usernames, and fanIds (OnlyFans). Use when the creator asks who messaged, recent chats, or to find a fan by name so you can scan their thread or send a DM.',
+      description:
+        'List recent DM conversations with fan names, usernames, and fanIds (OnlyFans). Use when the creator asks who messaged, recent chats, or to find a fan by name so you can scan their thread or send a DM. Prefer this to search for a fan instead of scanning individual message threads.',
       parameters: {
         type: 'object',
-        properties: { limit: { type: 'number', description: 'Max conversations (default 20)' } },
+        properties: {
+          limit: { type: 'number', description: 'Max conversations (default 20)' },
+          query: {
+            type: 'string',
+            description:
+              'Optional name or username substring to filter conversations (case-insensitive).',
+          },
+        },
       },
     },
   },
@@ -298,7 +306,14 @@ async function runContextTool(
   try {
     if (name === 'get_dm_conversations') {
       const limit = typeof args.limit === 'number' ? args.limit : 20
-      const res = await fetch(`${base}/api/divine/dm-conversations?limit=${limit}`, { headers })
+      const query =
+        typeof args.query === 'string' && args.query.trim().length
+          ? `&query=${encodeURIComponent(args.query.trim())}`
+          : ''
+      const res = await fetch(
+        `${base}/api/divine/dm-conversations?limit=${limit}${query}`,
+        { headers },
+      )
       const data = (await res.json().catch(() => ({}))) as { conversations?: Array<{ fanId: string; username: string; name?: string | null; lastMessage?: string; unreadCount?: number }>; error?: string }
       if (data.error || !res.ok) return data.error ?? 'Failed to fetch conversations.'
       const list = (data.conversations ?? []).slice(0, 15).map((c) => {

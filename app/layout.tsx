@@ -57,8 +57,8 @@ export const metadata: Metadata = {
       'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction.',
   },
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/icon.png',
+    apple: '/icon.png',
   },
 }
 
@@ -90,7 +90,7 @@ export default function RootLayout({
               '@type': 'Organization',
               name: 'Circe et Venus',
               url: 'https://circe-venus.vercel.app',
-              logo: 'https://circe-venus.vercel.app/icon.svg',
+              logo: 'https://circe-venus.vercel.app/icon.png',
             }),
           }}
         />

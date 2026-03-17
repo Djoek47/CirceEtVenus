@@ -190,7 +190,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('gender_identity, pronouns, pronouns_custom')
+          .select('*')
           .eq('id', user.id)
           .maybeSingle()
         if (profile) {

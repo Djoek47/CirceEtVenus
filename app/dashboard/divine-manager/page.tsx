@@ -106,7 +106,7 @@ export default function DivineManagerPage() {
   const [lastToolName, setLastToolName] = useState<string | null>(null)
   const [lastToolResult, setLastToolResult] = useState<Record<string, unknown> | null>(null)
   const [captionSuggestion, setCaptionSuggestion] = useState<string>('')
-  const [captionHashtags, setCaptionHashtags] = useState<string>('')*** End Patch```} ***!
+  const [captionHashtags, setCaptionHashtags] = useState<string>('')
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeAfterActionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetIdleRef = useRef<(() => void) | null>(null)

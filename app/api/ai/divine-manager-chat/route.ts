@@ -279,10 +279,10 @@ export async function POST(req: NextRequest) {
 
     const { data: analytics } = await supabase
       .from('analytics_snapshots')
-      .select('platform,date,fans,revenue')
+      .select('platform,date,fans,revenue,total_fans,new_fans')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
-      .limit(7)
+      .limit(14)
 
     const persona = settings.persona || {}
     const rules = settings.automation_rules || {}
@@ -302,7 +302,10 @@ export async function POST(req: NextRequest) {
     const analyticsSummary =
       analytics && analytics.length
         ? analytics
-            .map((row) => `${row.date} ${row.platform}: fans=${row.fans ?? 'n/a'}, revenue=${row.revenue ?? 'n/a'}`)
+            .map(
+              (row) =>
+                `${row.date} ${row.platform}: fans=${row.fans ?? 'n/a'}, revenue=${row.revenue ?? 'n/a'}${row.total_fans != null ? `, total_fans=${row.total_fans}` : ''}${row.new_fans != null ? `, new_fans=${row.new_fans}` : ''}`
+            )
             .join('\n')
         : 'No recent analytics snapshots.'
 
@@ -327,8 +330,10 @@ Manager settings:
 Recent tasks:
 ${taskSummary}
 
-Recent analytics (most recent first):
+Recent analytics (14 days, most recent first):
 ${analyticsSummary}
+
+You have access to the creator's analytics: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth.
 
 Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.`
 

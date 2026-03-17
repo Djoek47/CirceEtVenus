@@ -55,10 +55,10 @@ export async function POST(req: NextRequest) {
 
     const { data: analytics } = await supabase
       .from('analytics_snapshots')
-      .select('platform,date,fans,revenue')
+      .select('platform,date,fans,revenue,total_fans,new_fans')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
-      .limit(7)
+      .limit(14)
 
     const persona = settings?.persona ?? {}
     const goals = settings?.goals ?? {}
@@ -81,10 +81,18 @@ export async function POST(req: NextRequest) {
         ? analytics
             .map(
               (row) =>
-                `${row.date} ${row.platform}: fans=${row.fans ?? 'n/a'}, revenue=${row.revenue ?? 'n/a'}`
+                `${row.date} ${row.platform}: fans=${row.fans ?? 'n/a'}, revenue=${row.revenue ?? 'n/a'}${row.total_fans != null ? `, total_fans=${row.total_fans}` : ''}${row.new_fans != null ? `, new_fans=${row.new_fans}` : ''}`
             )
             .join('\n')
         : 'No recent analytics.'
+    const analyticsTotals =
+      analytics && analytics.length
+        ? (() => {
+            const rev = analytics.reduce((s, r) => s + (Number(r.revenue) || 0), 0)
+            const fansMax = Math.max(0, ...analytics.map((r) => Number(r.fans) || 0))
+            return `Total revenue (period): ${rev.toFixed(2)}. Peak fans in period: ${fansMax}.`
+          })()
+        : ''
 
     const instructions = `You are the Divine Manager, a Jarvis-style voice companion for a creator. You speak in real time over voice. Be a calm, confident manager. Never role-play as the creator; never claim to have already sent messages or changed prices. You only describe what you see and what you recommend. Respect boundaries and platform safety. Avoid explicit or illegal content.
 
@@ -97,12 +105,15 @@ Automation: posts=${rules.autoPostSchedule?.enabled ? 'on' : 'off'}, welcome DM=
 Recent tasks:
 ${taskSummary}
 
-Recent analytics:
+Recent analytics (14 days):
 ${analyticsSummary}
+${analyticsTotals ? `\n${analyticsTotals}` : ''}
+
+You have access to the creator's analytics: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth.
 
 Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation.
 
-The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). When they say "write a caption", "caption this", or "what should I say", use generate_caption. When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice. You can create in-app reminders with send_notification. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
+The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). When they say "write a caption", "caption this", or "what should I say", use generate_caption. When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice. You can create in-app reminders with send_notification. When the creator is done or says goodbye, or after you have completed their request and they have nothing else, say a brief goodbye and call end_call to end the voice call. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
 
     const tools = [
       {
@@ -271,6 +282,16 @@ The creator only uploads one photo and talks to you—no typing. You manage ever
             link: { type: 'string', description: 'Optional app link e.g. /dashboard/divine-manager' },
           },
           required: ['title', 'description'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'end_call',
+        description:
+          'End the voice call. Call this when the conversation or task is complete and the creator has nothing else to ask (e.g. after confirming an action, or when they say goodbye, or when you have finished helping). Say a brief goodbye before calling.',
+        parameters: {
+          type: 'object',
+          properties: {},
         },
       },
     ]

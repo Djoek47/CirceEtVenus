@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getSettings,
@@ -101,6 +101,8 @@ export default function DivineManagerPage() {
   const [sessionPhotoDataUrl, setSessionPhotoDataUrl] = useState<string | null>(null)
   const sessionPhotoRef = useRef<string | null>(null)
   const [lastAIToolResult, setLastAIToolResult] = useState<string | null>(null)
+  const [lastToolName, setLastToolName] = useState<string | null>(null)
+  const [lastToolResult, setLastToolResult] = useState<Record<string, unknown> | null>(null)
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeAfterActionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetIdleRef = useRef<(() => void) | null>(null)
@@ -354,6 +356,9 @@ export default function DivineManagerPage() {
   const startRealtimeVoice = async () => {
     if (realtimeStatus === 'connecting' || realtimeStatus === 'connected') return
     setRealtimeError(null)
+    setLastAIToolResult(null)
+    setLastToolName(null)
+    setLastToolResult(null)
     setRealtimeStatus('connecting')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -382,10 +387,32 @@ export default function DivineManagerPage() {
             tool_calls?: Array<{ name?: string; arguments?: string }>
             response?: { output?: Array<{ type?: string; name?: string; arguments?: string }> }
           }
-          const runTool = (name: string, args: Record<string, unknown>) => {
+          const runTool = async (name: string, args: Record<string, unknown>) => {
             if (!name) return
+            if (name === 'end_call') {
+              endRealtimeVoice()
+              return
+            }
             if (name === 'analyze_content' || name === 'generate_caption' || name === 'predict_viral' || name === 'get_retention_insights' || name === 'get_whale_advice') {
               runAITool(name, args)
+            } else if (name === 'content_publish' && sessionPhotoRef.current) {
+              const platforms = (Array.isArray(args.platforms) ? args.platforms : args.platform ? [args.platform] : ['onlyfans', 'fansly']) as string[]
+              const params = { ...args, platforms }
+              if (platforms.includes('onlyfans')) {
+                try {
+                  const res = await fetch(sessionPhotoRef.current)
+                  const blob = await res.blob()
+                  const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' })
+                  const form = new FormData()
+                  form.append('file', file)
+                  const up = await fetch('/api/onlyfans/media/upload', { method: 'POST', body: form })
+                  const data = (await up.json()) as { id?: string; error?: string }
+                  if (data.id) params.mediaIds = [data.id]
+                } catch {
+                  // continue without media
+                }
+              }
+              runDivineIntent(name, params)
             } else {
               runDivineIntent(name, args)
             }
@@ -407,7 +434,7 @@ export default function DivineManagerPage() {
                       }
                     })()
                   : (tc.arguments ?? {}) as Record<string, unknown>
-              runTool(name!, args)
+              await runTool(name!, args)
             }
             return
           }
@@ -425,7 +452,7 @@ export default function DivineManagerPage() {
                         }
                       })()
                     : {}
-                runTool(item.name, args as Record<string, unknown>)
+                await runTool(item.name, args as Record<string, unknown>)
               }
             }
           }
@@ -457,7 +484,7 @@ export default function DivineManagerPage() {
     }
   }
 
-  const endRealtimeVoice = () => {
+  const endRealtimeVoice = useCallback(() => {
     if (idleTimeoutRef.current) {
       clearTimeout(idleTimeoutRef.current)
       idleTimeoutRef.current = null
@@ -481,7 +508,7 @@ export default function DivineManagerPage() {
     setRemoteVoiceStream(null)
     setRealtimeStatus('idle')
     setRealtimeError(null)
-  }
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -574,6 +601,8 @@ export default function DivineManagerPage() {
     if (!toolId) return
     setIntentInProgress(true)
     setLastAIToolResult(null)
+    setLastToolName(null)
+    setLastToolResult(null)
     try {
       const params = { ...args }
       if (toolName === 'analyze_content' && sessionPhotoRef.current) {
@@ -587,6 +616,8 @@ export default function DivineManagerPage() {
       const data = await res.json().catch(() => ({}))
       if (data.result) {
         const r = data.result as Record<string, unknown>
+        setLastToolName(toolName)
+        setLastToolResult(r)
         if (typeof r.score === 'number') {
           setLastAIToolResult(`Score ${r.score}/10. ${String(r.verdict ?? '').slice(0, 120)}`)
         } else if (r.captions && Array.isArray(r.captions)) {
@@ -1335,7 +1366,7 @@ export default function DivineManagerPage() {
                     variant="ghost"
                     size="sm"
                     className="text-xs h-7"
-                    onClick={() => { setSessionPhotoDataUrl(null); setLastAIToolResult(null) }}
+                    onClick={() => { setSessionPhotoDataUrl(null); setLastAIToolResult(null); setLastToolName(null); setLastToolResult(null) }}
                   >
                     Clear
                   </Button>
@@ -1348,6 +1379,105 @@ export default function DivineManagerPage() {
                 </div>
               )}
             </div>
+            {lastToolResult !== null && lastToolName && (
+              <Card className="border-border bg-muted/30">
+                <CardHeader className="py-2 px-3">
+                  <CardTitle className="text-sm font-medium">Tool result: {lastToolName.replace(/_/g, ' ')}</CardTitle>
+                </CardHeader>
+                <CardContent className="py-2 px-3 space-y-3 max-h-64 overflow-y-auto">
+                  {lastToolName === 'analyze_content' && (
+                    <>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-2xl font-bold text-foreground">
+                            {typeof lastToolResult.score === 'number' ? lastToolResult.score : '—'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">/10</span>
+                        </div>
+                        {lastToolResult.verdict && (
+                          <Badge variant="secondary" className="text-xs font-normal">
+                            {String(lastToolResult.verdict)}
+                          </Badge>
+                        )}
+                      </div>
+                      {lastToolResult.venusTake && (
+                        <p className="text-xs"><span className="font-medium text-foreground">Venus: </span><span className="text-muted-foreground">{String(lastToolResult.venusTake)}</span></p>
+                      )}
+                      {lastToolResult.circeTake && (
+                        <p className="text-xs"><span className="font-medium text-foreground">Circe: </span><span className="text-muted-foreground">{String(lastToolResult.circeTake)}</span></p>
+                      )}
+                      {Array.isArray(lastToolResult.strengths) && lastToolResult.strengths.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-foreground mb-1">Strengths</p>
+                          <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+                            {(lastToolResult.strengths as string[]).map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {Array.isArray(lastToolResult.improvements) && lastToolResult.improvements.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-foreground mb-1">Improvements</p>
+                          <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+                            {(lastToolResult.improvements as string[]).map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {lastToolName === 'generate_caption' && (
+                    <>
+                      {lastToolResult.captions && Array.isArray(lastToolResult.captions) && (
+                        <div className="space-y-2">
+                          {(lastToolResult.captions as { text?: string; hashtags?: string[] }[]).map((cap, i) => (
+                            <div key={i} className="rounded border border-border bg-background/50 p-2 text-xs">
+                              {cap.text && <p className="text-foreground whitespace-pre-wrap">{cap.text}</p>}
+                              {cap.hashtags && cap.hashtags.length > 0 && (
+                                <p className="text-muted-foreground mt-1">{(cap.hashtags as string[]).join(' ')}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(!lastToolResult.captions || !Array.isArray(lastToolResult.captions)) && (
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{JSON.stringify(lastToolResult)}</p>
+                      )}
+                    </>
+                  )}
+                  {lastToolName === 'predict_viral' && (
+                    <>
+                      {typeof lastToolResult.viralScore === 'number' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl font-bold text-foreground">{lastToolResult.viralScore}</span>
+                          <span className="text-xs text-muted-foreground">/100</span>
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(100, lastToolResult.viralScore)}%` }} />
+                          </div>
+                        </div>
+                      )}
+                      {lastToolResult.content && (
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{String(lastToolResult.content)}</p>
+                      )}
+                    </>
+                  )}
+                  {(lastToolName === 'get_retention_insights' || lastToolName === 'get_whale_advice') && (
+                    <div className="rounded border border-border bg-background/50 p-2 text-xs text-muted-foreground whitespace-pre-wrap">
+                      {typeof lastToolResult.content === 'string'
+                        ? lastToolResult.content
+                        : JSON.stringify(lastToolResult)}
+                    </div>
+                  )}
+                  {!['analyze_content', 'generate_caption', 'predict_viral', 'get_retention_insights', 'get_whale_advice'].includes(lastToolName) && (
+                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+                      {JSON.stringify(lastToolResult, null, 2)}
+                    </pre>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             {lastAIToolResult && (
               <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground max-h-24 overflow-y-auto">
                 <span className="font-medium text-foreground">Result: </span>

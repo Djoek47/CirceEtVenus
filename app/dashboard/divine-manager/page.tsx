@@ -81,6 +81,7 @@ export default function DivineManagerPage() {
   const [voiceMode, setVoiceMode] = useState<'intro' | 'ongoing' | 'what_next' | null>(null)
   const [voiceLoading, setVoiceLoading] = useState(false)
   const [ongoingCoachEnabled, setOngoingCoachEnabled] = useState(false)
+  const [introBriefingPlayed, setIntroBriefingPlayed] = useState(false)
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
@@ -110,6 +111,11 @@ export default function DivineManagerPage() {
   useEffect(() => {
     sessionPhotoRef.current = sessionPhotoDataUrl
   }, [sessionPhotoDataUrl])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setIntroBriefingPlayed(window.localStorage.getItem('divine_intro_briefing_played') === '1')
+  }, [])
 
   useEffect(() => {
     const supabase = createClient()
@@ -253,6 +259,10 @@ export default function DivineManagerPage() {
   const runVoiceMode = async (mode: 'intro' | 'ongoing' | 'what_next') => {
     setVoiceLoading(true)
     setVoiceMode(mode)
+    if (mode === 'intro' && typeof window !== 'undefined') {
+      window.localStorage.setItem('divine_intro_briefing_played', '1')
+      setIntroBriefingPlayed(true)
+    }
     try {
       const res = await fetch('/api/ai/divine-manager-voice', {
         method: 'POST',
@@ -379,7 +389,7 @@ export default function DivineManagerPage() {
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
       const dc = pc.createDataChannel('oai-events')
-      dc.onmessage = (event) => {
+      dc.onmessage = async (event) => {
         resetIdleRef.current?.()
         try {
           const payload = JSON.parse(event.data as string) as {
@@ -395,6 +405,8 @@ export default function DivineManagerPage() {
             }
             if (name === 'analyze_content' || name === 'generate_caption' || name === 'predict_viral' || name === 'get_retention_insights' || name === 'get_whale_advice') {
               runAITool(name, args)
+            } else if (name === 'get_dm_conversations' || name === 'get_dm_thread' || name === 'get_reply_suggestions' || name === 'list_content') {
+              runDivineDataTool(name, args)
             } else if (name === 'content_publish' && sessionPhotoRef.current) {
               const platforms = (Array.isArray(args.platforms) ? args.platforms : args.platform ? [args.platform] : ['onlyfans', 'fansly']) as string[]
               const params = { ...args, platforms }
@@ -518,6 +530,7 @@ export default function DivineManagerPage() {
 
   const IDLE_MS = 2.5 * 60 * 1000
   const CLOSE_AFTER_ACTION_MS = 5 * 1000
+  const CLOSE_AFTER_ACTION_INTENTS = new Set(['mass_dm', 'content_publish', 'create_task', 'send_notification'])
 
   useEffect(() => {
     if (realtimeStatus !== 'connected') return
@@ -583,6 +596,71 @@ export default function DivineManagerPage() {
   const handleCancelPendingIntent = () => {
     setPendingIntentId(null)
     setPendingIntentSummary(null)
+  }
+
+  /** Run DM/content context tools (get_dm_conversations, get_dm_thread, get_reply_suggestions, list_content). Fetches from Divine APIs and shows result in tool panel. */
+  const runDivineDataTool = async (toolName: string, args: Record<string, unknown>) => {
+    setIntentInProgress(true)
+    setLastAIToolResult(null)
+    setLastToolName(null)
+    setLastToolResult(null)
+    try {
+      if (toolName === 'get_dm_conversations') {
+        const limit = typeof args.limit === 'number' ? args.limit : 20
+        const res = await fetch(`/api/divine/dm-conversations?limit=${limit}`)
+        const data = await res.json().catch(() => ({}))
+        if (data.error && !res.ok) {
+          setLastAIToolResult(data.error)
+          return
+        }
+        setLastToolName(toolName)
+        setLastToolResult(data)
+        setLastAIToolResult(`${(data.conversations ?? []).length} conversations loaded.`)
+      } else if (toolName === 'get_dm_thread') {
+        const fanId = args.fanId
+        if (!fanId) { setLastAIToolResult('fanId required'); return }
+        const res = await fetch('/api/divine/dm-thread', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fanId }) })
+        const data = await res.json().catch(() => ({}))
+        if (data.error && !res.ok) {
+          setLastAIToolResult(data.error)
+          return
+        }
+        setLastToolName(toolName)
+        setLastToolResult(data)
+        setLastAIToolResult(`Thread: ${(data.thread ?? []).length} messages.`)
+      } else if (toolName === 'get_reply_suggestions') {
+        const fanId = args.fanId
+        if (!fanId) { setLastAIToolResult('fanId required'); return }
+        const res = await fetch('/api/divine/dm-reply-suggestions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fanId }) })
+        const data = await res.json().catch(() => ({}))
+        if (data.error && !res.ok) {
+          setLastAIToolResult(data.error)
+          return
+        }
+        setLastToolName(toolName)
+        setLastToolResult(data)
+        const rec = data.recommendation ? `Recommendation: ${data.recommendation}` : ''
+        setLastAIToolResult(rec || 'Circe, Venus, and Flirt suggestions ready. Pick one below.')
+      } else if (toolName === 'list_content') {
+        const limit = typeof args.limit === 'number' ? args.limit : 20
+        const status = typeof args.status === 'string' ? args.status : ''
+        const q = new URLSearchParams({ limit: String(limit) })
+        if (status) q.set('status', status)
+        const res = await fetch(`/api/divine/content-list?${q}`)
+        const data = await res.json().catch(() => ({}))
+        if (data.error && !res.ok) {
+          setLastAIToolResult(data.error)
+          return
+        }
+        setLastToolName(toolName)
+        setLastToolResult(data)
+        setLastAIToolResult(`${(data.content ?? []).length} content items.`)
+      }
+    } catch {
+      setLastAIToolResult('Request failed.')
+    } finally {
+      setIntentInProgress(false)
+    }
   }
 
   /** Run an AI Studio tool (analyze_content, generate_caption, predict_viral, get_retention_insights, get_whale_advice). Used so Divine can analyze photo, generate captions, retention/whale advice, etc. from voice only. */
@@ -673,7 +751,9 @@ export default function DivineManagerPage() {
       if (data.status === 'executed') {
         fetchIntentLog()
         if (closeAfterActionRef.current) clearTimeout(closeAfterActionRef.current)
-        closeAfterActionRef.current = setTimeout(() => endRealtimeVoice(), CLOSE_AFTER_ACTION_MS)
+        if (CLOSE_AFTER_ACTION_INTENTS.has(intentType)) {
+          closeAfterActionRef.current = setTimeout(() => endRealtimeVoice(), CLOSE_AFTER_ACTION_MS)
+        }
       }
       return data as { status: string; intent_id?: string; summary?: string; message?: string }
     } finally {
@@ -1134,12 +1214,12 @@ export default function DivineManagerPage() {
                 <Sparkles className="h-5 w-5 text-primary" />
                 Today&apos;s Plan
               </CardTitle>
-              <CardDescription>Curated tasks for today. Run the manager to generate suggestions.</CardDescription>
+              <CardDescription>Curated tasks for today. Run Divine to generate suggestions.</CardDescription>
             </div>
             {mode !== 'off' && (
               <Button variant="outline" size="sm" onClick={handleRunManager} disabled={runningBrain}>
                 {runningBrain ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {runningBrain ? 'Running…' : 'Run manager'}
+                {runningBrain ? 'Divine is running…' : 'Run Divine'}
               </Button>
             )}
           </div>
@@ -1239,65 +1319,6 @@ export default function DivineManagerPage() {
       {settings.beta_acknowledged && mode !== 'off' && (
         <Card className="divine-card">
           <CardHeader>
-            <CardTitle className="font-serif text-lg flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              Voice companion
-            </CardTitle>
-            <CardDescription>
-              Your manager can brief you by voice.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={voiceLoading}
-                onClick={() => runVoiceMode('intro')}
-              >
-                {voiceLoading && voiceMode === 'intro' ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3 w-3" />
-                )}
-                Play intro briefing
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={voiceLoading}
-                onClick={() => runVoiceMode('what_next')}
-              >
-                {voiceLoading && voiceMode === 'what_next' ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3 w-3" />
-                )}
-                What next, Divine Manager?
-              </Button>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={ongoingCoachEnabled}
-                  onCheckedChange={setOngoingCoachEnabled}
-                  disabled={voiceLoading}
-                />
-                <span className="text-xs text-muted-foreground">
-                  Ongoing coach while this page is open
-                </span>
-              </div>
-            </div>
-            {voiceScript && (
-              <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground max-h-40 overflow-y-auto">
-                {voiceScript}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {settings.beta_acknowledged && mode !== 'off' && (
-        <Card className="divine-card">
-          <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 <CardTitle className="font-serif text-lg flex items-center gap-2">
@@ -1305,7 +1326,7 @@ export default function DivineManagerPage() {
                   Voice Control
                 </CardTitle>
                 <CardDescription>
-                  Upload a photo, then talk. Divine will analyze it, write captions, create posts, and message fans—no typing, just voice.
+                  Live briefings and voice call. Upload a photo, then talk—Divine will analyze, caption, post, and message fans.
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -1336,6 +1357,57 @@ export default function DivineManagerPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {!introBriefingPlayed && (
+              <p className="text-xs text-muted-foreground rounded-md bg-muted/50 border border-border p-2">
+                New to Divine? Play intro briefing to see what you can do, then try What next?
+              </p>
+            )}
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Voice control AI briefings (live).</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={voiceLoading}
+                  onClick={() => runVoiceMode('intro')}
+                >
+                  {voiceLoading && voiceMode === 'intro' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  Play intro briefing
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={voiceLoading}
+                  onClick={() => runVoiceMode('what_next')}
+                >
+                  {voiceLoading && voiceMode === 'what_next' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  What next?
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={ongoingCoachEnabled}
+                    onCheckedChange={setOngoingCoachEnabled}
+                    disabled={voiceLoading}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Ongoing coach while this page is open
+                  </span>
+                </div>
+              </div>
+              {voiceScript && (
+                <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground max-h-40 overflow-y-auto">
+                  {voiceScript}
+                </div>
+              )}
+            </div>
             <div className="rounded-lg border border-dashed border-border p-3 space-y-2">
               <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
                 <ImagePlus className="h-3.5 w-3.5" />
@@ -1470,7 +1542,74 @@ export default function DivineManagerPage() {
                         : JSON.stringify(lastToolResult)}
                     </div>
                   )}
-                  {!['analyze_content', 'generate_caption', 'predict_viral', 'get_retention_insights', 'get_whale_advice'].includes(lastToolName) && (
+                  {lastToolName === 'get_reply_suggestions' && (
+                    <>
+                      {lastToolResult.recommendation && (
+                        <p className="text-xs font-medium text-foreground">
+                          Recommendation: {String(lastToolResult.recommendation).toUpperCase()}
+                          {lastToolResult.recommendationReason && ` — ${String(lastToolResult.recommendationReason)}`}
+                        </p>
+                      )}
+                      {lastToolResult.scan?.insights?.length > 0 && (
+                        <p className="text-xs text-muted-foreground">Scan: {(lastToolResult.scan.insights as string[]).slice(0, 2).join('; ')}</p>
+                      )}
+                      <p className="text-[11px] text-muted-foreground mb-2">Choose a reply style while Divine reads the proposal (click to copy):</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {['circe', 'venus', 'flirt'].map((persona) => {
+                          const key = `${persona}Suggestions` as 'circeSuggestions' | 'venusSuggestions' | 'flirtSuggestions'
+                          const suggestions = (lastToolResult[key] as string[] | undefined) ?? []
+                          const label = persona === 'circe' ? 'Circe Reply' : persona === 'venus' ? 'Venus Reply' : 'Flirt Reply'
+                          const borderClass = persona === 'circe' ? 'border-circe/40' : persona === 'venus' ? 'border-gold/50' : 'border-pink-500/50'
+                          const text = suggestions[0] ?? ''
+                          return (
+                            <Button
+                              key={persona}
+                              variant="outline"
+                              size="sm"
+                              className={`text-xs h-auto py-2 flex flex-col items-stretch gap-1 text-left ${borderClass}`}
+                              onClick={() => {
+                                if (text && navigator.clipboard) navigator.clipboard.writeText(text)
+                              }}
+                            >
+                              <span className="font-medium">{label}</span>
+                              {text ? <span className="text-[10px] font-normal text-muted-foreground line-clamp-3">{text}</span> : null}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      {lastToolResult.fan && (
+                        <a href="/dashboard/messages" target="_blank" rel="noopener noreferrer" className="text-[11px] text-primary hover:underline mt-2 inline-block">Open Messages</a>
+                      )}
+                    </>
+                  )}
+                  {lastToolName === 'get_dm_conversations' && (
+                    <ul className="space-y-1 text-xs">
+                      {(lastToolResult.conversations as Array<{ username: string; fanId: string; lastMessage?: string; unreadCount?: number }> ?? []).slice(0, 15).map((c, i) => (
+                        <li key={i} className="flex justify-between gap-2">
+                          <span className="font-medium">@{c.username}</span>
+                          {c.unreadCount ? <Badge variant="secondary" className="text-[10px]">{c.unreadCount}</Badge> : null}
+                          {c.lastMessage && <span className="text-muted-foreground truncate">{String(c.lastMessage).slice(0, 40)}…</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {lastToolName === 'get_dm_thread' && (
+                    <div className="space-y-1 text-xs max-h-48 overflow-y-auto">
+                      {(lastToolResult.thread as Array<{ from: string; text: string }> ?? []).map((m, i) => (
+                        <div key={i} className={m.from === 'creator' ? 'text-right text-muted-foreground' : 'text-left'}>
+                          <span className="font-medium">{m.from}: </span>{m.text.slice(0, 120)}{m.text.length > 120 ? '…' : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {lastToolName === 'list_content' && (
+                    <ul className="space-y-1 text-xs">
+                      {(lastToolResult.content as Array<{ title: string; status: string; scheduled_at?: string }> ?? []).map((c, i) => (
+                        <li key={i}>[{c.status}] {c.title}{c.scheduled_at ? ` — ${c.scheduled_at}` : ''}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {!['analyze_content', 'generate_caption', 'predict_viral', 'get_retention_insights', 'get_whale_advice', 'get_reply_suggestions', 'get_dm_conversations', 'get_dm_thread', 'list_content'].includes(lastToolName) && (
                     <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
                       {JSON.stringify(lastToolResult, null, 2)}
                     </pre>
@@ -1561,10 +1700,10 @@ export default function DivineManagerPage() {
           <CardHeader>
             <CardTitle className="font-serif text-lg flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              Talk to your Manager
+              Ask Divine
             </CardTitle>
             <CardDescription>
-              Ask about your fans, revenue, or which tasks to prioritize. Replies use your Divine Manager setup.
+              Same Divine manager in text mode. Ask about your fans, revenue, or which tasks to prioritize.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

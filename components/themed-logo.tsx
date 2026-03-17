@@ -25,7 +25,7 @@ export function ThemedLogo({ width = 40, height = 40, className = '', priority =
 
   return (
     <Image
-      src="/favicon.png"
+      src="/icon.svg"
       alt="Circe et Venus"
       width={width}
       height={height}

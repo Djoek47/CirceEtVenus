@@ -330,7 +330,13 @@ async function runContextTool(
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ fanId }),
       })
-      const data = (await res.json().catch(() => ({}))) as { thread?: Array<{ from: string; text: string; createdAt: string }>; error?: string }
+      const data = (await res.json().catch(() => ({}))) as {
+        thread?: Array<{ from: string; text: string; createdAt: string }>
+        error?: string
+      }
+      if (res.status === 404) {
+        return data.error || `This fan's thread is no longer available on OnlyFans.`
+      }
       if (data.error || !res.ok) return data.error ?? 'Failed to fetch thread.'
       const thread = (data.thread ?? []).slice(-25).map((m) => `${m.from}: ${m.text.slice(0, 200)}`)
       return thread.length ? `Thread:\n${thread.join('\n')}` : 'No messages in thread.'

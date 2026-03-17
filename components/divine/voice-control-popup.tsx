@@ -13,6 +13,14 @@ export function VoiceControlPopup() {
   const { status, error, startVoiceCall, endVoiceCall, voiceVizRef } = voice
 
   const isActive = status === 'connected' || status === 'connecting'
+  const primaryLabel =
+    status === 'idle'
+      ? 'Idle'
+      : status === 'connecting'
+        ? 'Connecting…'
+        : status === 'connected'
+          ? 'Listening'
+          : 'Error'
 
   return (
     <div
@@ -24,26 +32,25 @@ export function VoiceControlPopup() {
         <div
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-full',
-            isActive ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground',
+            status === 'error'
+              ? 'bg-red-500/10 text-red-500'
+              : status === 'connecting'
+                ? 'bg-amber-500/10 text-amber-500'
+                : isActive
+                  ? 'bg-emerald-500/10 text-emerald-500'
+                  : 'bg-muted text-muted-foreground',
           )}
         >
           <Mic className="h-5 w-5" />
         </div>
         <div className="flex flex-col gap-0.5">
           <span className="text-xs font-medium">
-            {status === 'idle' && 'Voice control idle'}
-            {status === 'connecting' && 'Divine is connecting…'}
-            {status === 'connected' && 'Divine is listening'}
-            {status === 'error' && 'Voice error'}
+            Divine voice: {primaryLabel}
           </span>
           <span className="text-[11px] text-muted-foreground">
             You can keep browsing; call stays active.
           </span>
-          {/* Visual \"working\" signal while Divine is connected/connecting */}
-          <DivineWorkingLogo
-            working={isActive}
-            className="mt-0.5"
-          />
+          <DivineWorkingLogo working={isActive} className="mt-0.5" />
         </div>
       </div>
       <canvas

@@ -179,7 +179,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ fanId }),
                 })
-                const data = await res.json().catch(() => ({}))
+                const data = await res.json().catch(() => ({} as { error?: string; thread?: any[] }))
+                if (res.status === 404) {
+                  return (data as { error?: string }).error
+                    || `This fan's thread is no longer available on OnlyFans.`
+                }
                 if (!res.ok) {
                   const msg = (data as { error?: string }).error
                   return msg ? `Error loading thread: ${msg}` : 'Failed to load thread.'

@@ -105,6 +105,8 @@ export default function DivineManagerPage() {
   const [lastAIToolResult, setLastAIToolResult] = useState<string | null>(null)
   const [lastToolName, setLastToolName] = useState<string | null>(null)
   const [lastToolResult, setLastToolResult] = useState<Record<string, unknown> | null>(null)
+  const [captionSuggestion, setCaptionSuggestion] = useState<string>('')
+  const [captionHashtags, setCaptionHashtags] = useState<string>('')*** End Patch```} ***!
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeAfterActionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetIdleRef = useRef<(() => void) | null>(null)
@@ -759,8 +761,14 @@ export default function DivineManagerPage() {
         if (typeof r.score === 'number') {
           setLastAIToolResult(`Score ${r.score}/10. ${String(r.verdict ?? '').slice(0, 120)}`)
         } else if (r.captions && Array.isArray(r.captions)) {
-          const first = (r.captions as { text?: string }[])[0]
-          setLastAIToolResult(first?.text ? `Caption: ${first.text.slice(0, 150)}…` : 'Captions generated.')
+          const first = (r.captions as { text?: string; hashtags?: string[] }[])[0]
+          if (first?.text) {
+            setCaptionSuggestion(first.text)
+          }
+          if (first?.hashtags && Array.isArray(first.hashtags)) {
+            setCaptionHashtags((first.hashtags as string[]).join(' '))
+          }
+          setLastAIToolResult('Caption ready in suggestion box.')
         } else if (typeof r.viralScore === 'number') {
           setLastAIToolResult(`Viral score ${r.viralScore}/100. ${String(r.content ?? '').slice(0, 100)}`)
         } else if (typeof r.content === 'string') {
@@ -1511,6 +1519,28 @@ export default function DivineManagerPage() {
                 </div>
               )}
             </div>
+          {captionSuggestion && (
+            <Card className="border-border bg-muted/30">
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="text-sm font-medium">Caption suggestion</CardTitle>
+              </CardHeader>
+              <CardContent className="py-2 px-3 space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  Divine&apos;s suggested caption is editable. Changes here will be used when you publish.
+                </p>
+                <textarea
+                  className="w-full min-h-[72px] resize-y rounded-md border border-border bg-background/60 px-2 py-1 text-xs text-foreground"
+                  value={captionSuggestion}
+                  onChange={(e) => setCaptionSuggestion(e.target.value)}
+                />
+                {captionHashtags && (
+                  <p className="text-[11px] text-muted-foreground break-words">
+                    {captionHashtags}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
             {lastToolResult !== null && lastToolName && (
               <Card className="border-border bg-muted/30">
                 <CardHeader className="py-2 px-3">

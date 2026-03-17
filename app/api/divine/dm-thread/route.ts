@@ -30,7 +30,20 @@ export async function POST(req: NextRequest) {
 
     const api = createOnlyFansAPI(connection.access_token)
     const limit = Math.min(Number(body.limit) || 50, 100)
-    const result = await api.getMessages(String(fanId), { limit })
+    let result: any
+    try {
+      result = await api.getMessages(String(fanId), { limit })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message || '' : String(e ?? '')
+      // OnlyFans may respond with a 404-style \"resource was not found\" error when a fan/thread no longer exists.
+      if (msg.toLowerCase().includes('resource was not found')) {
+        return NextResponse.json(
+          { error: 'Thread not found for this fan.' },
+          { status: 404 },
+        )
+      }
+      throw e
+    }
     const messages = (result.messages || []).sort((a: any, b: any) => {
       const ta = a?.createdAt ? new Date(a.createdAt).getTime() : 0
       const tb = b?.createdAt ? new Date(b.createdAt).getTime() : 0

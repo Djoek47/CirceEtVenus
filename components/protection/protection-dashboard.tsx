@@ -222,6 +222,9 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>DMCA Takedown Notice</DialogTitle>
+            <DialogDescription>
+              Review and send a DMCA takedown notice for this leak. You can attach proof files before sending.
+            </DialogDescription>
           </DialogHeader>
 
           {dmcaLoading ? (

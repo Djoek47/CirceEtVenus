@@ -7,10 +7,12 @@ import {
   getStats,
   executeContentPublish,
   executeCreateTask,
+  executeSendMessage,
   type MassDmParams,
   type GetStatsParams,
   type ContentPublishParams,
   type CreateTaskParams,
+  type SendMessageParams,
 } from '@/lib/divine-intent-actions'
 
 export const maxDuration = 60
@@ -48,6 +50,7 @@ interface IntentBody {
   delta?: number
   // content_publish
   content?: string
+  mediaIds?: string[]
   mediaUrls?: string[]
   scheduledFor?: string
   contentId?: string
@@ -205,6 +208,7 @@ export async function POST(req: NextRequest) {
         const params: ContentPublishParams = {
           content: body.content ?? '',
           platforms,
+          mediaIds: body.mediaIds,
           mediaUrls: body.mediaUrls,
           scheduledFor: body.scheduledFor,
           contentId: body.contentId,
@@ -231,10 +235,14 @@ export async function POST(req: NextRequest) {
         break
       }
       case 'send_message': {
-        result = {
-          success: false,
-          summary: 'Single-fan messaging via voice is not implemented yet. Use mass_dm for bulk or Messages in the app.',
+        const params: SendMessageParams = {
+          fanId: String(body.fanId ?? body.fan_id ?? ''),
+          message: String(body.message ?? '').trim(),
+          platform: body.platform === 'fansly' ? 'fansly' : 'onlyfans',
+          price: typeof body.price === 'number' ? body.price : undefined,
+          mediaIds: Array.isArray(body.mediaIds) ? body.mediaIds : undefined,
         }
+        result = await executeSendMessage(supabase, user.id, params)
         break
       }
       case 'send_notification': {
@@ -272,7 +280,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (result.success && type !== 'send_notification') {
-      const notifTitle = type === 'mass_dm' ? 'Divine: Mass DM sent' : type === 'content_publish' ? 'Divine: Content published' : type === 'create_task' ? 'Divine: Task added' : type === 'get_stats' ? 'Divine: Stats' : 'Divine Manager'
+      const notifTitle = type === 'mass_dm' ? 'Divine: Mass DM sent' : type === 'content_publish' ? 'Divine: Content published' : type === 'create_task' ? 'Divine: Task added' : type === 'get_stats' ? 'Divine: Stats' : type === 'send_message' ? 'Divine: DM sent' : 'Divine Manager'
       await insertDivineNotification(supabase, user.id, notifTitle, result.summary)
     }
 

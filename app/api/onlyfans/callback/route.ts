@@ -19,13 +19,17 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
-    let userId = clientReferenceId
-    if (!userId) {
-      const { data: { user } } = await supabase.auth.getUser()
-      userId = user?.id
-    }
+    const { data: { user } } = await supabase.auth.getUser()
+    // Always use the current session user so connection and analytics are saved to the logged-in account
+    const userId = user?.id ?? clientReferenceId
     if (!userId) {
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 })
+    }
+    if (clientReferenceId && clientReferenceId !== userId) {
+      return NextResponse.json(
+        { error: 'Session mismatch. Please refresh and try again.' },
+        { status: 403 }
+      )
     }
 
     const ownership = await assertPlatformAccountAvailable(supabase as any, {

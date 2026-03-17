@@ -27,7 +27,6 @@ export const metadata: Metadata = {
   title: 'Circe et Venus - Divine Creator Management',
   description:
     'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction. Manage fans, content, analytics with divine precision.',
-  generator: 'v0.app',
   keywords: [
     'creator management',
     'OnlyFans',

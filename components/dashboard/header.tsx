@@ -31,6 +31,7 @@ interface HeaderProps {
 
 const pageNames: Record<string, string> = {
   '/dashboard': 'Divine Dashboard',
+  '/dashboard/divine-manager': 'Divine Manager',
   '/dashboard/ai-studio': 'AI Oracle Chamber',
   '/dashboard/fans': 'Fan Management',
   '/dashboard/content': 'Cosmic Content Calendar',

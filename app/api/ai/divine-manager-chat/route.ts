@@ -395,6 +395,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}))
     const messages = (Array.isArray(body.messages) ? body.messages : []) as ChatMessage[]
+    const focusedFan = body.focusedFan as { id?: string; username?: string; name?: string } | undefined
     if (!messages.length) {
       return NextResponse.json({ error: 'messages array is required' }, { status: 400 })
     }
@@ -459,6 +460,10 @@ Avoid explicit or illegal content entirely. Use clear, practical language.
 You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification. Use them when the creator's request fits; then summarize the result. For mass_dm and content_publish the app may ask them to confirm.
 You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options for that chat. send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.`
 
+    const focusedFanLine = focusedFan?.id
+      ? `\n\nFocused DM fan (from UI): id=${focusedFan.id}, username=${focusedFan.username ?? 'unknown'}, name=${focusedFan.name ?? 'unknown'}.\nWhen using DM tools (get_dm_thread, get_reply_suggestions, send_message), prefer this fan unless the creator clearly asks for someone else.`
+      : ''
+
     const userContext = `Creator persona:
 - Tone: ${persona.tone ?? 'friendly'}
 - Flirty level: ${persona.flirtyLevel ?? 'mild'}
@@ -478,7 +483,7 @@ ${analyticsSummary}
 
 You have access to the creator's analytics: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth.
 
-Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.`
+Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.${focusedFanLine}`
 
     const history = messages.slice(-10)
     const cookie = req.headers.get('cookie') || ''

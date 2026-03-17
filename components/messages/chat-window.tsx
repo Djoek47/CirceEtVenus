@@ -18,6 +18,7 @@ import {
   DollarSign,
   MoreVertical,
   User,
+  Crown,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -26,6 +27,7 @@ import {
   Heart,
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
+import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { cn } from '@/lib/utils'
 import { stripHtml } from '@/lib/html-utils'
 import type { NormalizedChatMessage } from '@/lib/ai/message-suggestions'
@@ -133,6 +135,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [flirtKeywords, setFlirtKeywords] = useState<string>('')
   const [creatorPronouns, setCreatorPronouns] = useState<string | null>(null)
   const [creatorGenderIdentity, setCreatorGenderIdentity] = useState<string | null>(null)
+  const divinePanel = useDivinePanel()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -464,6 +467,28 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {divinePanel && (
+              <DropdownMenuItem
+                onClick={() => {
+                  divinePanel.setFocusedFan({
+                    id: String(conversation.user.id),
+                    username: conversation.user.username,
+                    name: conversation.user.name,
+                  })
+                  divinePanel.setPanelCollapsed(false)
+                  divinePanel.setPanelOpen(true)
+                }}
+              >
+                <Crown className="mr-2 h-4 w-4" />
+                Focus for Divine
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem asChild>
+              <a href="/dashboard/divine-manager" className="flex items-center">
+                <Crown className="mr-2 h-4 w-4" />
+                Open Divine Manager
+              </a>
+            </DropdownMenuItem>
             <DropdownMenuItem>
               <User className="mr-2 h-4 w-4" />
               View Profile

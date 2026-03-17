@@ -23,12 +23,22 @@ export type GetStatsParams = { period?: string; platform?: string }
 export type ContentPublishParams = {
   content: string
   platforms: string[]
+  /** OnlyFans media IDs from upload; use these when creating the post. */
+  mediaIds?: string[]
   mediaUrls?: string[]
   scheduledFor?: string
   contentId?: string
 }
 
 export type CreateTaskParams = { type: string; summary: string; payload?: Record<string, unknown> }
+
+export type SendMessageParams = {
+  fanId: string
+  message: string
+  platform?: 'onlyfans' | 'fansly'
+  price?: number
+  mediaIds?: string[]
+}
 
 const MASS_DM_MAX_RECIPIENTS_CAP = 5000
 
@@ -183,12 +193,57 @@ export async function getStats(
   return { success: true, summary, stats: { byPlatform, totalRevenue, totalFans } }
 }
 
+export async function executeSendMessage(
+  supabase: SupabaseClient,
+  userId: string,
+  params: SendMessageParams
+): Promise<{ success: boolean; summary: string }> {
+  const { fanId, message, platform = 'onlyfans', price, mediaIds } = params
+  if (!fanId || !message?.trim()) {
+    return { success: false, summary: 'fanId and message are required.' }
+  }
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token, platform_user_id')
+    .eq('user_id', userId)
+    .eq('platform', platform)
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection) {
+    return { success: false, summary: `${platform} is not connected.` }
+  }
+  try {
+    if (platform === 'onlyfans') {
+      const api = createOnlyFansAPI(connection.access_token)
+      await api.sendMessage(String(fanId), {
+        text: message.trim(),
+        price: typeof price === 'number' && price >= 0 ? price : undefined,
+        mediaFiles: Array.isArray(mediaIds) && mediaIds.length > 0 ? mediaIds : undefined,
+      })
+      return { success: true, summary: `Message sent to fan on OnlyFans.` }
+    }
+    if (platform === 'fansly') {
+      const api = createFanslyAPI()
+      const result = await api.sendMessage(connection.platform_user_id, String(fanId), {
+        text: message.trim(),
+        mediaIds: Array.isArray(mediaIds) && mediaIds.length > 0 ? mediaIds : undefined,
+      })
+      if (result?.success) return { success: true, summary: 'Message sent to fan on Fansly.' }
+      return { success: false, summary: 'Failed to send on Fansly.' }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Send failed'
+    return { success: false, summary: msg }
+  }
+  return { success: false, summary: 'Unsupported platform.' }
+}
+
 export async function executeContentPublish(
   supabase: SupabaseClient,
   userId: string,
   params: ContentPublishParams
 ): Promise<{ success: boolean; summary: string; results?: Record<string, unknown> }> {
-  const { content, platforms, mediaUrls, scheduledFor, contentId } = params
+  const { content, platforms, mediaIds, mediaUrls, scheduledFor, contentId } = params
   if (!content?.trim() || !platforms?.length) {
     return { success: false, summary: 'Content and at least one platform required.' }
   }
@@ -230,7 +285,7 @@ export async function executeContentPublish(
         const api = createOnlyFansAPI(connection.access_token)
         const result = await api.createPost({
           text: content,
-          mediaFiles: mediaUrls,
+          mediaIds: mediaIds?.length ? mediaIds : undefined,
           schedule: scheduledFor ? new Date(scheduledFor).toISOString() : undefined,
         })
         results.onlyfans = {

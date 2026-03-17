@@ -11,11 +11,19 @@ import type { User } from '@supabase/supabase-js'
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
+export type FocusedFan = {
+  id: string
+  username?: string | null
+  name?: string | null
+}
+
 type DivinePanelContextValue = {
   panelOpen: boolean
   setPanelOpen: (open: boolean) => void
   panelCollapsed: boolean
   setPanelCollapsed: (collapsed: boolean) => void
+  focusedFan: FocusedFan | null
+  setFocusedFan: (fan: FocusedFan | null) => void
   chatMessages: ChatMessage[]
   setChatMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
   chatInput: string
@@ -46,6 +54,7 @@ export function DivinePanelProvider({
 }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelCollapsed, setPanelCollapsed] = useState(true)
+  const [focusedFan, setFocusedFan] = useState<FocusedFan | null>(null)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
@@ -69,6 +78,7 @@ export function DivinePanelProvider({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+          focusedFan,
         }),
       })
       if (!res.ok) throw new Error('Chat request failed')
@@ -81,7 +91,7 @@ export function DivinePanelProvider({
     } finally {
       setChatLoading(false)
     }
-  }, [chatInput, chatMessages, chatLoading])
+  }, [chatInput, chatMessages, chatLoading, focusedFan])
 
   const requestGenerate = useCallback(async () => {
     const prompt = generatePrompt.trim()
@@ -124,6 +134,8 @@ export function DivinePanelProvider({
     setPanelOpen,
     panelCollapsed,
     setPanelCollapsed,
+    focusedFan,
+    setFocusedFan,
     chatMessages,
     setChatMessages,
     chatInput,

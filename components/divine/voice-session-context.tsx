@@ -45,6 +45,35 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const IDLE_MS = 2.5 * 60 * 1000
 
+  const playCue = useCallback((kind: 'done' | 'error') => {
+    if (typeof window === 'undefined') return
+    try {
+      const AnyWindow = window as unknown as {
+        AudioContext?: typeof AudioContext
+        webkitAudioContext?: typeof AudioContext
+      }
+      const AudioCtx = AnyWindow.AudioContext || AnyWindow.webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      const isError = kind === 'error'
+      osc.type = 'sine'
+      osc.frequency.value = isError ? 440 : 880
+      gain.gain.value = 0.05
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.15)
+      osc.onended = () => {
+        gain.disconnect()
+        ctx.close().catch(() => undefined)
+      }
+    } catch {
+      // ignore audio failures
+    }
+  }, [])
+
   const endVoiceCall = useCallback(() => {
     if (idleTimeoutRef.current) {
       clearTimeout(idleTimeoutRef.current)
@@ -251,6 +280,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                     : {}
                 const summary = await runTool(item.name, args as Record<string, unknown>)
                 if (summary) {
+                  const lowerSummary = summary.toLowerCase()
+                  const isErrorSummary =
+                    lowerSummary.startsWith('error ') ||
+                    lowerSummary.startsWith('failed ') ||
+                    lowerSummary.includes('failed to ')
+                  playCue(isErrorSummary ? 'error' : 'done')
                   const eventPayload = {
                     type: 'conversation.item.create',
                     item: {
@@ -290,11 +325,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setStatus('connected')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to start voice call'
+      endVoiceCall()
       setError(msg)
       setStatus('error')
-      endVoiceCall()
+      playCue('error')
     }
-  }, [endVoiceCall, status])
+  }, [endVoiceCall, playCue, status])
 
   useEffect(() => {
     if (status !== 'connected') return

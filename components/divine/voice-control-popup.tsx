@@ -1,6 +1,7 @@
 'use client'
 
 import { useVoiceSession } from '@/components/divine/voice-session-context'
+import { DivineWorkingLogo } from '@/components/divine/divine-working-logo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Mic, PhoneOff } from 'lucide-react'
@@ -19,14 +20,16 @@ export function VoiceControlPopup() {
         'fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-all',
       )}
     >
-      <div className="flex items-center gap-2">
-        <div className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-full',
-          isActive ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
-        )}>
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-full',
+            isActive ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground',
+          )}
+        >
           <Mic className="h-5 w-5" />
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           <span className="text-xs font-medium">
             {status === 'idle' && 'Voice control idle'}
             {status === 'connecting' && 'Divine is connecting…'}
@@ -36,6 +39,11 @@ export function VoiceControlPopup() {
           <span className="text-[11px] text-muted-foreground">
             You can keep browsing; call stays active.
           </span>
+          {/* Visual \"working\" signal while Divine is connected/connecting */}
+          <DivineWorkingLogo
+            working={isActive}
+            className="mt-0.5"
+          />
         </div>
       </div>
       <canvas

@@ -31,12 +31,17 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url)
     const limit = Math.min(Number(url.searchParams.get('limit')) || 30, 50)
-    const query = (url.searchParams.get('query') || '').trim().toLowerCase()
+    const rawQuery = (url.searchParams.get('query') || '').trim()
+    const query = rawQuery.toLowerCase()
 
     const { createOnlyFansAPI } = await import('@/lib/onlyfans-api')
     const api = createOnlyFansAPI(connection.access_token)
+    const fetchLimit =
+      rawQuery.length > 0
+        ? Math.min(Math.max(limit, 50), 100)
+        : limit
     const result = await api
-      .getConversations({ limit, offset: 0 })
+      .getConversations({ limit: fetchLimit, offset: 0, query: rawQuery || undefined })
       .catch(() => ({ conversations: [], total: 0 }))
 
     let conversations = (result.conversations || []).map(

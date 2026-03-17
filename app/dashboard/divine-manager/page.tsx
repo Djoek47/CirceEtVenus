@@ -597,7 +597,11 @@ export default function DivineManagerPage() {
     try {
       if (toolName === 'get_dm_conversations') {
         const limit = typeof args.limit === 'number' ? args.limit : 20
-        const res = await fetch(`/api/divine/dm-conversations?limit=${limit}`)
+        const queryParam =
+          typeof args.query === 'string' && args.query.trim().length
+            ? `&query=${encodeURIComponent(args.query.trim())}`
+            : ''
+        const res = await fetch(`/api/divine/dm-conversations?limit=${limit}${queryParam}`)
         const data = await res.json().catch(() => ({}))
         if (data.error && !res.ok) {
           setLastAIToolResult(data.error)

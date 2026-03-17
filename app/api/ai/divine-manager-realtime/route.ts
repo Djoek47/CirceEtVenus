@@ -219,6 +219,11 @@ The creator only uploads one photo and talks to you—no typing. You manage ever
           type: 'object',
           properties: {
             limit: { type: 'number', description: 'Max conversations to return (default 20)' },
+            query: {
+              type: 'string',
+              description:
+                'Optional name or username substring to filter conversations (case-insensitive).',
+            },
           },
         },
       },

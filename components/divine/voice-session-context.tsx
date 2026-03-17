@@ -93,8 +93,93 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
       const dc = pc.createDataChannel('oai-events')
-      dc.onmessage = () => {
+      dc.onmessage = async (event) => {
         resetIdleRef.current?.()
+        try {
+          const payload = JSON.parse(event.data as string) as {
+            type?: string
+            tool_calls?: Array<{ name?: string; arguments?: string }>
+            response?: { output?: Array<{ type?: string; name?: string; arguments?: string }> }
+          }
+          const runTool = async (name: string, args: Record<string, unknown>) => {
+            if (!name) return
+            if (name === 'end_call') {
+              endVoiceCall()
+              return
+            }
+            if (name === 'get_dm_conversations') {
+              const limit = typeof args.limit === 'number' ? args.limit : 20
+              const queryParam =
+                typeof args.query === 'string' && args.query.trim().length
+                  ? `&query=${encodeURIComponent(args.query.trim())}`
+                  : ''
+              await fetch(`/api/divine/dm-conversations?limit=${limit}${queryParam}`)
+            } else if (name === 'get_dm_thread') {
+              const fanId = (args as { fanId?: unknown }).fanId
+              if (!fanId || typeof fanId !== 'string') return
+              await fetch('/api/divine/dm-thread', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fanId }),
+              })
+            } else if (name === 'get_reply_suggestions') {
+              const fanId = (args as { fanId?: unknown }).fanId
+              if (!fanId || typeof fanId !== 'string') return
+              await fetch('/api/divine/dm-reply-suggestions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fanId }),
+              })
+            } else if (name === 'list_content') {
+              const limit = typeof args.limit === 'number' ? args.limit : 20
+              const status = typeof (args as { status?: unknown }).status === 'string'
+                ? (args as { status?: string }).status
+                : ''
+              const q = new URLSearchParams({ limit: String(limit) })
+              if (status) q.set('status', status)
+              await fetch(`/api/divine/content-list?${q.toString()}`)
+            }
+          }
+          const toolCalls =
+            payload?.tool_calls ??
+            (payload as { tool_calls?: Array<{ name?: string; arguments?: string }> })?.tool_calls
+          if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+            for (const tc of toolCalls) {
+              const name = tc.name
+              const args =
+                typeof tc.arguments === 'string'
+                  ? (() => {
+                      try {
+                        return JSON.parse(tc.arguments!)
+                      } catch {
+                        return {}
+                      }
+                    })()
+                  : (tc.arguments ?? {}) as Record<string, unknown>
+              await runTool(name!, args)
+            }
+            return
+          }
+          if (payload?.type === 'response.done' && Array.isArray(payload.response?.output)) {
+            for (const item of payload.response.output) {
+              if (item?.type === 'function_call' && item.name) {
+                const args =
+                  typeof item.arguments === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(item.arguments!)
+                        } catch {
+                          return {}
+                        }
+                      })()
+                    : {}
+                await runTool(item.name, args as Record<string, unknown>)
+              }
+            }
+          }
+        } catch {
+          // ignore non-JSON or unexpected format
+        }
       }
 
       const offer = await pc.createOffer()

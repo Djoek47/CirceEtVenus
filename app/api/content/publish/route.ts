@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { executeContentPublish, type ContentPublishParams } from '@/lib/divine-intent-actions'
 import type { DivinePostDraft } from '@/lib/divine/post-types'
+import { validateOnlyFansPost } from '@/lib/onlyfans-validation'
 
 // POST: Publish content to selected platforms (shared with Divine Manager)
 export async function POST(request: NextRequest) {
@@ -26,13 +27,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const divineBody = body as DivinePostDraft
+
+    // Basic OnlyFans-specific validation when onlyfans is among platforms
+    if (platforms.includes('onlyfans')) {
+      const postError = validateOnlyFansPost({
+        text,
+        mediaIds: divineBody.mediaIds,
+        scheduledDate: divineBody.scheduledFor,
+      })
+      if (postError) {
+        return NextResponse.json({ error: postError }, { status: 400 })
+      }
+    }
+
     const params: ContentPublishParams = {
       content: text,
       platforms,
-      mediaIds: (body as DivinePostDraft).mediaIds,
-      mediaUrls: (body as DivinePostDraft).mediaUrls,
-      scheduledFor: (body as DivinePostDraft).scheduledFor,
-      contentId: (body as DivinePostDraft).contentId,
+      mediaIds: divineBody.mediaIds,
+      mediaUrls: divineBody.mediaUrls,
+      scheduledFor: divineBody.scheduledFor,
+      contentId: divineBody.contentId,
     }
 
     const result = await executeContentPublish(supabase, user.id, params)

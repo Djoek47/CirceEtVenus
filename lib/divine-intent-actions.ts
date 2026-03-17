@@ -7,6 +7,7 @@ import { createFanslyAPI } from '@/lib/fansly-api'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 import { createTask } from '@/lib/divine-manager'
 import type { DivineManagerSettingsRow } from '@/lib/divine-manager'
+import { formatOnlyFansText } from '@/lib/onlyfans-text'
 
 export type MassDmParams = {
   message: string
@@ -37,7 +38,9 @@ export type SendMessageParams = {
   message: string
   platform?: 'onlyfans' | 'fansly'
   price?: number
-  mediaIds?: string[]
+  mediaIds?: (string | number)[]
+  previews?: (string | number)[]
+  rfTag?: (string | number)[]
 }
 
 const MASS_DM_MAX_RECIPIENTS_CAP = 5000
@@ -198,9 +201,31 @@ export async function executeSendMessage(
   userId: string,
   params: SendMessageParams
 ): Promise<{ success: boolean; summary: string }> {
-  const { fanId, message, platform = 'onlyfans', price, mediaIds } = params
-  if (!fanId || !message?.trim()) {
-    return { success: false, summary: 'fanId and message are required.' }
+  const { fanId, message, platform = 'onlyfans', price, mediaIds, previews, rfTag } = params
+  const trimmed = message?.trim()
+  const hasText = typeof trimmed === 'string' && trimmed.length > 0
+  const hasMedia = Array.isArray(mediaIds) && mediaIds.length > 0
+
+  // OnlyFans rule: all paid messages must contain at least one media file
+  if (platform === 'onlyfans' && typeof price === 'number' && price > 0 && !hasMedia) {
+    return { success: false, summary: 'Paid messages on OnlyFans must include at least one media file.' }
+  }
+
+  // We still require at least text or media overall
+  if (!fanId || (!hasText && !hasMedia)) {
+    return { success: false, summary: 'fanId and either message text or media are required.' }
+  }
+
+  // previews must be subset of mediaIds if provided
+  if (platform === 'onlyfans' && Array.isArray(previews) && previews.length > 0 && hasMedia) {
+    const mediaSet = new Set(mediaIds!.map(String))
+    const invalidPreview = previews.find((p) => !mediaSet.has(String(p)))
+    if (invalidPreview !== undefined) {
+      return {
+        success: false,
+        summary: 'Preview media must also be included in media files for OnlyFans messages.',
+      }
+    }
   }
   const { data: connection } = await supabase
     .from('platform_connections')
@@ -216,9 +241,11 @@ export async function executeSendMessage(
     if (platform === 'onlyfans') {
       const api = createOnlyFansAPI(connection.access_token)
       await api.sendMessage(String(fanId), {
-        text: message.trim(),
+        text: formatOnlyFansText(trimmed || '', { size: 'default' }),
         price: typeof price === 'number' && price >= 0 ? price : undefined,
-        mediaFiles: Array.isArray(mediaIds) && mediaIds.length > 0 ? mediaIds : undefined,
+        mediaFiles: hasMedia ? mediaIds : undefined,
+        previews: Array.isArray(previews) && previews.length > 0 ? previews : undefined,
+        rfTag: Array.isArray(rfTag) && rfTag.length > 0 ? rfTag : undefined,
       })
       return { success: true, summary: `Message sent to fan on OnlyFans.` }
     }

@@ -28,15 +28,50 @@ export async function POST(request: Request) {
     api.setAccountId(connection.access_token)
 
     const body = await request.json()
-    const { text, mediaIds, price, targetLists, userIds } = body
+    const { text, mediaIds, previews, price, targetLists, userIds } = body as {
+      text?: string
+      mediaIds?: (string | number)[]
+      previews?: (string | number)[]
+      price?: number
+      targetLists?: string[]
+      userIds?: string[]
+    }
 
-    if (!text) {
-      return NextResponse.json({ error: 'Message text required' }, { status: 400 })
+    const trimmed = text?.trim() ?? ''
+    const hasText = trimmed.length > 0
+    const hasMedia = Array.isArray(mediaIds) && mediaIds.length > 0
+
+    if (!hasText && !hasMedia) {
+      return NextResponse.json(
+        { error: 'Message text or media required' },
+        { status: 400 },
+      )
+    }
+
+    // OnlyFans rule: all paid messages must contain at least one media file.
+    if (typeof price === 'number' && price > 0 && !hasMedia) {
+      return NextResponse.json(
+        { error: 'Paid messages must include at least one media file.' },
+        { status: 400 },
+      )
+    }
+
+    // previews must be subset of mediaIds if provided
+    if (Array.isArray(previews) && previews.length > 0 && hasMedia) {
+      const mediaSet = new Set(mediaIds.map((m) => String(m)))
+      const invalid = previews.find((p) => !mediaSet.has(String(p)))
+      if (invalid !== undefined) {
+        return NextResponse.json(
+          { error: 'Preview media must also be included in media files.' },
+          { status: 400 },
+        )
+      }
     }
 
     const result = await api.sendMassMessage({
-      text,
-      mediaFiles: mediaIds,
+      text: trimmed || '',
+      mediaFiles: hasMedia ? mediaIds : undefined,
+      previews: Array.isArray(previews) && previews.length > 0 ? previews : undefined,
       price,
       userLists: targetLists,
       userIds,

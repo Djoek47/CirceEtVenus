@@ -86,8 +86,9 @@ export default function NewContentPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content,
+          text: content,
           platforms,
+          contentType: contentType as 'image' | 'video' | 'text',
         }),
       })
 

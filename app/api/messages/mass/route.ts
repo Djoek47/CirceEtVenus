@@ -6,7 +6,8 @@ import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 interface MassMessageRequest {
   message: string
   platforms: string[]
-  mediaIds?: string[]
+  mediaIds?: (string | number)[]
+  previews?: (string | number)[]
   price?: number
   filter?: 'all' | 'active' | 'expired' | 'renewing'
 }
@@ -22,11 +23,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body: MassMessageRequest = await request.json()
-    const { message, platforms, mediaIds, price, filter = 'all' } = body
+    const { message, platforms, mediaIds, previews, price, filter = 'all' } = body
 
-    if (!message || !platforms || platforms.length === 0) {
+    const trimmed = message?.trim()
+    const hasText = typeof trimmed === 'string' && trimmed.length > 0
+    const hasMedia = Array.isArray(mediaIds) && mediaIds.length > 0
+
+    if (!hasText && !hasMedia) {
       return NextResponse.json({ 
-        error: 'Message and at least one platform are required' 
+        error: 'Message text or media and at least one platform are required' 
       }, { status: 400 })
     }
 
@@ -69,7 +74,7 @@ export async function POST(request: NextRequest) {
           const accountId = connection.platform_user_id
 
           const result = await api.sendMassMessage(accountId, {
-            content: message,
+            content: trimmed || '',
             mediaIds,
             price,
             subscriberFilter: filter,
@@ -86,11 +91,37 @@ export async function POST(request: NextRequest) {
           totalFailed += result.failed || 0
 
         } else if (platform === 'onlyfans') {
+          // OnlyFans rule: all paid messages must contain at least one media file
+          if (typeof price === 'number' && price > 0 && !hasMedia) {
+            results.onlyfans = {
+              success: false,
+              sent: 0,
+              failed: 0,
+              error: 'Paid messages must include at least one media file.',
+            }
+            continue
+          }
+
+          // previews must be subset of mediaIds if provided
+          if (Array.isArray(previews) && previews.length > 0 && hasMedia) {
+            const mediaSet = new Set(mediaIds.map((m) => String(m)))
+            const invalid = previews.find((p) => !mediaSet.has(String(p)))
+            if (invalid !== undefined) {
+              results.onlyfans = {
+                success: false,
+                sent: 0,
+                failed: 0,
+                error: 'Preview media must also be included in media files.',
+              }
+              continue
+            }
+          }
           const api = createOnlyFansAPI(connection.access_token)
           
           const result = await api.sendMassMessage({
-            text: message,
-            mediaIds,
+            text: trimmed || '',
+            mediaFiles: mediaIds,
+            previews,
             price,
           })
 

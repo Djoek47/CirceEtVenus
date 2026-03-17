@@ -17,5 +17,20 @@ export interface DivinePostDraft {
   scheduledFor?: string
   /** Optional link to a saved content record. */
   contentId?: string
+  /** Optional OnlyFans post labels (labelIds). */
+  labelIds?: (string | number)[]
+  /** Optional OnlyFans expireDays (1,3,7,30). */
+  expireDays?: 1 | 3 | 7 | 30
+  /** Save for later instead of publishing immediately. */
+  saveForLater?: boolean
+  /** Fundraising target amount for fundraising posts. */
+  fundRaisingTargetAmount?: number
+  /** Tip presets for fundraising posts. */
+  fundRaisingTipsPresets?: number[]
+  /** Optional voting configuration for polls/quizzes. */
+  votingType?: 'poll' | 'quiz'
+  votingOptions?: string[]
+  votingDue?: 1 | 3 | 7 | 30
+  votingCorrectIndex?: number
 }
 

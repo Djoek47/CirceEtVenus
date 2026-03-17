@@ -33,6 +33,7 @@ import {
 import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff, ImagePlus } from 'lucide-react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { useVoiceSession } from '@/components/divine/voice-session-context'
+import { DivineReplyDialog } from '@/components/divine/divine-reply-dialog'
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -110,6 +111,15 @@ export default function DivineManagerPage() {
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeAfterActionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetIdleRef = useRef<(() => void) | null>(null)
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false)
+  const [replyContext, setReplyContext] = useState<{
+    fan: { id: string; username?: string | null; name?: string | null }
+    circeSuggestions: string[]
+    venusSuggestions: string[]
+    flirtSuggestions: string[]
+    recommendation?: 'circe' | 'venus' | 'flirt' | null
+    recommendationReason?: string | null
+  } | null>(null)
 
   useEffect(() => {
     sessionPhotoRef.current = sessionPhotoDataUrl
@@ -691,7 +701,37 @@ export default function DivineManagerPage() {
         }
         setLastToolName(toolName)
         setLastToolResult(data)
-        const rec = (data as { recommendation?: string }).recommendation
+        const rec = (data as { recommendation?: 'circe' | 'venus' | 'flirt' | null }).recommendation
+        const recReason = (data as { recommendationReason?: string | null }).recommendationReason
+        const fan = (data as { fan?: { id: string; username?: string | null; name?: string | null } }).fan
+        const circeSuggestions = (data as { circeSuggestions?: string[] }).circeSuggestions ?? []
+        const venusSuggestions = (data as { venusSuggestions?: string[] }).venusSuggestions ?? []
+        const flirtSuggestions = (data as { flirtSuggestions?: string[] }).flirtSuggestions ?? []
+
+        // Emit a \"dm_reply_ready\"-style event into local state so UI can open the reply dialog
+        if (fan && (circeSuggestions.length || venusSuggestions.length || flirtSuggestions.length)) {
+          setReplyContext({
+            fan: {
+              id: String(fan.id),
+              username: fan.username ?? null,
+              name: fan.name ?? null,
+            },
+            circeSuggestions,
+            venusSuggestions,
+            flirtSuggestions,
+            recommendation: rec ?? null,
+            recommendationReason: recReason ?? null,
+          })
+          setReplyDialogOpen(true)
+          // Also focus this fan in the Divine panel if available
+          if (panelCtx) {
+            panelCtx.setFocusedFan({
+              id: String(fan.id),
+              username: fan.username ?? null,
+              name: fan.name ?? null,
+            })
+          }
+        }
         setLastAIToolResult(rec || 'Circe, Venus, and Flirt suggestions ready. Pick one below.')
         const suggestions = (data as { suggestions?: string[] }).suggestions ?? []
         const firstSuggestion =
@@ -1926,6 +1966,18 @@ export default function DivineManagerPage() {
           </div>
         </CardContent>
       </Card>
+      {replyContext && (
+        <DivineReplyDialog
+          open={replyDialogOpen}
+          onOpenChange={setReplyDialogOpen}
+          fan={replyContext.fan}
+          circeSuggestions={replyContext.circeSuggestions}
+          venusSuggestions={replyContext.venusSuggestions}
+          flirtSuggestions={replyContext.flirtSuggestions}
+          recommendedPersona={replyContext.recommendation}
+          recommendationReason={replyContext.recommendationReason ?? null}
+        />
+      )}
       </div>
     </div>
   )

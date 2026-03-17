@@ -9,6 +9,23 @@ import type { NormalizedChatMessage } from '@/lib/ai/message-suggestions'
 
 type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
 
+const MAX_AI_MS = 7000
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error('AI_TIMEOUT')), ms)
+    promise
+      .then((value) => {
+        clearTimeout(id)
+        resolve(value)
+      })
+      .catch((err) => {
+        clearTimeout(id)
+        reject(err)
+      })
+  })
+}
+
 /**
  * POST: Get Scan Thread + Circe / Venus / Flirt reply suggestions for a fan, plus a recommendation.
  * Body: { fanId: string, username?: string, name?: string }
@@ -37,8 +54,8 @@ export async function POST(req: NextRequest) {
 
     const api = createOnlyFansAPI(connection.access_token)
     const [threadRes, convRes] = await Promise.all([
-      api.getMessages(String(fanId), { limit: 50 }),
-      api.getConversations({ limit: 100 }),
+      api.getMessages(String(fanId), { limit: 30 }),
+      api.getConversations({ limit: 60 }),
     ])
     const fanFromConv = (convRes.conversations || []).find((c: any) => String(c.user?.id) === String(fanId))
     const fan = {
@@ -103,12 +120,35 @@ export async function POST(req: NextRequest) {
       return null
     }
 
-    const [scanResult, circeResult, venusResult, flirtResult] = await Promise.all([
-      runMode('scan'),
-      runMode('circe'),
-      runMode('venus'),
-      runMode('flirt'),
-    ])
+    let scanResult: unknown = null
+    let circeResult: unknown = null
+    let venusResult: unknown = null
+    let flirtResult: unknown = null
+
+    try {
+      ;[scanResult, circeResult, venusResult, flirtResult] = await withTimeout(
+        Promise.all([
+          runMode('scan'),
+          runMode('circe'),
+          runMode('venus'),
+          runMode('flirt'),
+        ]),
+        MAX_AI_MS,
+      )
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AI_TIMEOUT') {
+        return NextResponse.json({
+          scan: null,
+          circeSuggestions: [],
+          venusSuggestions: [],
+          flirtSuggestions: [],
+          recommendation: null,
+          recommendationReason: 'Divine took too long to generate suggestions; please try again.',
+          fan: { id: fanId, username: fan.username, name: fan.name },
+        })
+      }
+      throw err
+    }
 
     const scan = scanResult && 'insights' in scanResult ? (scanResult as { insights?: { insights?: string[]; riskFlags?: string[]; suggestedAngles?: string[] } }).insights ?? null : null
     const circeSuggestions = (circeResult && 'suggestions' in circeResult ? (circeResult.suggestions || []) : []).map((s: { text?: string }) => s.text).filter(Boolean) as string[]

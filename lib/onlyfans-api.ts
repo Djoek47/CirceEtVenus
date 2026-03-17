@@ -522,11 +522,22 @@ class OnlyFansAPI {
     text: string
     lockedText?: boolean
     price?: number
-    mediaFiles?: string[]
+    mediaFiles?: (string | number)[]
+    previews?: (string | number)[]
+    rfTag?: (string | number)[]
   }): Promise<Message> {
+    const payload: Record<string, unknown> = {
+      text: data.text,
+    }
+    if (typeof data.lockedText === 'boolean') payload.lockedText = data.lockedText
+    if (typeof data.price === 'number') payload.price = data.price
+    if (Array.isArray(data.mediaFiles)) payload.mediaFiles = data.mediaFiles
+    if (Array.isArray(data.previews)) payload.previews = data.previews
+    if (Array.isArray(data.rfTag)) payload.rfTag = data.rfTag
+
     const response = await this.request<{ data: Message }>(`/chats/${chatId}/messages`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     })
     return response.data
   }
@@ -540,11 +551,23 @@ class OnlyFansAPI {
     userLists?: string[]
     userIds?: string[]
     price?: number
-    mediaFiles?: string[]
+    mediaFiles?: (string | number)[]
+    previews?: (string | number)[]
+    rfTag?: (string | number)[]
   }): Promise<{ sent: number; failed: number; id?: number }> {
+    const payload: Record<string, unknown> = {
+      text: data.text,
+    }
+    if (Array.isArray(data.userLists)) payload.userLists = data.userLists
+    if (Array.isArray(data.userIds)) payload.userIds = data.userIds
+    if (typeof data.price === 'number') payload.price = data.price
+    if (Array.isArray(data.mediaFiles)) payload.mediaFiles = data.mediaFiles
+    if (Array.isArray(data.previews)) payload.previews = data.previews
+    if (Array.isArray(data.rfTag)) payload.rfTag = data.rfTag
+
     const response = await this.request<{ data: any }>('/mass-messaging', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     })
     return { 
       sent: response.data?.total || 0, 
@@ -627,21 +650,52 @@ class OnlyFansAPI {
 
   async createPost(data: {
     text: string
-    mediaIds?: string[]
-    mediaFiles?: string[]
-    price?: number
+    mediaIds?: (string | number)[]
+    mediaFiles?: (string | number)[]
     schedule?: string
+    labelIds?: (string | number)[]
+    expireDays?: 1 | 3 | 7 | 30
+    saveForLater?: boolean
+    fundRaisingTargetAmount?: number
+    fundRaisingTipsPresets?: number[]
+    votingType?: 'poll' | 'quiz'
+    votingOptions?: string[]
+    votingDue?: 1 | 3 | 7 | 30
+    votingCorrectIndex?: number
   }): Promise<{ success: boolean; postId?: string; error?: string }> {
     try {
+      const payload: Record<string, unknown> = {
+        text: data.text,
+      }
+      // OnlyFans API accepts mediaFiles; allow callers to pass either mediaIds or mediaFiles.
+      const media = data.mediaFiles ?? data.mediaIds
+      if (Array.isArray(media)) payload.mediaFiles = media
+      if (data.schedule) payload.scheduledDate = data.schedule
+      if (Array.isArray(data.labelIds)) payload.labelIds = data.labelIds
+      if (typeof data.expireDays === 'number') payload.expireDays = data.expireDays
+      if (typeof data.saveForLater === 'boolean') payload.saveForLater = data.saveForLater
+      if (typeof data.fundRaisingTargetAmount === 'number') {
+        payload.fundRaisingTargetAmount = data.fundRaisingTargetAmount
+      }
+      if (Array.isArray(data.fundRaisingTipsPresets)) {
+        payload.fundRaisingTipsPresets = data.fundRaisingTipsPresets
+      }
+      if (data.votingType) {
+        payload.votingType = data.votingType
+      }
+      if (Array.isArray(data.votingOptions)) {
+        payload.votingOptions = data.votingOptions
+      }
+      if (typeof data.votingDue === 'number') {
+        payload.votingDue = data.votingDue
+      }
+      if (typeof data.votingCorrectIndex === 'number') {
+        payload.votingCorrectIndex = data.votingCorrectIndex
+      }
+
       const result = await this.request<{ id: string }>('/posts', {
         method: 'POST',
-        body: JSON.stringify({
-          text: data.text,
-          // OnlyFans API accepts mediaFiles; allow callers to pass either mediaIds or mediaFiles.
-          mediaFiles: data.mediaFiles ?? data.mediaIds,
-          price: data.price,
-          scheduledDate: data.schedule,
-        }),
+        body: JSON.stringify(payload),
       })
       return { success: true, postId: result.id }
     } catch (error) {

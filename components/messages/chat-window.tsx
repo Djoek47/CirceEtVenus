@@ -166,10 +166,12 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     })
   }
 
-  // Load creator niches/boundaries and identity for the active platform
+  // Load creator niches/boundaries and identity for the active platform (stable deps to avoid infinite loop)
+  const conversationPlatform = conversation?.platform
+  const conversationUserId = conversation?.user?.id
   useEffect(() => {
     const loadNiches = async () => {
-      if (!conversation) {
+      if (!conversationPlatform) {
         setNiches([])
         setBoundaries([])
         return
@@ -181,7 +183,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
           .from('platform_connections')
           .select('platform,niches')
           .eq('user_id', user.id)
-          .eq('platform', conversation.platform)
+          .eq('platform', conversationPlatform)
           .eq('is_connected', true)
           .maybeSingle()
         const tags = ((data as any)?.niches || []) as string[]
@@ -203,7 +205,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       }
     }
     loadNiches()
-  }, [conversation?.platform, supabase, conversation])
+  }, [conversationPlatform, conversationUserId, supabase])
 
   const buildNormalizedMessages = (): NormalizedChatMessage[] => {
     return messages.slice(-30).map((m) => ({
@@ -213,17 +215,21 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     }))
   }
 
-  // When a conversation becomes active, automatically focus that fan for Divine + voice.
+  // When a conversation becomes active, automatically focus that fan for Divine + voice (primitives-only deps to avoid infinite loop when context updates).
+  const focusedFanId = conversation?.user?.id
+  const focusedFanUsername = conversation?.user?.username
+  const focusedFanName = conversation?.user?.name
   useEffect(() => {
-    if (!conversation || !divinePanel) return
+    if (focusedFanId == null || !divinePanel) return
     const fan = {
-      id: String(conversation.user.id),
-      username: conversation.user.username,
-      name: conversation.user.name,
+      id: String(focusedFanId),
+      username: focusedFanUsername ?? undefined,
+      name: focusedFanName ?? undefined,
     }
     divinePanel.setFocusedFan(fan)
     voiceSession?.setFocusedFanForVoice(fan)
-  }, [conversation, divinePanel, voiceSession])
+    // Intentionally omit divinePanel/voiceSession from deps: their refs change when we call setFocusedFan, which would retrigger this effect and cause "Maximum update depth exceeded" (React #185).
+  }, [focusedFanId, focusedFanUsername, focusedFanName])
 
   const callSuggestionApi = async (mode: 'scan' | 'circe' | 'venus' | 'flirt') => {
     if (!conversation) return

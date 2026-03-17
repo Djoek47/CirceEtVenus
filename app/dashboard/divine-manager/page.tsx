@@ -42,6 +42,7 @@ const MODE_LABELS: Record<DivineManagerMode, string> = {
 }
 
 export default function DivineManagerPage() {
+  const panelCtx = useDivinePanel()
   const [loading, setLoading] = useState(true)
   const [settings, setSettings] = useState<DivineManagerSettingsRow | null>(null)
   const [tasks, setTasks] = useState<DivineManagerTaskRow[]>([])

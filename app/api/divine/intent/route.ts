@@ -14,6 +14,9 @@ import {
   getTopMessage,
   getMessageEngagement,
   publishQueueItem,
+  getOnlyFansNotificationSummary,
+  listOnlyFansNotifications,
+  markOnlyFansNotificationsRead,
   type MassDmParams,
   type GetStatsParams,
   type ContentPublishParams,
@@ -48,6 +51,9 @@ export type DivineIntentType =
   | 'get_top_message'
   | 'get_message_engagement'
   | 'publish_queue_item'
+  | 'get_notifications_summary'
+  | 'list_notifications'
+  | 'mark_notifications_read'
 
 interface IntentBody {
   type: DivineIntentType
@@ -92,6 +98,8 @@ interface IntentBody {
   type?: 'direct' | 'mass'
   // publish_queue_item
   queueId?: string
+  // notifications
+  tab?: string
 }
 
 async function insertDivineNotification(
@@ -370,6 +378,22 @@ export async function POST(req: NextRequest) {
         result = await publishQueueItem(supabase, user.id, params)
         break
       }
+      case 'get_notifications_summary': {
+        result = await getOnlyFansNotificationSummary(supabase, user.id)
+        break
+      }
+      case 'list_notifications': {
+        result = await listOnlyFansNotifications(supabase, user.id, {
+          limit: typeof body.limit === 'number' ? body.limit : undefined,
+          offset: typeof body.offset === 'number' ? body.offset : undefined,
+          tab: body.tab as string | undefined,
+        })
+        break
+      }
+      case 'mark_notifications_read': {
+        result = await markOnlyFansNotificationsRead(supabase, user.id)
+        break
+      }
       default:
         return NextResponse.json({ error: `Unknown intent type: ${type}` }, { status: 400 })
     }
@@ -419,6 +443,8 @@ export async function POST(req: NextRequest) {
       ...(result.buyers != null && { buyers: result.buyers }),
       ...(result.messages != null && { messages: result.messages }),
       ...(result.chart != null && { chart: result.chart }),
+      ...(result.counts != null && { counts: result.counts }),
+      ...(result.notifications != null && { notifications: result.notifications }),
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Intent execution failed'

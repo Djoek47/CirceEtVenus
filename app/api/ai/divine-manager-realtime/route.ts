@@ -369,6 +369,40 @@ The creator only uploads one photo and talks to you—no typing. You manage ever
       },
       {
         type: 'function' as const,
+        name: 'get_notifications',
+        description:
+          'Get a summary of OnlyFans notifications (new fans, tips, messages). Use when the creator asks what they missed, any new fans, or any new tips.',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_notifications',
+        description:
+          'List recent OnlyFans notifications with type, user, and text. Use when the creator wants details about what happened recently.',
+        parameters: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', description: 'Max notifications (default 25)' },
+            offset: { type: 'number' },
+            tab: { type: 'string', description: 'Optional OnlyFans notifications tab key' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'mark_notifications_read',
+        description:
+          'Mark all OnlyFans notifications as read. Use only when the creator clearly asks to clear notifications on OnlyFans.',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        type: 'function' as const,
         name: 'send_notification',
         description:
           'Create an in-app notification (reminder) for the creator. Use when you want to leave a reminder they will see in the app (e.g. "Check your OnlyFans DMs tomorrow", "Review pricing suggestions").',

@@ -250,6 +250,46 @@ const CHAT_TOOLS: Array<{
   {
     type: 'function',
     function: {
+      name: 'get_notifications',
+      description:
+        'Get a summary of OnlyFans notifications (new fans, tips, messages). Use when they ask what they missed, any new fans, or any new tips.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_notifications',
+      description:
+        'List recent OnlyFans notifications with type, user, and text. Use when they want details about what happened recently.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Max notifications (default 25)' },
+          offset: { type: 'number' },
+          tab: { type: 'string', description: 'Optional OnlyFans notifications tab key' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'mark_notifications_read',
+      description:
+        'Mark all OnlyFans notifications as read. Use only when the creator explicitly asks to clear notifications on OnlyFans.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_fans',
       description:
         'List fans from OnlyFans: active, expired, latest, top spenders, or all. Use when they ask who are my fans, top fans, expired fans, or how many subscribers.',
@@ -711,6 +751,28 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
             summary: args.summary ?? 'Task',
             payload: { type: (args as { type?: string }).type ?? 'content_idea', summary: args.summary },
           }
+        }
+        if (name === 'get_notifications') {
+          const intentRes = await runIntent('get_notifications_summary', intentBody, cookie)
+          const summary = (intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)).slice(0, 4000)
+          toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary })
+          continue
+        }
+        if (name === 'list_notifications') {
+          const intentRes = await runIntent('list_notifications', intentBody, cookie)
+          let summary = intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)
+          const r = intentRes as { notifications?: unknown[] }
+          if (Array.isArray(r.notifications) && r.notifications.length) {
+            summary += '\n' + JSON.stringify(r.notifications.slice(0, 25)).slice(0, 3000)
+          }
+          toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary.slice(0, 6000) })
+          continue
+        }
+        if (name === 'mark_notifications_read') {
+          const intentRes = await runIntent('mark_notifications_read', intentBody, cookie)
+          const summary = (intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)).slice(0, 2000)
+          toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary })
+          continue
         }
         const intentRes = await runIntent(name, intentBody, cookie)
         let summary = intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)

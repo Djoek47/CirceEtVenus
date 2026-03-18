@@ -630,3 +630,105 @@ export async function publishQueueItem(
     return { success: false, summary: msg }
   }
 }
+
+// ============ ONLYFANS NOTIFICATIONS ============
+
+export async function getOnlyFansNotificationSummary(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ success: boolean; summary: string; counts?: Record<string, unknown>; notifications?: unknown[] }> {
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI()
+    api.setAccountId(connection.access_token)
+    const counts = await api.getNotificationCounts()
+    const { notifications } = await api.listNotifications({ limit: 25 })
+
+    const tipCount = (counts as Record<string, unknown>).tips ?? (counts as Record<string, unknown>).tip ?? 0
+    const fanCount = (counts as Record<string, unknown>).fans ?? (counts as Record<string, unknown>).new_fans ?? 0
+    const messageCount =
+      (counts as Record<string, unknown>).messages ??
+      (counts as Record<string, unknown>).new_messages ??
+      0
+
+    const parts: string[] = []
+    if (fanCount) parts.push(`${fanCount} new fan${Number(fanCount) === 1 ? '' : 's'}`)
+    if (tipCount) parts.push(`${tipCount} new tip${Number(tipCount) === 1 ? '' : 's'}`)
+    if (messageCount) parts.push(`${messageCount} new message${Number(messageCount) === 1 ? '' : 's'}`)
+    const summary =
+      parts.length > 0
+        ? `OnlyFans notifications: ${parts.join(', ')}.`
+        : 'No notable new OnlyFans notifications right now.'
+
+    return { success: true, summary, counts, notifications }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch OnlyFans notifications'
+    return { success: false, summary: msg }
+  }
+}
+
+export async function listOnlyFansNotifications(
+  supabase: SupabaseClient,
+  userId: string,
+  params?: { limit?: number; offset?: number; tab?: string }
+): Promise<{ success: boolean; summary: string; notifications?: unknown[] }> {
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI()
+    api.setAccountId(connection.access_token)
+    const limit = Math.min(params?.limit ?? 25, 50)
+    const { notifications } = await api.listNotifications({
+      limit,
+      offset: params?.offset ?? 0,
+      tab: params?.tab,
+    })
+    const summary = `Fetched ${notifications.length} OnlyFans notification(s).`
+    return { success: true, summary, notifications }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to list OnlyFans notifications'
+    return { success: false, summary: msg }
+  }
+}
+
+export async function markOnlyFansNotificationsRead(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<{ success: boolean; summary: string }> {
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI()
+    api.setAccountId(connection.access_token)
+    await api.markAllNotificationsAsRead()
+    return { success: true, summary: 'Marked all OnlyFans notifications as read.' }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to mark OnlyFans notifications as read'
+    return { success: false, summary: msg }
+  }
+}

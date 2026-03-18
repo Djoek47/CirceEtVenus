@@ -81,6 +81,26 @@ interface Stats {
   }
 }
 
+interface OnlyFansNotificationCounts {
+  total: number
+  unread: number
+  [key: string]: number
+}
+
+interface OnlyFansNotification {
+  id: string
+  type: string
+  title?: string
+  text?: string
+  createdAt?: string
+  fromUser?: {
+    id?: string
+    username?: string
+    name?: string
+    avatar?: string
+  }
+}
+
 class OnlyFansAPI {
   private apiKey: string
   private accountId: string | null = null
@@ -732,6 +752,21 @@ class OnlyFansAPI {
   }
 
   /**
+   * Get media gallery for a specific chat
+   * Endpoint: GET /api/{account}/chats/{chat_id}/media
+   */
+  async getChatMedia(chatId: string, params?: {
+    limit?: number
+    offset?: number
+  }): Promise<{ data: any[] }> {
+    const queryParams = new URLSearchParams()
+    if (params?.limit != null) queryParams.set('limit', String(params.limit))
+    if (params?.offset != null) queryParams.set('offset', String(params.offset))
+    const suffix = queryParams.toString() ? `?${queryParams.toString()}` : ''
+    return this.request(`/chats/${encodeURIComponent(chatId)}/media${suffix}`)
+  }
+
+  /**
    * Send a message to a specific chat
    * Endpoint: POST /api/{account}/chats/{chat_id}/messages
    */
@@ -925,7 +960,7 @@ class OnlyFansAPI {
 
   // ============ MEDIA ============
 
-  async uploadMedia(file: File): Promise<{ id: string; url: string; type: string }> {
+  async uploadMedia(file: File): Promise<{ id: string; url?: string; type?: string }> {
     const formData = new FormData()
     formData.append('file', file)
     
@@ -947,7 +982,113 @@ class OnlyFansAPI {
       throw new Error('Failed to upload media')
     }
 
-    return response.json()
+    const json = await response.json().catch(() => null)
+
+    // Align with OnlyFans API docs: upload-media-to-the-only-fans-cdn returns
+    // { data: { id: 'ofapi_media_*', url, type, ... }, ... }. The rest of the app
+    // expects a flat { id } (and optionally url/type) object.
+    if (json && typeof json === 'object') {
+      const data = (json as any).data ?? json
+      if (data && typeof data.id === 'string') {
+        return {
+          id: data.id,
+          url: typeof data.url === 'string' ? data.url : undefined,
+          type: typeof data.type === 'string' ? data.type : undefined,
+        }
+      }
+    }
+
+    throw new Error('Unexpected upload response from OnlyFans API')
+  }
+
+  // ============ NOTIFICATIONS ============
+
+  /**
+   * Get unread notification counts - GET /api/{account}/notifications/counts
+   */
+  async getNotificationCounts(): Promise<OnlyFansNotificationCounts> {
+    const res = await this.request<any>('/notifications/counts')
+    const counts = (res?.data ?? res) as Record<string, unknown>
+    const out: OnlyFansNotificationCounts = {
+      total: Number(counts.total ?? counts.all ?? 0),
+      unread: Number(counts.unread ?? 0),
+    }
+    for (const [key, value] of Object.entries(counts)) {
+      if (typeof value === 'number' && !(key in out)) {
+        out[key] = value
+      }
+    }
+    return out
+  }
+
+  /**
+   * List notifications - GET /api/{account}/notifications
+   */
+  async listNotifications(params?: {
+    limit?: number
+    offset?: number
+    tab?: string
+  }): Promise<{ notifications: OnlyFansNotification[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    if (params?.tab) q.set('tab', params.tab)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    const res = await this.request<any>(`/notifications${suffix}`)
+    const list = Array.isArray(res?.data?.list) ? res.data.list : Array.isArray(res?.data) ? res.data : []
+    const notifications: OnlyFansNotification[] = list.map((n: any) => ({
+      id: String(n.id ?? n.notificationId ?? ''),
+      type: String(n.type ?? n.category ?? 'unknown'),
+      title: typeof n.title === 'string' ? n.title : undefined,
+      text: typeof n.text === 'string'
+        ? n.text
+        : typeof n.body === 'string'
+          ? n.body
+          : typeof n.message === 'string'
+            ? n.message
+            : undefined,
+      createdAt: typeof n.createdAt === 'string'
+        ? n.createdAt
+        : typeof n.date === 'string'
+          ? n.date
+          : typeof n.time === 'string'
+            ? n.time
+            : undefined,
+      fromUser: n.user
+        ? {
+            id: n.user.id != null ? String(n.user.id) : undefined,
+            username: n.user.username,
+            name: n.user.name ?? n.user.displayName,
+            avatar: n.user.avatar,
+          }
+        : undefined,
+    }))
+    return { notifications }
+  }
+
+  /**
+   * Mark all notifications as read - POST /api/{account}/notifications/mark-all-as-read
+   */
+  async markAllNotificationsAsRead(): Promise<{ success: boolean }> {
+    await this.request('/notifications/mark-all-as-read', { method: 'POST' })
+    return { success: true }
+  }
+
+  /**
+   * Get notification tabs order - GET /api/{account}/notifications/tabs-order
+   */
+  async getNotificationTabsOrder(): Promise<any> {
+    return this.request('/notifications/tabs-order')
+  }
+
+  /**
+   * Update notification tabs order - PUT /api/{account}/notifications/tabs-order
+   */
+  async updateNotificationTabsOrder(order: unknown): Promise<any> {
+    return this.request('/notifications/tabs-order', {
+      method: 'PUT',
+      body: JSON.stringify({ order }),
+    })
   }
 
   // ============ CLIENT SESSIONS (SDK flow) ============

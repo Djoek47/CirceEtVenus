@@ -28,12 +28,13 @@ export async function POST(request: NextRequest) {
     }
 
     const divineBody = body as DivinePostDraft
+    const mediaIds = Array.isArray(divineBody.mediaIds) ? divineBody.mediaIds : undefined
 
     // Basic OnlyFans-specific validation when onlyfans is among platforms
     if (platforms.includes('onlyfans')) {
       const postError = validateOnlyFansPost({
         text,
-        mediaIds: divineBody.mediaIds,
+        mediaIds,
         scheduledDate: divineBody.scheduledFor,
       })
       if (postError) {
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     const params: ContentPublishParams = {
       content: text,
       platforms,
-      mediaIds: divineBody.mediaIds,
+      mediaIds,
       mediaUrls: divineBody.mediaUrls,
       scheduledFor: divineBody.scheduledFor,
       contentId: divineBody.contentId,

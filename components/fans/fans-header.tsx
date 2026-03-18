@@ -78,8 +78,21 @@ export function FansHeader({
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0">
-                <Filter className="h-4 w-4" />
+              <Button variant="outline" className="gap-2 min-h-[44px] sm:min-h-0">
+                <Filter className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline truncate max-w-[140px]">
+                  {filter === 'database'
+                    ? 'From database'
+                    : filter === 'active'
+                      ? 'Live: Active'
+                      : filter === 'expired'
+                        ? 'Live: Expired'
+                        : filter === 'latest'
+                          ? 'Live: Latest'
+                          : filter === 'top'
+                            ? 'Live: Top'
+                            : 'Filter'}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

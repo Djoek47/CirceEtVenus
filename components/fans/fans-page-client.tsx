@@ -19,7 +19,10 @@ export function FansPageClient({
   hasOnlyFansConnected,
   hasFanPlatformsConnected,
 }: FansPageClientProps) {
-  const [filter, setFilter] = useState<FansFilter>('database')
+  // When OnlyFans is connected, default to live "active" so the page is live by default
+  const [filter, setFilter] = useState<FansFilter>(() =>
+    hasOnlyFansConnected ? 'active' : 'database'
+  )
   const [liveFans, setLiveFans] = useState<Fan[]>([])
   const [loadingLive, setLoadingLive] = useState(false)
 

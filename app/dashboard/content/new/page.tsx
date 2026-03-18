@@ -31,6 +31,7 @@ export default function NewContentPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [publishError, setPublishError] = useState<string | null>(null)
   const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; error?: string }> | null>(null)
   const [platforms, setPlatforms] = useState<string[]>([])
   const [connectedPlatforms, setConnectedPlatforms] = useState<ConnectedPlatform[]>([])
@@ -80,19 +81,32 @@ export default function NewContentPage() {
     
     setIsPublishing(true)
     setPublishResults(null)
+    setPublishError(null)
     
     try {
       const response = await fetch('/api/content/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: content,
+          text: content.trim(),
           platforms,
           contentType: contentType as 'image' | 'video' | 'text',
         }),
       })
 
-      const data = await response.json()
+      let data: { success?: boolean; results?: Record<string, { success: boolean; error?: string }>; error?: string }
+      try {
+        data = await response.json()
+      } catch {
+        const text = await response.text()
+        throw new Error(response.ok ? 'Invalid response from server' : text || response.statusText || 'Publish failed')
+      }
+
+      if (!response.ok) {
+        const msg = data?.error || response.statusText || `Publish failed (${response.status})`
+        setPublishError(msg)
+        return
+      }
       
       if (data.results) {
         setPublishResults(data.results)
@@ -104,6 +118,7 @@ export default function NewContentPage() {
       }
     } catch (error) {
       console.error('Failed to publish:', error)
+      setPublishError(error instanceof Error ? error.message : 'Failed to publish')
     } finally {
       setIsPublishing(false)
     }
@@ -312,6 +327,13 @@ export default function NewContentPage() {
                     )
                   })}
                 </>
+              )}
+
+              {/* Publish error */}
+              {publishError && (
+                <div className="mt-4 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {publishError}
+                </div>
               )}
 
               {/* Publish Results */}

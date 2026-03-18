@@ -19,7 +19,9 @@ type VoiceSessionContextValue = {
   startVoiceCall: () => Promise<void>
   endVoiceCall: () => void
   remoteVoiceStream: MediaStream | null
+  localVoiceStream: MediaStream | null
   voiceVizRef: React.RefObject<HTMLCanvasElement>
+  userVoiceVizRef: React.RefObject<HTMLCanvasElement>
   focusedFanForVoice: FocusedFan | null
   setFocusedFanForVoice: (fan: FocusedFan | null) => void
 }
@@ -34,7 +36,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<VoiceStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [remoteVoiceStream, setRemoteVoiceStream] = useState<MediaStream | null>(null)
+  const [localVoiceStream, setLocalVoiceStream] = useState<MediaStream | null>(null)
   const voiceVizRef = useRef<HTMLCanvasElement | null>(null)
+  const userVoiceVizRef = useRef<HTMLCanvasElement | null>(null)
   const [focusedFanForVoice, setFocusedFanForVoice] = useState<FocusedFan | null>(null)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -92,6 +96,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
     audioRef.current = null
     setRemoteVoiceStream(null)
+    setLocalVoiceStream(null)
     setStatus('idle')
     setError(null)
   }, [])
@@ -106,6 +111,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
+      setLocalVoiceStream(stream)
       const pc = new RTCPeerConnection()
       pcRef.current = pc
 
@@ -360,7 +366,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [endVoiceCall])
 
-  // Simple waveform: just depend on remoteVoiceStream and existing canvas ref
+  // Divine (remote) waveform: react to sound with lower smoothing so it fluctuates visibly
   useEffect(() => {
     if (!remoteVoiceStream || !voiceVizRef.current) return
     const canvas = voiceVizRef.current
@@ -370,8 +376,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const audioContext = new AudioContext()
       const source = audioContext.createMediaStreamSource(remoteVoiceStream)
       const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 64
-      analyser.smoothingTimeConstant = 0.7
+      analyser.fftSize = 128
+      analyser.smoothingTimeConstant = 0.35
       source.connect(analyser)
       const dataArray = new Uint8Array(analyser.frequencyBinCount)
       let rafId: number
@@ -386,14 +392,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         const gap = 2
         for (let i = 0; i < barCount; i++) {
           const v = dataArray[Math.floor((i / barCount) * dataArray.length)] ?? 0
-          const barH = Math.max(4, (v / 255) * h * 0.7)
+          const barH = Math.max(6, (v / 255) * h * 0.85)
           const x = i * barW + gap / 2
           const y = (h - barH) / 2
-          ctx.fillStyle = `rgba(168, 85, 247, ${0.4 + (v / 255) * 0.6})`
+          ctx.fillStyle = `rgba(168, 85, 247, ${0.5 + (v / 255) * 0.5})`
           ctx.beginPath()
-          // @ts-ignore roundRect not always present in lib dom types
-          ctx.roundRect(x, y, barW - gap, barH, 4)
-          ctx.fill()
+          if (typeof (ctx as unknown as { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect === 'function') {
+            (ctx as unknown as { roundRect: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect(x, y, barW - gap, barH, 4)
+            ctx.fill()
+          } else {
+            ctx.fillRect(x, y, barW - gap, barH)
+          }
         }
       }
       draw()
@@ -406,13 +415,64 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [remoteVoiceStream])
 
+  // User (local mic) waveform: same style, amber color, fluctuates with your voice
+  useEffect(() => {
+    if (!localVoiceStream || !userVoiceVizRef.current) return
+    const canvas = userVoiceVizRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    try {
+      const audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(localVoiceStream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 128
+      analyser.smoothingTimeConstant = 0.35
+      source.connect(analyser)
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      let rafId: number
+      const draw = () => {
+        rafId = requestAnimationFrame(draw)
+        analyser.getByteFrequencyData(dataArray)
+        const w = canvas.width
+        const h = canvas.height
+        ctx.clearRect(0, 0, w, h)
+        const barCount = 24
+        const barW = w / barCount
+        const gap = 2
+        for (let i = 0; i < barCount; i++) {
+          const v = dataArray[Math.floor((i / barCount) * dataArray.length)] ?? 0
+          const barH = Math.max(6, (v / 255) * h * 0.85)
+          const x = i * barW + gap / 2
+          const y = (h - barH) / 2
+          ctx.fillStyle = `rgba(245, 158, 11, ${0.5 + (v / 255) * 0.5})`
+          ctx.beginPath()
+          if (typeof (ctx as unknown as { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect === 'function') {
+            (ctx as unknown as { roundRect: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect(x, y, barW - gap, barH, 4)
+            ctx.fill()
+          } else {
+            ctx.fillRect(x, y, barW - gap, barH)
+          }
+        }
+      }
+      draw()
+      return () => {
+        cancelAnimationFrame(rafId)
+        audioContext.close()
+      }
+    } catch {
+      return undefined
+    }
+  }, [localVoiceStream])
+
   const value: VoiceSessionContextValue = {
     status,
     error,
     startVoiceCall,
     endVoiceCall,
     remoteVoiceStream,
+    localVoiceStream,
     voiceVizRef,
+    userVoiceVizRef,
     focusedFanForVoice,
     setFocusedFanForVoice,
   }

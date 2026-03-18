@@ -16,13 +16,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = (await request.json()) as DivinePostDraft | { content: string; platforms: string[] }
-    const text = 'text' in body ? body.text : body.content
-    const platforms = body.platforms
-
-    if (!text?.trim() || !platforms?.length) {
+    let body: DivinePostDraft | { content: string; platforms: string[] }
+    try {
+      const raw = await request.json()
+      if (raw == null || typeof raw !== 'object') {
+        return NextResponse.json(
+          { error: 'Request body must be a JSON object with "text" or "content" and "platforms"' },
+          { status: 400 },
+        )
+      }
+      body = raw as DivinePostDraft | { content: string; platforms: string[] }
+    } catch {
       return NextResponse.json(
-        { error: 'Content and at least one platform are required' },
+        { error: 'Request body must be valid JSON' },
+        { status: 400 },
+      )
+    }
+
+    const text = ('text' in body ? body.text : body.content) ?? ''
+    const platforms = Array.isArray(body.platforms) ? body.platforms : []
+    const hasMedia = Array.isArray((body as DivinePostDraft).mediaIds) && (body as DivinePostDraft).mediaIds!.length > 0
+
+    if (!platforms.length) {
+      return NextResponse.json(
+        { error: 'At least one platform is required' },
+        { status: 400 },
+      )
+    }
+    if (!text.trim() && !hasMedia) {
+      return NextResponse.json(
+        { error: 'Content and at least one platform are required (or media IDs for media-only posts)' },
         { status: 400 },
       )
     }

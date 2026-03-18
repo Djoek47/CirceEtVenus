@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff, ImagePlus } from 'lucide-react'
+import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Settings2, ThumbsUp, X, Pencil, Mic, PhoneOff, ImagePlus, Hourglass } from 'lucide-react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { useVoiceSession } from '@/components/divine/voice-session-context'
 import { DivineReplyDialog } from '@/components/divine/divine-reply-dialog'
@@ -95,6 +95,7 @@ export default function DivineManagerPage() {
   const realtimeError = voiceSession?.error ?? null
   const remoteVoiceStream = voiceSession?.remoteVoiceStream ?? null
   const voiceVizRef = voiceSession?.voiceVizRef ?? useRef<HTMLCanvasElement | null>(null)
+  const userVoiceVizRef = voiceSession?.userVoiceVizRef ?? useRef<HTMLCanvasElement | null>(null)
   const [intentLog, setIntentLog] = useState<{ id: string; intent_type: string; status: string; result_summary?: string; created_at: string }[]>([])
   const [intentLogLoading, setIntentLogLoading] = useState(false)
   const [pendingIntentId, setPendingIntentId] = useState<string | null>(null)
@@ -868,52 +869,6 @@ export default function DivineManagerPage() {
       setIntentInProgress(false)
     }
   }
-
-  // Voice waveform visualization (Sesame-style) when we have the remote stream
-  useEffect(() => {
-    if (!remoteVoiceStream || !voiceVizRef.current) return
-    const canvas = voiceVizRef.current
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    try {
-      const audioContext = new AudioContext()
-      const source = audioContext.createMediaStreamSource(remoteVoiceStream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 64
-      analyser.smoothingTimeConstant = 0.7
-      source.connect(analyser)
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-      let rafId: number
-      const draw = () => {
-        rafId = requestAnimationFrame(draw)
-        analyser.getByteFrequencyData(dataArray)
-        const w = canvas.width
-        const h = canvas.height
-        ctx.fillStyle = 'transparent'
-        ctx.fillRect(0, 0, w, h)
-        const barCount = 24
-        const barW = w / barCount
-        const gap = 2
-        for (let i = 0; i < barCount; i++) {
-          const v = dataArray[Math.floor((i / barCount) * dataArray.length)] ?? 0
-          const barH = Math.max(4, (v / 255) * h * 0.7)
-          const x = i * barW + gap / 2
-          const y = (h - barH) / 2
-          ctx.fillStyle = `rgba(168, 85, 247, ${0.4 + (v / 255) * 0.6})`
-          ctx.beginPath()
-          ctx.roundRect(x, y, barW - gap, barH, 4)
-          ctx.fill()
-        }
-      }
-      draw()
-      return () => {
-        cancelAnimationFrame(rafId)
-        audioContext.close()
-      }
-    } catch {
-      return undefined
-    }
-  }, [remoteVoiceStream])
 
   if (loading) {
     return (
@@ -1755,18 +1710,40 @@ export default function DivineManagerPage() {
             )}
             {realtimeStatus === 'connected' && (
               <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-gradient-to-b from-violet-500/10 to-transparent p-4">
-                <div className="relative flex items-center justify-center">
-                  <div className="absolute h-20 w-20 rounded-full bg-violet-500/30 animate-ping [animation-duration:2s]" />
-                  <div className="relative h-16 w-16 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-500 shadow-lg shadow-violet-500/30 animate-pulse [animation-duration:2s]" />
-                </div>
-                <canvas
-                  ref={voiceVizRef}
-                  width={240}
-                  height={32}
-                  className="h-8 w-full max-w-[240px] rounded-full opacity-90"
-                  style={{ background: 'transparent' }}
-                />
-                <p className="text-xs text-muted-foreground">Listening and speaking…</p>
+                {(realtimeStatus === 'connecting' || intentInProgress) ? (
+                  <>
+                    <div className="flex flex-col items-center gap-2">
+                      <Hourglass className="h-12 w-12 text-violet-500 animate-spin" style={{ animationDuration: '3s' }} />
+                      <p className="text-xs text-muted-foreground">
+                        {intentInProgress ? 'Working…' : 'Connecting…'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-full max-w-[240px] space-y-1.5">
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">You</p>
+                      <canvas
+                        ref={userVoiceVizRef}
+                        width={240}
+                        height={28}
+                        className="h-7 w-full rounded-lg opacity-90 block"
+                        style={{ background: 'rgba(0,0,0,0.05)' }}
+                      />
+                    </div>
+                    <div className="w-full max-w-[240px] space-y-1.5">
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Divine</p>
+                      <canvas
+                        ref={voiceVizRef}
+                        width={240}
+                        height={28}
+                        className="h-7 w-full rounded-lg opacity-90 block"
+                        style={{ background: 'transparent' }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Listening and speaking…</p>
+                  </>
+                )}
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">

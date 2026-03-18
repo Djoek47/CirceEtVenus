@@ -31,20 +31,37 @@ export default async function FansPage() {
 
   if (!user) return null
 
-  const [{ data: rows }, { data: connections }] = await Promise.all([
+  const [{ data: rows }, { data: connections }, { data: analytics }] = await Promise.all([
     supabase.from('fans').select('*').eq('user_id', user.id).order('total_spent', { ascending: false }),
     supabase.from('platform_connections').select('platform').eq('user_id', user.id).in('platform', ['onlyfans', 'fansly']),
+    supabase
+      .from('analytics_snapshots')
+      .select('platform,total_fans,date')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false })
+      .limit(30),
   ])
 
   const fans: Fan[] = (rows || []).map(normalizeFan)
   const hasFanPlatformsConnected = (connections?.length ?? 0) > 0
   const hasOnlyFansConnected = connections?.some((c: { platform: string }) => c.platform === 'onlyfans') ?? false
 
+  // Mirror dashboard logic: derive total fans from the latest snapshot per platform
+  const latestByPlatform = new Map<string, { platform: string; total_fans?: number | null; date: string }>()
+  ;(analytics || []).forEach((a: any) => {
+    if (!latestByPlatform.has(a.platform) || new Date(a.date) > new Date(latestByPlatform.get(a.platform)!.date)) {
+      latestByPlatform.set(a.platform, a)
+    }
+  })
+  const analyticsTotalFans =
+    Array.from(latestByPlatform.values()).reduce((sum, a) => sum + (a.total_fans || 0), 0) || 0
+
   return (
     <FansPageClient
       initialFans={fans}
       hasOnlyFansConnected={hasOnlyFansConnected}
       hasFanPlatformsConnected={hasFanPlatformsConnected}
+      analyticsTotalFans={analyticsTotalFans}
     />
   )
 }

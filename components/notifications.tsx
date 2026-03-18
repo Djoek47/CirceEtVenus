@@ -98,8 +98,8 @@ export function Notifications() {
   const [mounted, setMounted] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const supabase = createClient()
-  
-  // Load notifications from database
+
+  // Load app + platform notifications
   const loadNotifications = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -122,6 +122,9 @@ export function Notifications() {
       return
     }
     
+    // Base list from DB
+    let base: Notification[] = dbNotifications || []
+
     // If user has no notifications, create default ones
     if (!dbNotifications || dbNotifications.length === 0) {
       const defaultNotifs = getDefaultNotifications()
@@ -145,13 +148,57 @@ export function Notifications() {
       
       if (insertError) {
         console.error('Error creating notifications:', insertError)
-        setNotifications(defaultNotifs)
+        base = defaultNotifs
       } else {
-        setNotifications(inserted || defaultNotifs)
+        base = inserted || defaultNotifs
       }
-    } else {
-      setNotifications(dbNotifications)
     }
+
+    // Try to merge live OnlyFans notifications so they show up in the same list with logos.
+    // This does not persist them; it only augments the in-memory list for the current session.
+    let merged = base
+    try {
+      const res = await fetch('/api/onlyfans/notifications')
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && !json.error && Array.isArray(json.notifications)) {
+        const ofNotifs: Notification[] = json.notifications.map((n: any) => ({
+          id: `of-${String(n.id ?? n.notificationId ?? '')}`,
+          type: 'system',
+          title: typeof n.title === 'string' && n.title.trim().length
+            ? n.title
+            : typeof n.type === 'string'
+              ? n.type
+              : 'OnlyFans notification',
+          description:
+            typeof n.text === 'string' && n.text.trim().length
+              ? n.text
+              : typeof n.body === 'string' && n.body.trim().length
+                ? n.body
+                : typeof n.message === 'string'
+                  ? n.message
+                  : '',
+          read: false,
+          created_at:
+            typeof n.createdAt === 'string'
+              ? n.createdAt
+              : typeof n.date === 'string'
+                ? n.date
+                : new Date().toISOString(),
+          link: '/dashboard',
+          platform: 'onlyfans',
+          avatar_url: null,
+        }))
+        // Avoid duplicate IDs if webhooks already wrote similar notifications
+        const existingIds = new Set(base.map((n) => n.id))
+        const filteredOf = ofNotifs.filter((n) => !existingIds.has(n.id))
+        merged = [...base, ...filteredOf]
+      }
+    } catch {
+      // Ignore OnlyFans notification errors; base notifications still show.
+      merged = base
+    }
+
+    setNotifications(merged)
   }, [supabase])
   
   useEffect(() => {

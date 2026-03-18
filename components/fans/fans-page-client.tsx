@@ -12,12 +12,14 @@ interface FansPageClientProps {
   initialFans: Fan[]
   hasOnlyFansConnected: boolean
   hasFanPlatformsConnected: boolean
+  analyticsTotalFans?: number
 }
 
 export function FansPageClient({
   initialFans,
   hasOnlyFansConnected,
   hasFanPlatformsConnected,
+  analyticsTotalFans = 0,
 }: FansPageClientProps) {
   // When OnlyFans is connected, default to live "active" so the page is live by default
   const [filter, setFilter] = useState<FansFilter>(() =>
@@ -54,8 +56,13 @@ export function FansPageClient({
   }, [filter, fetchLive])
 
   const fans = filter === 'database' ? initialFans : liveFans
+
+  // Prefer analytics-derived total fans when it is higher than the concrete list length.
+  // This keeps the Fans page headline in sync with the main dashboard even when the
+  // upstream API only returns aggregate counts (no per-fan breakdown) so the table is empty.
+  const derivedTotalFans = Math.max(analyticsTotalFans || 0, fans.length)
   const stats = {
-    totalFans: fans.length,
+    totalFans: derivedTotalFans,
     whales: fans.filter((f) => f.tier === 'whale' || f.tier === 'vip').length,
     totalRevenue: fans.reduce((sum, f) => sum + f.total_spent, 0),
     activeFans: fans.filter((f) => f.tier !== 'inactive').length,

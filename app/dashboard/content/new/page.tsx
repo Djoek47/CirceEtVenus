@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,10 @@ export default function NewContentPage() {
   const [contentType, setContentType] = useState('image')
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
+  const [uploadingMedia, setUploadingMedia] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [mediaIds, setMediaIds] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const supabase = createClient()
 
   // Load connected platforms
@@ -91,6 +95,9 @@ export default function NewContentPage() {
           text: content.trim(),
           platforms,
           contentType: contentType as 'image' | 'video' | 'text',
+          // When OnlyFans is selected and media has been uploaded, include mediaIds so posts
+          // are created with the correct ofapi_media_* ids on OnlyFans.
+          mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
         }),
       })
 
@@ -130,6 +137,49 @@ export default function NewContentPage() {
         ? prev.filter(p => p !== platform)
         : [...prev, platform]
     )
+  }
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploadError(null)
+    setUploadingMedia(true)
+    try {
+      const newIds: string[] = []
+      for (let i = 0; i < files.length; i++) {
+        const formData = new FormData()
+        formData.append('file', files[i])
+        const res = await fetch('/api/onlyfans/media/upload', { method: 'POST', body: formData })
+        const data = (await res.json()) as { id?: string; error?: string }
+        if (!res.ok || !data.id) {
+          throw new Error(data.error || 'Upload failed')
+        }
+        newIds.push(data.id)
+      }
+      setMediaIds((prev) => [...prev, ...newIds])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to upload media'
+      setUploadError(msg)
+    } finally {
+      setUploadingMedia(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (uploadingMedia) return
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      void handleFilesSelected(files)
+    }
+  }
+
+  const handleBrowseClick = () => {
+    if (uploadingMedia) return
+    fileInputRef.current?.click()
   }
 
   return (
@@ -214,12 +264,41 @@ export default function NewContentPage() {
 
                 <div className="space-y-2">
                   <Label>Upload Media</Label>
-                  <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border bg-input/50">
-                    <div className="text-center">
+                  <div
+                    className="flex h-32 flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-input/50 cursor-pointer transition-colors hover:border-primary/60"
+                    onClick={handleBrowseClick}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                    onDrop={handleDrop}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,video/*"
+                      className="hidden"
+                      onChange={(e) => void handleFilesSelected(e.target.files)}
+                    />
+                    <div className="text-center px-4">
                       <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Drag and drop or click to upload
+                        {uploadingMedia ? 'Uploading media…' : 'Drag and drop or click to upload'}
                       </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Images and videos will be uploaded to OnlyFans and attached to this post when publishing.
+                      </p>
+                      {mediaIds.length > 0 && (
+                        <p className="mt-1 text-[11px] text-emerald-500">
+                          {mediaIds.length} file{mediaIds.length === 1 ? '' : 's'} attached
+                        </p>
+                      )}
+                      {uploadError && (
+                        <p className="mt-1 text-[11px] text-destructive">
+                          {uploadError}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

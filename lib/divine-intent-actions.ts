@@ -315,10 +315,15 @@ export async function executeContentPublish(
           mediaIds: mediaIds?.length ? mediaIds : undefined,
           schedule: scheduledFor ? new Date(scheduledFor).toISOString() : undefined,
         })
+        const rawError = result.error || ''
+        const friendlyError =
+          rawError.includes('Bad Request - The request could not be understood by the server')
+            ? 'OnlyFans rejected this post with a generic \"Bad Request\". This usually means the linked OnlyFans account does not have API posting enabled or the OnlyFans API partner blocked publishing for this account. Try reconnecting OnlyFans from Settings, or contact support for OnlyFans API posting access.'
+            : rawError || undefined
         results.onlyfans = {
           success: result.success,
           postId: result.postId,
-          error: result.success ? undefined : result.error,
+          error: result.success ? undefined : friendlyError,
         }
       }
     } catch (err) {

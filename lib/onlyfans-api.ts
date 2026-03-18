@@ -458,6 +458,223 @@ class OnlyFansAPI {
     return this.request(`/fans/search?q=${encodeURIComponent(query)}`)
   }
 
+  /**
+   * List active fans - GET /api/{account}/fans/active
+   * Paginated; newest first.
+   */
+  async getFansActive(params?: { limit?: number; offset?: number }): Promise<{ data: Fan[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/fans/active${suffix}`)
+  }
+
+  /**
+   * List all fans - GET /api/{account}/fans/all
+   */
+  async getFansAll(params?: { limit?: number; offset?: number }): Promise<{ data: Fan[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/fans/all${suffix}`)
+  }
+
+  /**
+   * List expired fans - GET /api/{account}/fans/expired
+   */
+  async getFansExpired(params?: { limit?: number; offset?: number }): Promise<{ data: Fan[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/fans/expired${suffix}`)
+  }
+
+  /**
+   * List latest fans - GET /api/{account}/fans/latest
+   * Filter: total | only_new | only_renewals.
+   */
+  async getFansLatest(params?: {
+    limit?: number
+    offset?: number
+    filter?: 'total' | 'only_new' | 'only_renewals'
+  }): Promise<{ data: Fan[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    if (params?.filter) q.set('filter', params.filter)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/fans/latest${suffix}`)
+  }
+
+  /**
+   * List top fans by spending - GET /api/{account}/fans/top
+   * Sort: total | subscriptions | tips | messages | posts | streams.
+   */
+  async getFansTop(params?: {
+    limit?: number
+    offset?: number
+    sort?: 'total' | 'subscriptions' | 'tips' | 'messages' | 'posts' | 'streams'
+  }): Promise<{ data: Fan[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    if (params?.sort) q.set('sort', params.sort)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/fans/top${suffix}`)
+  }
+
+  /**
+   * Get subscription history for a fan - GET /api/{account}/fans/{user_id}/subscriptions-history
+   */
+  async getSubscriptionHistory(userId: string, params?: { limit?: number; offset?: number }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/fans/${encodeURIComponent(userId)}/subscriptions-history${suffix}`)
+  }
+
+  // ============ FOLLOWING ============
+
+  /**
+   * List active followings - GET /api/{account}/following/active
+   */
+  async getFollowingActive(params?: { limit?: number; offset?: number }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/following/active${suffix}`)
+  }
+
+  /**
+   * List all followings - GET /api/{account}/following/all
+   */
+  async getFollowingAll(params?: { limit?: number; offset?: number }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/following/all${suffix}`)
+  }
+
+  /**
+   * List expired followings - GET /api/{account}/following/expired
+   */
+  async getFollowingExpired(params?: { limit?: number; offset?: number }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/following/expired${suffix}`)
+  }
+
+  // ============ QUEUE ============
+
+  /**
+   * Publish a queue/saved item - PUT /api/{account}/queue/{queue_id}/publish
+   * Sends the item immediately (saved post or mass message).
+   */
+  async publishQueueItem(queueId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.request<unknown>(`/queue/${encodeURIComponent(queueId)}/publish`, { method: 'PUT' })
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to publish queue item',
+      }
+    }
+  }
+
+  // ============ ENGAGEMENT MESSAGES ============
+
+  /**
+   * List direct messages with engagement - GET /api/{account}/engagement/messages/direct-messages
+   */
+  async getDirectMessagesEngagement(params?: {
+    limit?: number
+    offset?: number
+    startDate?: string
+    endDate?: string
+  }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    if (params?.startDate) q.set('startDate', params.startDate)
+    if (params?.endDate) q.set('endDate', params.endDate)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/engagement/messages/direct-messages${suffix}`)
+  }
+
+  /**
+   * Direct messages chart - GET /api/{account}/engagement/messages/direct-messages/chart
+   */
+  async getDirectMessagesChart(params?: { startDate?: string; endDate?: string; period?: string }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.startDate) q.set('startDate', params.startDate)
+    if (params?.endDate) q.set('endDate', params.endDate)
+    if (params?.period) q.set('period', params.period)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/engagement/messages/direct-messages/chart${suffix}`)
+  }
+
+  /**
+   * List mass messages with engagement - GET /api/{account}/engagement/messages/mass-messages
+   */
+  async getMassMessagesEngagement(params?: {
+    limit?: number
+    offset?: number
+    startDate?: string
+    endDate?: string
+  }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    if (params?.startDate) q.set('startDate', params.startDate)
+    if (params?.endDate) q.set('endDate', params.endDate)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/engagement/messages/mass-messages${suffix}`)
+  }
+
+  /**
+   * Mass messages chart - GET /api/{account}/engagement/messages/mass-messages/chart
+   */
+  async getMassMessagesChart(params?: { startDate?: string; endDate?: string; period?: string }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.startDate) q.set('startDate', params.startDate)
+    if (params?.endDate) q.set('endDate', params.endDate)
+    if (params?.period) q.set('period', params.period)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/engagement/messages/mass-messages/chart${suffix}`)
+  }
+
+  /**
+   * Top performing message by purchases - GET /api/{account}/engagement/messages/top-message
+   */
+  async getTopMessage(params?: { startDate?: string; endDate?: string; period?: string }): Promise<{ data: unknown }> {
+    const q = new URLSearchParams()
+    if (params?.startDate) q.set('startDate', params.startDate)
+    if (params?.endDate) q.set('endDate', params.endDate)
+    if (params?.period) q.set('period', params.period)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/engagement/messages/top-message${suffix}`)
+  }
+
+  /**
+   * List buyers for a specific message - GET /api/{account}/engagement/messages/{message_id}/buyers
+   */
+  async getMessageBuyers(messageId: string, params?: { limit?: number; offset?: number }): Promise<{ data: unknown[] }> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/engagement/messages/${encodeURIComponent(messageId)}/buyers${suffix}`)
+  }
+
   // ============ CHATS/MESSAGES ============
 
   /**

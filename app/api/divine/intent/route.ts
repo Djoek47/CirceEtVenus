@@ -8,17 +8,29 @@ import {
   executeContentPublish,
   executeCreateTask,
   executeSendMessage,
+  listFans,
+  getFanSubscriptionHistory,
+  listFollowings,
+  getTopMessage,
+  getMessageEngagement,
+  publishQueueItem,
   type MassDmParams,
   type GetStatsParams,
   type ContentPublishParams,
   type CreateTaskParams,
   type SendMessageParams,
+  type ListFansParams,
+  type GetFanSubscriptionHistoryParams,
+  type ListFollowingsParams,
+  type GetTopMessageParams,
+  type GetMessageEngagementParams,
+  type PublishQueueItemParams,
 } from '@/lib/divine-intent-actions'
 
 export const maxDuration = 60
 
 /** Intent types that require confirmation when voice_auto is off. */
-const RISKY_INTENTS = ['mass_dm', 'pricing_changes', 'content_publish'] as const
+const RISKY_INTENTS = ['mass_dm', 'pricing_changes', 'content_publish', 'publish_queue_item'] as const
 type RiskyIntentType = (typeof RISKY_INTENTS)[number]
 
 /** Supported intent types. */
@@ -30,6 +42,12 @@ export type DivineIntentType =
   | 'content_publish'
   | 'create_task'
   | 'send_notification'
+  | 'list_fans'
+  | 'get_fan_subscription_history'
+  | 'list_followings'
+  | 'get_top_message'
+  | 'get_message_engagement'
+  | 'publish_queue_item'
 
 interface IntentBody {
   type: DivineIntentType
@@ -61,6 +79,19 @@ interface IntentBody {
   title?: string
   description?: string
   link?: string
+  // list_fans
+  filter?: 'all' | 'active' | 'expired' | 'latest' | 'top'
+  sort?: string
+  // get_fan_subscription_history
+  userId?: string
+  // list_followings
+  // get_top_message / get_message_engagement
+  startDate?: string
+  endDate?: string
+  period?: string
+  type?: 'direct' | 'mass'
+  // publish_queue_item
+  queueId?: string
 }
 
 async function insertDivineNotification(
@@ -157,7 +188,9 @@ export async function POST(req: NextRequest) {
 
     const intentTypeForPolicy = type as RiskyIntentType
     const allowed =
-      RISKY_INTENTS.includes(intentTypeForPolicy) && isVoiceAutoAllowed(settings, intentTypeForPolicy)
+      RISKY_INTENTS.includes(intentTypeForPolicy) &&
+      intentTypeForPolicy !== 'publish_queue_item' &&
+      isVoiceAutoAllowed(settings, intentTypeForPolicy as 'mass_dm' | 'pricing_changes' | 'content_publish')
     const requiresConfirmation =
       RISKY_INTENTS.includes(intentTypeForPolicy) && !allowed && !confirm
 
@@ -253,6 +286,90 @@ export async function POST(req: NextRequest) {
         result = { success: true, summary: 'Notification added.' }
         break
       }
+      case 'list_fans': {
+        const params: ListFansParams = {
+          filter: body.filter,
+          limit: typeof body.limit === 'number' ? body.limit : undefined,
+          offset: typeof body.offset === 'number' ? body.offset : undefined,
+          sort: body.sort as ListFansParams['sort'],
+        }
+        const listResult = await listFans(supabase, user.id, params)
+        result = {
+          success: listResult.success,
+          summary: listResult.summary,
+          ...(listResult.fans != null && { fans: listResult.fans }),
+          ...(listResult.total != null && { total: listResult.total }),
+        }
+        break
+      }
+      case 'get_fan_subscription_history': {
+        const fanUserId = (body.userId ?? body.fan_id) as string | undefined
+        const params: GetFanSubscriptionHistoryParams = {
+          userId: fanUserId ?? '',
+          limit: typeof body.limit === 'number' ? body.limit : undefined,
+          offset: typeof body.offset === 'number' ? body.offset : undefined,
+        }
+        const histResult = await getFanSubscriptionHistory(supabase, user.id, params)
+        result = {
+          success: histResult.success,
+          summary: histResult.summary,
+          ...(histResult.history != null && { history: histResult.history }),
+        }
+        break
+      }
+      case 'list_followings': {
+        const params: ListFollowingsParams = {
+          filter: body.filter as ListFollowingsParams['filter'],
+          limit: typeof body.limit === 'number' ? body.limit : undefined,
+          offset: typeof body.offset === 'number' ? body.offset : undefined,
+        }
+        const followResult = await listFollowings(supabase, user.id, params)
+        result = {
+          success: followResult.success,
+          summary: followResult.summary,
+          ...(followResult.followings != null && { followings: followResult.followings }),
+        }
+        break
+      }
+      case 'get_top_message': {
+        const params: GetTopMessageParams = {
+          startDate: body.startDate as string | undefined,
+          endDate: body.endDate as string | undefined,
+          period: body.period as string | undefined,
+        }
+        const topResult = await getTopMessage(supabase, user.id, params)
+        result = {
+          success: topResult.success,
+          summary: topResult.summary,
+          ...(topResult.message != null && { message: topResult.message }),
+          ...(topResult.buyers != null && { buyers: topResult.buyers }),
+        }
+        break
+      }
+      case 'get_message_engagement': {
+        const params: GetMessageEngagementParams = {
+          type: body.type as 'direct' | 'mass' | undefined,
+          limit: typeof body.limit === 'number' ? body.limit : undefined,
+          offset: typeof body.offset === 'number' ? body.offset : undefined,
+          startDate: body.startDate as string | undefined,
+          endDate: body.endDate as string | undefined,
+        }
+        const engResult = await getMessageEngagement(supabase, user.id, params)
+        result = {
+          success: engResult.success,
+          summary: engResult.summary,
+          ...(engResult.messages != null && { messages: engResult.messages }),
+          ...(engResult.chart != null && { chart: engResult.chart }),
+        }
+        break
+      }
+      case 'publish_queue_item': {
+        const params: PublishQueueItemParams = {
+          queueId: (body.queueId ?? body.queue_id) as string,
+        }
+        result = await publishQueueItem(supabase, user.id, params)
+        break
+      }
       default:
         return NextResponse.json({ error: `Unknown intent type: ${type}` }, { status: 400 })
     }
@@ -284,6 +401,10 @@ export async function POST(req: NextRequest) {
       await insertDivineNotification(supabase, user.id, notifTitle, result.summary)
     }
 
+    if (result.success && type === 'publish_queue_item') {
+      await insertDivineNotification(supabase, user.id, 'Divine: Queue item published', result.summary)
+    }
+
     return NextResponse.json({
       status: 'executed',
       success: result.success,
@@ -291,6 +412,13 @@ export async function POST(req: NextRequest) {
       ...(result.results && { results: result.results }),
       ...(result.stats && { stats: result.stats }),
       ...(result.taskId && { task_id: result.taskId }),
+      ...(result.fans != null && { fans: result.fans }),
+      ...(result.followings != null && { followings: result.followings }),
+      ...(result.history != null && { history: result.history }),
+      ...(result.message != null && { message: result.message }),
+      ...(result.buyers != null && { buyers: result.buyers }),
+      ...(result.messages != null && { messages: result.messages }),
+      ...(result.chart != null && { chart: result.chart }),
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Intent execution failed'

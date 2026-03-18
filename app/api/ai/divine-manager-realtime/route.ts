@@ -132,11 +132,13 @@ ${analyticsTotals ? `\n${analyticsTotals}` : ''}
 
 You have access to the creator's analytics: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth.
 
+You can see and act on OnlyFans fans, followings, message engagement, and queue: list_fans (filter: active, expired, latest, top) for who are my fans, top spenders, or expired subs; get_fan_subscription_history for a specific fan's renewals; list_followings for who the creator follows; get_top_message for the best-performing message and its buyers; get_message_engagement (type direct or mass) for how DMs or mass messages performed; publish_queue_item to publish a saved post or saved mass message. Prefer the smallest set of API calls that answers the question: e.g. "who spent the most this month" → list_fans with filter=top; "how did yesterday's mass message do" → get_message_engagement with type=mass; "publish my saved post about the new set" → look up queue then publish_queue_item with that queueId.
+
 You have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. If a DM thread is not found (for example, the fan or conversation was deleted), tell the creator that the thread is no longer available and suggest picking another fan instead of treating it as a generic error. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options (the creator will see three buttons to choose while you read). send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.${focusedFanLine}
 
 Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation.
 
-The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). When they say "write a caption", "caption this", or "what should I say", use generate_caption. When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice. You can create in-app reminders with send_notification. When the creator is done or says goodbye, or after you have completed their request and they have nothing else, say a brief goodbye and call end_call to end the voice call. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
+The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). When they say "write a caption", "caption this", or "what should I say", use generate_caption. When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice or list_fans with filter=top. For "which fans spent the most", "top 10 fans", or "who are my biggest spenders" use list_fans with filter=top (and optional sort). For "how did my mass message perform" or "last mass DM stats" use get_message_engagement with type=mass. For "publish my saved post" or "send my saved mass DM" use publish_queue_item with the queue id (you may need to describe that they should confirm in the app if you do not have the queue id). You can create in-app reminders with send_notification. When the creator is done or says goodbye, or after you have completed their request and they have nothing else, say a brief goodbye and call end_call to end the voice call. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish, publish_queue_item) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
 
     const tools = [
       {
@@ -378,6 +380,101 @@ The creator only uploads one photo and talks to you—no typing. You manage ever
             link: { type: 'string', description: 'Optional app link e.g. /dashboard/divine-manager' },
           },
           required: ['title', 'description'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_fans',
+        description:
+          'List fans from OnlyFans: active, expired, latest, top spenders, or all. Use when the creator asks who are my fans, top fans, expired fans, or how many subscribers.',
+        parameters: {
+          type: 'object',
+          properties: {
+            filter: {
+              type: 'string',
+              enum: ['all', 'active', 'expired', 'latest', 'top'],
+              description: 'active (default), expired, latest, top, or all',
+            },
+            limit: { type: 'number', description: 'Max items (default 25)' },
+            offset: { type: 'number' },
+            sort: {
+              type: 'string',
+              enum: ['total', 'subscriptions', 'tips', 'messages', 'posts', 'streams'],
+              description: 'For filter=top: sort by spend category',
+            },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_fan_subscription_history',
+        description:
+          'Get subscription history for a specific fan (renewals, expirations). Use when they ask about a fan\'s subscription history.',
+        parameters: {
+          type: 'object',
+          properties: {
+            userId: { type: 'string', description: 'Fan user id from list_fans or get_dm_conversations' },
+            limit: { type: 'number' },
+            offset: { type: 'number' },
+          },
+          required: ['userId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_followings',
+        description:
+          'List who the creator follows on OnlyFans (active, expired, or all). Use when they ask about followings.',
+        parameters: {
+          type: 'object',
+          properties: {
+            filter: { type: 'string', enum: ['all', 'active', 'expired'], description: 'Default all' },
+            limit: { type: 'number' },
+            offset: { type: 'number' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_top_message',
+        description:
+          'Get the top-performing message by purchases and its buyers. Use when they ask which message did best or who bought my best message.',
+        parameters: {
+          type: 'object',
+          properties: {
+            startDate: { type: 'string' },
+            endDate: { type: 'string' },
+            period: { type: 'string' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_message_engagement',
+        description:
+          'Get direct or mass message engagement (list and chart). Use when they ask how did my messages perform or mass message stats.',
+        parameters: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['direct', 'mass'], description: 'direct or mass messages' },
+            limit: { type: 'number' },
+            offset: { type: 'number' },
+            startDate: { type: 'string' },
+            endDate: { type: 'string' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'publish_queue_item',
+        description:
+          'Publish a saved post or mass message from the queue. Use when they say publish my saved post or send my saved mass DM. May require confirmation.',
+        parameters: {
+          type: 'object',
+          properties: {
+            queueId: { type: 'string', description: 'Queue item id to publish' },
+          },
+          required: ['queueId'],
         },
       },
       {

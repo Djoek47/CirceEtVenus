@@ -372,3 +372,261 @@ export async function executeCreateTask(
     taskId: row.id,
   }
 }
+
+// ============ FANS & FOLLOWINGS (OnlyFans API) ============
+
+export type ListFansParams = {
+  filter?: 'all' | 'active' | 'expired' | 'latest' | 'top'
+  limit?: number
+  offset?: number
+  sort?: 'total' | 'subscriptions' | 'tips' | 'messages' | 'posts' | 'streams'
+}
+
+export async function listFans(
+  supabase: SupabaseClient,
+  userId: string,
+  params: ListFansParams = {}
+): Promise<{ success: boolean; summary: string; fans?: unknown[]; total?: number }> {
+  const limit = Math.min(params.limit ?? 25, 50)
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI(connection.access_token)
+    let data: { data?: unknown[] }
+    switch (params.filter ?? 'active') {
+      case 'all':
+        data = await api.getFansAll({ limit, offset: params.offset })
+        break
+      case 'expired':
+        data = await api.getFansExpired({ limit, offset: params.offset })
+        break
+      case 'latest':
+        data = await api.getFansLatest({ limit, offset: params.offset })
+        break
+      case 'top':
+        data = await api.getFansTop({ limit, offset: params.offset, sort: params.sort })
+        break
+      default:
+        data = await api.getFansActive({ limit, offset: params.offset })
+    }
+    const list = Array.isArray(data?.data) ? data.data : []
+    const summary = `Found ${list.length} fans (${params.filter ?? 'active'}).`
+    return { success: true, summary, fans: list, total: list.length }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to list fans'
+    return { success: false, summary: msg }
+  }
+}
+
+export type GetFanSubscriptionHistoryParams = { userId: string; limit?: number; offset?: number }
+
+export async function getFanSubscriptionHistory(
+  supabase: SupabaseClient,
+  userId: string,
+  params: GetFanSubscriptionHistoryParams
+): Promise<{ success: boolean; summary: string; history?: unknown[] }> {
+  const fanUserId = params.userId?.trim()
+  if (!fanUserId) {
+    return { success: false, summary: 'Fan user id is required.' }
+  }
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI(connection.access_token)
+    const result = await api.getSubscriptionHistory(fanUserId, {
+      limit: Math.min(params.limit ?? 20, 50),
+      offset: params.offset,
+    })
+    const history = Array.isArray(result?.data) ? result.data : []
+    return {
+      success: true,
+      summary: `Subscription history for fan: ${history.length} record(s).`,
+      history,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch subscription history'
+    return { success: false, summary: msg }
+  }
+}
+
+export type ListFollowingsParams = { filter?: 'all' | 'active' | 'expired'; limit?: number; offset?: number }
+
+export async function listFollowings(
+  supabase: SupabaseClient,
+  userId: string,
+  params: ListFollowingsParams = {}
+): Promise<{ success: boolean; summary: string; followings?: unknown[] }> {
+  const limit = Math.min(params.limit ?? 25, 50)
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI(connection.access_token)
+    let data: { data?: unknown[] }
+    switch (params.filter ?? 'all') {
+      case 'active':
+        data = await api.getFollowingActive({ limit, offset: params.offset })
+        break
+      case 'expired':
+        data = await api.getFollowingExpired({ limit, offset: params.offset })
+        break
+      default:
+        data = await api.getFollowingAll({ limit, offset: params.offset })
+    }
+    const list = Array.isArray(data?.data) ? data.data : []
+    return { success: true, summary: `Found ${list.length} followings (${params.filter ?? 'all'}).`, followings: list }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to list followings'
+    return { success: false, summary: msg }
+  }
+}
+
+// ============ MESSAGE ENGAGEMENT (OnlyFans API) ============
+
+export type GetTopMessageParams = { startDate?: string; endDate?: string; period?: string }
+
+export async function getTopMessage(
+  supabase: SupabaseClient,
+  userId: string,
+  params: GetTopMessageParams = {}
+): Promise<{ success: boolean; summary: string; message?: unknown; buyers?: unknown[] }> {
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI(connection.access_token)
+    const result = await api.getTopMessage({
+      startDate: params.startDate,
+      endDate: params.endDate,
+      period: params.period,
+    })
+    const message = result?.data
+    let buyers: unknown[] = []
+    if (message && typeof message === 'object' && 'id' in message && typeof (message as { id: string }).id === 'string') {
+      const buyersRes = await api.getMessageBuyers((message as { id: string }).id, { limit: 25 })
+      buyers = Array.isArray(buyersRes?.data) ? buyersRes.data : []
+    }
+    return {
+      success: true,
+      summary: message ? `Top message found with ${buyers.length} buyers.` : 'No top message in period.',
+      message,
+      buyers,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch top message'
+    return { success: false, summary: msg }
+  }
+}
+
+export type GetMessageEngagementParams = {
+  type?: 'direct' | 'mass'
+  limit?: number
+  offset?: number
+  startDate?: string
+  endDate?: string
+}
+
+export async function getMessageEngagement(
+  supabase: SupabaseClient,
+  userId: string,
+  params: GetMessageEngagementParams = {}
+): Promise<{ success: boolean; summary: string; messages?: unknown[]; chart?: unknown[] }> {
+  const limit = Math.min(params.limit ?? 10, 50)
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI(connection.access_token)
+    const isMass = params.type === 'mass'
+    const list = isMass
+      ? await api.getMassMessagesEngagement({ limit, offset: params.offset, startDate: params.startDate, endDate: params.endDate })
+      : await api.getDirectMessagesEngagement({ limit, offset: params.offset, startDate: params.startDate, endDate: params.endDate })
+    const chart = isMass
+      ? await api.getMassMessagesChart({ startDate: params.startDate, endDate: params.endDate })
+      : await api.getDirectMessagesChart({ startDate: params.startDate, endDate: params.endDate })
+    const messages = Array.isArray(list?.data) ? list.data : []
+    const chartData = Array.isArray(chart?.data) ? chart.data : []
+    return {
+      success: true,
+      summary: `${isMass ? 'Mass' : 'Direct'} messages: ${messages.length} items; chart points: ${chartData.length}.`,
+      messages,
+      chart: chartData,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch message engagement'
+    return { success: false, summary: msg }
+  }
+}
+
+// ============ QUEUE ============
+
+export type PublishQueueItemParams = { queueId: string }
+
+export async function publishQueueItem(
+  supabase: SupabaseClient,
+  userId: string,
+  params: PublishQueueItemParams
+): Promise<{ success: boolean; summary: string }> {
+  const queueId = params.queueId?.trim()
+  if (!queueId) {
+    return { success: false, summary: 'Queue item id is required.' }
+  }
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token')
+    .eq('user_id', userId)
+    .eq('platform', 'onlyfans')
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection?.access_token) {
+    return { success: false, summary: 'OnlyFans is not connected.' }
+  }
+  try {
+    const api = createOnlyFansAPI(connection.access_token)
+    const result = await api.publishQueueItem(queueId)
+    if (result.success) {
+      return { success: true, summary: 'Queue item published successfully.' }
+    }
+    return { success: false, summary: result.error ?? 'Failed to publish queue item.' }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to publish queue item'
+    return { success: false, summary: msg }
+  }
+}

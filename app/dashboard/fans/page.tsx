@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { FansTable } from '@/components/fans/fans-table'
-import { FansHeader } from '@/components/fans/fans-header'
-import { FansStats } from '@/components/fans/fans-stats'
+import { FansPageClient } from '@/components/fans/fans-page-client'
 import type { Fan } from '@/lib/types'
 
 function normalizeFan(row: Record<string, unknown>): Fan {
@@ -40,19 +38,13 @@ export default async function FansPage() {
 
   const fans: Fan[] = (rows || []).map(normalizeFan)
   const hasFanPlatformsConnected = (connections?.length ?? 0) > 0
-
-  const stats = {
-    totalFans: fans.length,
-    whales: fans.filter(f => f.tier === 'whale' || f.tier === 'vip').length,
-    totalRevenue: fans.reduce((sum, f) => sum + f.total_spent, 0),
-    activeFans: fans.filter(f => f.tier !== 'inactive').length,
-  }
+  const hasOnlyFansConnected = connections?.some((c: { platform: string }) => c.platform === 'onlyfans') ?? false
 
   return (
-    <div className="space-y-6">
-      <FansHeader />
-      <FansStats stats={stats} />
-      <FansTable fans={fans} hasFanPlatformsConnected={hasFanPlatformsConnected} />
-    </div>
+    <FansPageClient
+      initialFans={fans}
+      hasOnlyFansConnected={hasOnlyFansConnected}
+      hasFanPlatformsConnected={hasFanPlatformsConnected}
+    />
   )
 }

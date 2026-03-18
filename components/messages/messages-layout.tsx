@@ -4,14 +4,18 @@ import { useState, useEffect, useCallback } from 'react'
 import { ConversationList, type Conversation } from './conversation-list'
 import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
+import { MessageEngagementInsights } from './message-engagement-insights'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Loader2, ArrowLeft } from 'lucide-react'
+import { RefreshCw, Loader2, ArrowLeft, BarChart3, MessageSquare } from 'lucide-react'
+
+type MessagesView = 'conversations' | 'insights'
 
 interface MessagesLayoutProps {
   userId: string
 }
 
 export function MessagesLayout({ userId }: MessagesLayoutProps) {
+  const [view, setView] = useState<MessagesView>('conversations')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [loading, setLoading] = useState(true)
@@ -127,10 +131,10 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] min-h-0">
-      {/* Header: back on mobile when chat open, title, actions */}
+      {/* Header: back on mobile when chat open, title, view toggle, actions */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          {selectedConversation && (
+          {selectedConversation && view === 'conversations' && (
             <Button
               variant="ghost"
               size="icon"
@@ -143,57 +147,89 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
           )}
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
-              {selectedConversation ? (selectedConversation.user.name || selectedConversation.user.username || 'Chat') : 'Messages'}
+              {view === 'insights' ? 'Message insights' : selectedConversation ? (selectedConversation.user.name || selectedConversation.user.username || 'Chat') : 'Messages'}
             </h2>
             <p className="text-sm text-muted-foreground truncate">
-              {selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations · OnlyFans & Fansly`}
+              {view === 'insights' ? 'Direct & mass message performance' : selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations · OnlyFans & Fansly`}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-10 w-10"
-            onClick={() => loadConversations(true)}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </Button>
-          <MassMessageDialog />
+          <div className="flex rounded-md border border-border p-0.5">
+            <Button
+              variant={view === 'conversations' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => setView('conversations')}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Chats
+            </Button>
+            <Button
+              variant={view === 'insights' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => setView('insights')}
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Insights
+            </Button>
+          </div>
+          {view === 'conversations' && (
+            <>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => loadConversations(true)}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
+              <MassMessageDialog />
+            </>
+          )}
         </div>
       </div>
 
-      {/* Desktop: side-by-side list + chat */}
-      <div className="hidden md:flex flex-1 gap-4 min-h-0">
-        <ConversationList
-          conversations={conversations}
-          selectedId={selectedConversation?.user.id}
-          onSelect={(conv) => setSelectedConversation(conv)}
-        />
-        <ChatWindow
-          conversation={selectedConversation}
-          userId={userId}
-          onMessageSent={() => loadConversations(true)}
-        />
-      </div>
+      {view === 'insights' ? (
+        <div className="flex-1 min-h-0 overflow-auto">
+          <MessageEngagementInsights />
+        </div>
+      ) : (
+        <>
+          {/* Desktop: side-by-side list + chat */}
+          <div className="hidden md:flex flex-1 gap-4 min-h-0">
+            <ConversationList
+              conversations={conversations}
+              selectedId={selectedConversation?.user.id}
+              onSelect={(conv) => setSelectedConversation(conv)}
+            />
+            <ChatWindow
+              conversation={selectedConversation}
+              userId={userId}
+              onMessageSent={() => loadConversations(true)}
+            />
+          </div>
 
-      {/* Mobile: list or chat (full width) */}
-      <div className="flex flex-1 flex-col min-h-0 md:hidden">
-        {selectedConversation ? (
-          <ChatWindow
-            conversation={selectedConversation}
-            userId={userId}
-            onMessageSent={() => loadConversations(true)}
-          />
-        ) : (
-          <ConversationList
-            conversations={conversations}
-            selectedId={selectedConversation?.user.id}
-            onSelect={(conv) => setSelectedConversation(conv)}
-          />
-        )}
-      </div>
+          {/* Mobile: list or chat (full width) */}
+          <div className="flex flex-1 flex-col min-h-0 md:hidden">
+            {selectedConversation ? (
+              <ChatWindow
+                conversation={selectedConversation}
+                userId={userId}
+                onMessageSent={() => loadConversations(true)}
+              />
+            ) : (
+              <ConversationList
+                conversations={conversations}
+                selectedId={selectedConversation?.user.id}
+                onSelect={(conv) => setSelectedConversation(conv)}
+              />
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

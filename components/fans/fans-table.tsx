@@ -37,7 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { MoreHorizontal, MessageSquare, Star, Ban, Eye } from 'lucide-react'
+import { MoreHorizontal, MessageSquare, Star, Ban, Eye, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Fan } from '@/lib/types'
 import Link from 'next/link'
@@ -45,6 +45,8 @@ import Link from 'next/link'
 interface FansTableProps {
   fans: Fan[]
   hasFanPlatformsConnected?: boolean
+  loading?: boolean
+  liveFilter?: 'active' | 'expired' | 'latest' | 'top'
 }
 
 const tierColors = {
@@ -60,7 +62,12 @@ const platformColors = {
   fansly: 'bg-[#009FFF]/20 text-[#009FFF]',
 }
 
-export function FansTable({ fans, hasFanPlatformsConnected = false }: FansTableProps) {
+export function FansTable({
+  fans,
+  hasFanPlatformsConnected = false,
+  loading = false,
+  liveFilter,
+}: FansTableProps) {
   const [selectedFans, setSelectedFans] = useState<string[]>([])
 
   const toggleFan = (fanId: string) => {
@@ -74,6 +81,17 @@ export function FansTable({ fans, hasFanPlatformsConnected = false }: FansTableP
   const toggleAll = () => {
     setSelectedFans(prev =>
       prev.length === fans.length ? [] : fans.map(f => f.id)
+    )
+  }
+
+  if (loading) {
+    return (
+      <Card className="border-border bg-card">
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+          <p className="text-sm text-muted-foreground">Loading fans from OnlyFans…</p>
+        </CardContent>
+      </Card>
     )
   }
 

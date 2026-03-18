@@ -250,6 +250,113 @@ const CHAT_TOOLS: Array<{
   {
     type: 'function',
     function: {
+      name: 'list_fans',
+      description:
+        'List fans from OnlyFans: active, expired, latest, top spenders, or all. Use when they ask who are my fans, top fans, expired fans, or how many subscribers.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filter: {
+            type: 'string',
+            enum: ['all', 'active', 'expired', 'latest', 'top'],
+            description: 'active (default), expired, latest, top, or all',
+          },
+          limit: { type: 'number', description: 'Max items (default 25, max 50)' },
+          offset: { type: 'number' },
+          sort: {
+            type: 'string',
+            enum: ['total', 'subscriptions', 'tips', 'messages', 'posts', 'streams'],
+            description: 'For filter=top: sort by spend category',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_fan_subscription_history',
+      description:
+        'Get subscription history for a specific fan (renewals, expirations). Use when they ask about a fan\'s subscription history or renewals.',
+      parameters: {
+        type: 'object',
+        properties: {
+          userId: { type: 'string', description: 'Fan user id (from list_fans or get_dm_conversations)' },
+          limit: { type: 'number' },
+          offset: { type: 'number' },
+        },
+        required: ['userId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_followings',
+      description:
+        'List who the creator follows on OnlyFans (active, expired, or all). Use when they ask about followings or who they follow.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filter: { type: 'string', enum: ['all', 'active', 'expired'], description: 'Default all' },
+          limit: { type: 'number' },
+          offset: { type: 'number' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_top_message',
+      description:
+        'Get the top-performing message (by purchases) and its buyers. Use when they ask which message did best, top message, or who bought my best message.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: { type: 'string' },
+          endDate: { type: 'string' },
+          period: { type: 'string' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_message_engagement',
+      description:
+        'Get direct or mass message engagement (list + chart). Use when they ask how did my messages perform, mass message stats, or DM performance.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['direct', 'mass'], description: 'direct or mass messages' },
+          limit: { type: 'number' },
+          offset: { type: 'number' },
+          startDate: { type: 'string' },
+          endDate: { type: 'string' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'publish_queue_item',
+      description:
+        'Publish a saved post or mass message from the queue. Use when they say publish my saved post, send my saved mass DM, or publish queue item. May require confirmation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          queueId: { type: 'string', description: 'Queue item id to publish' },
+        },
+        required: ['queueId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'send_notification',
       description: 'Create an in-app notification/reminder for the creator.',
       parameters: {
@@ -478,7 +585,8 @@ You know their tasks, rules, and analytics. Speak as a manager, not as the creat
 Never claim you have already sent messages, changed prices, or executed actions. You may only recommend or suggest actions or rule changes.
 Respect the creator's boundaries, niches, and all platform safety rules.
 Avoid explicit or illegal content entirely. Use clear, practical language.
-You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification. Use them when the creator's request fits; then summarize the result. For mass_dm and content_publish the app may ask them to confirm.
+You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm.
+Fans and engagement: list_fans (filter: active, expired, latest, top) for "who are my fans", "top spenders", "expired subs"; get_fan_subscription_history for a fan's renewals; list_followings for who they follow; get_top_message for best-performing message and buyers; get_message_engagement (type direct or mass) for "how did my messages perform"; publish_queue_item to publish a saved post or saved mass message. Route: "who spent the most" → list_fans filter=top; "how did my mass message do" → get_message_engagement type=mass; "publish my saved post" → publish_queue_item.
 You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options for that chat. send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.`
 
     const focusedFanLine = focusedFan?.id
@@ -605,8 +713,41 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
           }
         }
         const intentRes = await runIntent(name, intentBody, cookie)
-        const summary = intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)
-        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary })
+        let summary = intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)
+        const dataIntent = name as string
+        if (
+          dataIntent === 'list_fans' &&
+          Array.isArray((intentRes as { fans?: unknown[] }).fans)
+        ) {
+          const fans = (intentRes as { fans: unknown[] }).fans
+          summary += '\n' + JSON.stringify(fans.slice(0, 30)).slice(0, 3000)
+        } else if (
+          dataIntent === 'get_fan_subscription_history' &&
+          Array.isArray((intentRes as { history?: unknown[] }).history)
+        ) {
+          summary += '\n' + JSON.stringify((intentRes as { history: unknown[] }).history).slice(0, 2000)
+        } else if (
+          dataIntent === 'list_followings' &&
+          Array.isArray((intentRes as { followings?: unknown[] }).followings)
+        ) {
+          summary += '\n' + JSON.stringify((intentRes as { followings: unknown[] }).followings.slice(0, 20)).slice(0, 2000)
+        } else if (dataIntent === 'get_top_message') {
+          const r = intentRes as { message?: unknown; buyers?: unknown[] }
+          if (r.message) summary += '\nMessage: ' + JSON.stringify(r.message).slice(0, 1000)
+          if (Array.isArray(r.buyers) && r.buyers.length)
+            summary += '\nBuyers: ' + JSON.stringify(r.buyers.slice(0, 15)).slice(0, 1500)
+        } else if (
+          dataIntent === 'get_message_engagement' &&
+          ((intentRes as { messages?: unknown[] }).messages != null ||
+            (intentRes as { chart?: unknown[] }).chart != null)
+        ) {
+          const r = intentRes as { messages?: unknown[]; chart?: unknown[] }
+          if (Array.isArray(r.messages) && r.messages.length)
+            summary += '\nMessages: ' + JSON.stringify(r.messages.slice(0, 10)).slice(0, 2000)
+          if (Array.isArray(r.chart) && r.chart.length)
+            summary += '\nChart: ' + JSON.stringify(r.chart.slice(-14)).slice(0, 1500)
+        }
+        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary.slice(0, 6000) })
         if (intentRes.status === 'requires_confirmation' && intentRes.intent_id) {
           pendingConfirmations.push({
             type: name,

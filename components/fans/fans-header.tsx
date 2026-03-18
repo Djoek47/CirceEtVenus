@@ -8,12 +8,26 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Plus, Search, Filter, Download, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
+import type { FansFilter } from './fans-page-client'
 
-export function FansHeader() {
+interface FansHeaderProps {
+  filter?: FansFilter
+  onFilterChange?: (f: FansFilter) => void
+  hasOnlyFansConnected?: boolean
+  loadingLive?: boolean
+}
+
+export function FansHeader({
+  filter = 'database',
+  onFilterChange,
+  hasOnlyFansConnected = false,
+  loadingLive = false,
+}: FansHeaderProps = {}) {
   const router = useRouter()
   const [refreshing, setRefreshing] = useState(false)
 
@@ -69,11 +83,26 @@ export function FansHeader() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>All Fans</DropdownMenuItem>
-              <DropdownMenuItem>Whales Only</DropdownMenuItem>
-              <DropdownMenuItem>Regular</DropdownMenuItem>
-              <DropdownMenuItem>New</DropdownMenuItem>
-              <DropdownMenuItem>Inactive</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onFilterChange?.('database')}>
+                From database
+              </DropdownMenuItem>
+              {hasOnlyFansConnected && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onFilterChange?.('active')}>
+                    Live: Active
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onFilterChange?.('expired')}>
+                    Live: Expired
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onFilterChange?.('latest')}>
+                    Live: Latest
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onFilterChange?.('top')}>
+                    Live: Top spenders
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 

@@ -278,6 +278,18 @@ export default function DivineManagerPage() {
       setIntroBriefingPlayed(true)
     }
     try {
+      // When the live Realtime voice session is connected, use realtime
+      // improvisation instead of generating a static TTS briefing.
+      if (voiceSession?.status === 'connected' && (mode === 'intro' || mode === 'what_next')) {
+        const prompt =
+          mode === 'intro'
+            ? 'Divine, answer me like you are talking to a real creator. Who are you and what do you do as the Divine Manager? Reply naturally (no script reading). Do NOT call any tools or take any actions. End by asking: "What do you want me to do next?"'
+            : 'Divine, talk to me like we are having a natural conversation. What can you do for me right now as Divine Manager? Recommend the next best thing to do today (keep it short and practical). Do NOT call any tools or take any actions. End by asking: "Anything else you want me to handle right now?"'
+
+        await voiceSession.sendBriefingQuestion(prompt)
+        return
+      }
+
       const res = await fetch('/api/ai/divine-manager-voice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -419,7 +431,10 @@ export default function DivineManagerPage() {
           const runTool = async (name: string, args: Record<string, unknown>) => {
             if (!name) return
             if (name === 'end_call') {
-              endRealtimeVoice()
+              // Don't end immediately; give the assistant a moment to finish speaking
+              // (especially the "anything else?" question) before we close the session.
+              if (closeAfterActionRef.current) clearTimeout(closeAfterActionRef.current)
+              closeAfterActionRef.current = setTimeout(() => endRealtimeVoice(), 2000)
               return
             }
             if (name === 'analyze_content' || name === 'generate_caption' || name === 'predict_viral' || name === 'get_retention_insights' || name === 'get_whale_advice') {
@@ -860,9 +875,9 @@ export default function DivineManagerPage() {
       if (data.status === 'executed') {
         fetchIntentLog()
         if (closeAfterActionRef.current) clearTimeout(closeAfterActionRef.current)
-        if (CLOSE_AFTER_ACTION_INTENTS.has(intentType)) {
-          closeAfterActionRef.current = setTimeout(() => endRealtimeVoice(), CLOSE_AFTER_ACTION_MS)
-        }
+        // Do not auto-close after actions; the model should ask if the user wants
+        // anything else before calling `end_call`. Auto-closing here can cut off
+        // the final spoken question.
       }
       return data as { status: string; intent_id?: string; summary?: string; message?: string }
     } finally {

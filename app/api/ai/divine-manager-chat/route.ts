@@ -586,14 +586,14 @@ export async function POST(req: NextRequest) {
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(40)
+      .limit(20)
 
     const { data: analytics } = await supabase
       .from('analytics_snapshots')
       .select('platform,date,fans,revenue,total_fans,new_fans')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
-      .limit(14)
+      .limit(8)
 
     const persona = settings.persona || {}
     const rules = settings.automation_rules || {}
@@ -601,7 +601,7 @@ export async function POST(req: NextRequest) {
 
     const taskSummary =
       tasks
-        ?.slice(0, 15)
+        ?.slice(0, 8)
         .map(
           (t) =>
             `[${t.status}] ${t.type}${
@@ -654,7 +654,7 @@ You have access to the creator's analytics: fans, revenue, and platform breakdow
 
 Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.${focusedFanLine}`
 
-    const history = messages.slice(-10)
+    const history = messages.slice(-6)
     const cookie = req.headers.get('cookie') || ''
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
@@ -677,8 +677,8 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
         model: OPENAI_MODEL,
         messages: openAiMessages,
         tools: CHAT_TOOLS,
-        max_tokens: 800,
-        temperature: 0.6,
+        max_tokens: 450,
+        temperature: 0.55,
       }),
     })
 
@@ -843,8 +843,8 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
       body: JSON.stringify({
         model: OPENAI_MODEL,
         messages: followUpMessages,
-        max_tokens: 600,
-        temperature: 0.6,
+        max_tokens: 350,
+        temperature: 0.55,
       }),
     })
 

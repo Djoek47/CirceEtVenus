@@ -18,6 +18,11 @@ type VoiceSessionContextValue = {
   error: string | null
   startVoiceCall: () => Promise<void>
   endVoiceCall: () => void
+  /**
+   * Inject a text "user message" into the live Realtime conversation, then request
+   * an assistant response. Used for the Divine Manager briefing buttons.
+   */
+  sendBriefingQuestion: (text: string) => Promise<void>
   remoteVoiceStream: MediaStream | null
   localVoiceStream: MediaStream | null
   voiceVizRef: React.RefObject<HTMLCanvasElement>
@@ -44,7 +49,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const oaiDataChannelRef = useRef<RTCDataChannel | null>(null)
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const endCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetIdleRef = useRef<(() => void) | null>(null)
 
   const IDLE_MS = 2.5 * 60 * 1000
@@ -83,6 +90,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       clearTimeout(idleTimeoutRef.current)
       idleTimeoutRef.current = null
     }
+    if (endCallTimeoutRef.current) {
+      clearTimeout(endCallTimeoutRef.current)
+      endCallTimeoutRef.current = null
+    }
     resetIdleRef.current = null
     const pc = pcRef.current
     if (pc) {
@@ -97,8 +108,36 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     audioRef.current = null
     setRemoteVoiceStream(null)
     setLocalVoiceStream(null)
+    oaiDataChannelRef.current = null
     setStatus('idle')
     setError(null)
+  }, [])
+
+  const sendBriefingQuestion = useCallback(async (text: string) => {
+    const dc = oaiDataChannelRef.current
+    if (!dc) {
+      throw new Error('Voice session is not connected')
+    }
+
+    // Inject a user text message into the conversation and ask the model to respond.
+    // The session already has the correct instructions/tools configured server-side.
+    dc.send(
+      JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text }],
+        },
+      }),
+    )
+
+    dc.send(
+      JSON.stringify({
+        type: 'response.create',
+        response: { modalities: ['audio'] },
+      }),
+    )
   }, [])
 
   const startVoiceCall = useCallback(async () => {
@@ -128,6 +167,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
       const dc = pc.createDataChannel('oai-events')
+      oaiDataChannelRef.current = dc
       dc.onmessage = async (event) => {
         resetIdleRef.current?.()
         try {
@@ -144,7 +184,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           ): Promise<string | null> => {
             if (!name) return null
             if (name === 'end_call') {
-              endVoiceCall()
+              // Don't end immediately; allow the assistant to finish speaking
+              // (especially the "anything else?" question) before closing.
+              if (endCallTimeoutRef.current) clearTimeout(endCallTimeoutRef.current)
+              endCallTimeoutRef.current = setTimeout(() => {
+                endVoiceCall()
+              }, 2000)
               return 'Call ended.'
             }
             if (name === 'get_dm_conversations') {
@@ -259,8 +304,30 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             payload?.tool_calls ??
             (payload as { tool_calls?: Array<{ name?: string; arguments?: string }> })?.tool_calls
           if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-            for (const tc of toolCalls) {
-              const name = tc.name
+            // Execute tools in parallel to reduce wall-time.
+            // Keep `end_call` last so we don't close the session before other tools finish.
+            const endCallToolCalls = toolCalls.filter((tc) => tc.name === 'end_call')
+            const parallelToolCalls = toolCalls.filter((tc) => tc.name && tc.name !== 'end_call')
+
+            await Promise.all(
+              parallelToolCalls.map(async (tc) => {
+                const name = tc.name
+                const args =
+                  typeof tc.arguments === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(tc.arguments!)
+                        } catch {
+                          return {}
+                        }
+                      })()
+                    : (tc.arguments ?? {}) as Record<string, unknown>
+                return runTool(name!, args)
+              }),
+            )
+
+            for (const tc of endCallToolCalls) {
+              if (!tc.name) continue
               const args =
                 typeof tc.arguments === 'string'
                   ? (() => {
@@ -271,13 +338,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                       }
                     })()
                   : (tc.arguments ?? {}) as Record<string, unknown>
-              await runTool(name!, args)
+              await runTool(tc.name, args)
             }
             return
           }
           if (payload?.type === 'response.done' && Array.isArray(payload.response?.output)) {
-            for (const item of payload.response.output) {
-              if (item?.type === 'function_call' && item.name) {
+            // Parallelize function_call tool runs and send outputs back per call_id.
+            const fnItems = payload.response.output.filter(
+              (item) => item?.type === 'function_call' && item.name,
+            ) as Array<{ id?: string; name: string; arguments?: string }>
+
+            await Promise.all(
+              fnItems.map(async (item) => {
                 const args =
                   typeof item.arguments === 'string'
                     ? (() => {
@@ -286,29 +358,31 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                         } catch {
                           return {}
                         }
-                    })()
+                      })()
                     : {}
+
                 const summary = await runTool(item.name, args as Record<string, unknown>)
-                if (summary) {
-                  const lowerSummary = summary.toLowerCase()
-                  const isErrorSummary =
-                    lowerSummary.startsWith('error ') ||
-                    lowerSummary.startsWith('failed ') ||
-                    lowerSummary.includes('failed to ')
-                  playCue(isErrorSummary ? 'error' : 'done')
-                  const eventPayload = {
-                    type: 'conversation.item.create',
-                    item: {
-                      type: 'function_call_output',
-                      // call_id links this output to the original function_call if present.
-                      call_id: item.id,
-                      output: summary,
-                    },
-                  }
-                  dc.send(JSON.stringify(eventPayload))
+                if (!summary) return
+
+                const lowerSummary = summary.toLowerCase()
+                const isErrorSummary =
+                  lowerSummary.startsWith('error ') ||
+                  lowerSummary.startsWith('failed ') ||
+                  lowerSummary.includes('failed to ')
+                playCue(isErrorSummary ? 'error' : 'done')
+
+                const eventPayload = {
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    // call_id links this output to the original function_call if present.
+                    call_id: item.id,
+                    output: summary,
+                  },
                 }
-              }
-            }
+                dc.send(JSON.stringify(eventPayload))
+              }),
+            )
           }
         } catch {
           // ignore non-JSON or unexpected format
@@ -469,6 +543,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     error,
     startVoiceCall,
     endVoiceCall,
+    sendBriefingQuestion,
     remoteVoiceStream,
     localVoiceStream,
     voiceVizRef,

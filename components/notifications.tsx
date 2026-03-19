@@ -214,7 +214,13 @@ export function Notifications() {
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     )
     
-    // Persist to database
+    // Persist to database for app/Fansly notifications only.
+    // Live OnlyFans notifications are ephemeral (ids like "of-123") and are not stored in the
+    // Supabase notifications table, which uses UUID ids. Skipping those avoids 22P02 errors.
+    if (id.startsWith('of-')) {
+      return
+    }
+
     if (userId) {
       const { error } = await supabase
         .from('notifications')

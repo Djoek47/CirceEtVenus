@@ -15,6 +15,8 @@ type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
 type VoiceSessionContextValue = {
   status: VoiceStatus
+  /** True while waiting to hang up after `end_call` (assistant audio + silence gate). */
+  closingPending: boolean
   error: string | null
   startVoiceCall: () => Promise<void>
   endVoiceCall: () => void
@@ -45,6 +47,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const voiceVizRef = useRef<HTMLCanvasElement | null>(null)
   const userVoiceVizRef = useRef<HTMLCanvasElement | null>(null)
   const [focusedFanForVoice, setFocusedFanForVoice] = useState<FocusedFan | null>(null)
+  const [closingPending, setClosingPending] = useState(false)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -52,6 +55,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const oaiDataChannelRef = useRef<RTCDataChannel | null>(null)
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const endCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const endCallRafRef = useRef<number | null>(null)
+  /** Shared with the remote waveform analyser for silence detection after `end_call`. */
+  const remoteAnalyserRef = useRef<AnalyserNode | null>(null)
   const resetIdleRef = useRef<(() => void) | null>(null)
 
   const IDLE_MS = 2.5 * 60 * 1000
@@ -94,6 +100,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       clearTimeout(endCallTimeoutRef.current)
       endCallTimeoutRef.current = null
     }
+    if (endCallRafRef.current != null) {
+      cancelAnimationFrame(endCallRafRef.current)
+      endCallRafRef.current = null
+    }
+    setClosingPending(false)
     resetIdleRef.current = null
     const pc = pcRef.current
     if (pc) {
@@ -168,6 +179,66 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
       const dc = pc.createDataChannel('oai-events')
       oaiDataChannelRef.current = dc
+
+      /** After `end_call`, wait for assistant audio to finish (min delay + remote silence). */
+      const scheduleGracefulEndCall = () => {
+        if (endCallTimeoutRef.current) {
+          clearTimeout(endCallTimeoutRef.current)
+          endCallTimeoutRef.current = null
+        }
+        if (endCallRafRef.current != null) {
+          cancelAnimationFrame(endCallRafRef.current)
+          endCallRafRef.current = null
+        }
+        setClosingPending(true)
+
+        const start = Date.now()
+        let lastLoudAt = Date.now()
+        const minMs = 1600
+        const silenceMs = 550
+        const maxMs = 14000
+        const loudThreshold = 10
+
+        const runTick = () => {
+          const elapsed = Date.now() - start
+          const analyser = remoteAnalyserRef.current
+          if (analyser) {
+            const buf = new Uint8Array(analyser.frequencyBinCount)
+            analyser.getByteFrequencyData(buf)
+            let sum = 0
+            for (let i = 0; i < buf.length; i++) sum += buf[i]
+            const avg = sum / buf.length
+            if (avg > loudThreshold) {
+              lastLoudAt = Date.now()
+            }
+          }
+
+          const minDone = elapsed >= minMs
+          const quietAfterSpeech = Date.now() - lastLoudAt >= silenceMs
+          if ((minDone && quietAfterSpeech) || elapsed >= maxMs) {
+            setClosingPending(false)
+            endVoiceCall()
+            endCallRafRef.current = null
+            return
+          }
+          endCallRafRef.current = requestAnimationFrame(runTick)
+        }
+
+        if (!remoteAnalyserRef.current) {
+          endCallTimeoutRef.current = setTimeout(() => {
+            endCallTimeoutRef.current = null
+            setClosingPending(false)
+            endVoiceCall()
+          }, 2500)
+          return
+        }
+
+        endCallTimeoutRef.current = setTimeout(() => {
+          endCallTimeoutRef.current = null
+          endCallRafRef.current = requestAnimationFrame(runTick)
+        }, 50)
+      }
+
       dc.onmessage = async (event) => {
         resetIdleRef.current?.()
         try {
@@ -184,12 +255,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           ): Promise<string | null> => {
             if (!name) return null
             if (name === 'end_call') {
-              // Don't end immediately; allow the assistant to finish speaking
-              // (especially the "anything else?" question) before closing.
-              if (endCallTimeoutRef.current) clearTimeout(endCallTimeoutRef.current)
-              endCallTimeoutRef.current = setTimeout(() => {
-                endVoiceCall()
-              }, 2000)
+              scheduleGracefulEndCall()
               return 'Call ended.'
             }
             if (name === 'get_dm_conversations') {
@@ -452,6 +518,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 128
       analyser.smoothingTimeConstant = 0.35
+      remoteAnalyserRef.current = analyser
       source.connect(analyser)
       const dataArray = new Uint8Array(analyser.frequencyBinCount)
       let rafId: number
@@ -482,6 +549,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       draw()
       return () => {
         cancelAnimationFrame(rafId)
+        remoteAnalyserRef.current = null
         audioContext.close()
       }
     } catch {
@@ -540,6 +608,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const value: VoiceSessionContextValue = {
     status,
+    closingPending,
     error,
     startVoiceCall,
     endVoiceCall,

@@ -92,6 +92,7 @@ export default function DivineManagerPage() {
   const [chatLoading, setChatLoading] = useState(false)
   const [resetting, setResetting] = useState(false)
   const realtimeStatus = voiceSession?.status ?? 'idle'
+  const closingPending = voiceSession?.closingPending ?? false
   const realtimeError = voiceSession?.error ?? null
   const remoteVoiceStream = voiceSession?.remoteVoiceStream ?? null
   const voiceVizRef = voiceSession?.voiceVizRef ?? useRef<HTMLCanvasElement | null>(null)
@@ -573,8 +574,6 @@ export default function DivineManagerPage() {
   }, [voiceSession])
 
   const IDLE_MS = 2.5 * 60 * 1000
-  const CLOSE_AFTER_ACTION_MS = 5 * 1000
-  const CLOSE_AFTER_ACTION_INTENTS = new Set(['mass_dm', 'content_publish', 'create_task', 'send_notification'])
 
   useEffect(() => {
     if (realtimeStatus !== 'connected') return
@@ -1725,12 +1724,12 @@ export default function DivineManagerPage() {
             )}
             {realtimeStatus === 'connected' && (
               <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-gradient-to-b from-violet-500/10 to-transparent p-4">
-                {(realtimeStatus === 'connecting' || intentInProgress) ? (
+                {(intentInProgress || closingPending) ? (
                   <>
                     <div className="flex flex-col items-center gap-2">
                       <Hourglass className="h-12 w-12 text-violet-500 animate-spin" style={{ animationDuration: '3s' }} />
                       <p className="text-xs text-muted-foreground">
-                        {intentInProgress ? 'Working…' : 'Connecting…'}
+                        {closingPending ? 'Ending call…' : 'Working…'}
                       </p>
                     </div>
                   </>

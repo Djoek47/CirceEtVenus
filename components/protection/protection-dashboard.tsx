@@ -7,20 +7,41 @@ import type { LeakAlert } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, ExternalLink, Upload, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Props = {
   activeAlerts: LeakAlert[]
+  /** Pre-filled from profile; user can edit before scanning */
+  suggestedAlias?: string | null
 }
 
-export function ProtectionDashboard({ activeAlerts }: Props) {
+function parseAliases(raw: string): string[] {
+  return raw
+    .split(/[\n,;]+/)
+    .map((s) => s.replace(/^@/, '').trim())
+    .filter(Boolean)
+}
+
+export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
   const [scanLoading, setScanLoading] = useState(false)
+  const [aliasInput, setAliasInput] = useState(() => suggestedAlias?.trim() ?? '')
+  const [strictScan, setStrictScan] = useState(true)
+  const [scanSummary, setScanSummary] = useState<string | null>(null)
   const [manualUrl, setManualUrl] = useState('')
   const [manualLoading, setManualLoading] = useState(false)
 
@@ -63,8 +84,30 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
 
   const runScan = async () => {
     setScanLoading(true)
+    setScanSummary(null)
     try {
-      await fetch('/api/leaks/scan', { method: 'POST' })
+      const aliases = parseAliases(aliasInput)
+      const res = await fetch('/api/leaks/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aliases, strict: strictScan }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        inserted?: number
+        skipped?: number
+        filteredStrict?: number
+        message?: string
+        error?: string
+      }
+      if (res.ok) {
+        setScanSummary(
+          `Added ${data.inserted ?? 0} new alert(s). Skipped duplicates: ${data.skipped ?? 0}.` +
+            (typeof data.filteredStrict === 'number' ? ` Filtered by strict mode: ${data.filteredStrict}.` : '') +
+            (data.message ? ` ${data.message}` : ''),
+        )
+      } else {
+        setScanSummary(data.error || 'Scan failed.')
+      }
       router.refresh()
     } finally {
       setScanLoading(false)
@@ -143,8 +186,37 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
 
   return (
     <div className="space-y-4 min-w-0">
+      <p className="text-xs text-muted-foreground">
+        Automated search surfaces candidates for your review. Confirm each link before sending a DMCA notice.
+      </p>
+
+      <div className="space-y-2">
+        <Label htmlFor="alias-input" className="text-xs text-muted-foreground">
+          Extra names and handles (comma or line; searched in addition to connected platforms)
+        </Label>
+        <Textarea
+          id="alias-input"
+          value={aliasInput}
+          onChange={(e) => setAliasInput(e.target.value)}
+          placeholder="e.g. stage name, alternate @handles"
+          className="min-h-[72px] text-sm"
+        />
+      </div>
+
+      <div className="flex items-start gap-2">
+        <Checkbox
+          id="strict-scan"
+          checked={strictScan}
+          onCheckedChange={(v) => setStrictScan(v === true)}
+        />
+        <label htmlFor="strict-scan" className="text-xs text-muted-foreground leading-snug cursor-pointer">
+          Strict mode: only keep search results that likely match your content (Grok on Pro plans; keyword match
+          otherwise). Your manually pasted links are always kept.
+        </label>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Button className="gap-2 bg-circe hover:bg-circe/90" onClick={runScan} disabled={scanLoading}>
             {scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Invoke Scan
@@ -154,6 +226,7 @@ export function ProtectionDashboard({ activeAlerts }: Props) {
               </Badge>
             )}
           </Button>
+          {scanSummary ? <p className="text-xs text-muted-foreground sm:max-w-md">{scanSummary}</p> : null}
         </div>
         <div className="w-full sm:max-w-md">
           <Label htmlFor="manual-url" className="text-xs text-muted-foreground">

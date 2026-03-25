@@ -12,6 +12,8 @@ export default async function ProtectionPage() {
 
   if (!user) return null
 
+  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+
   const { data: leakAlerts } = await supabase
     .from('leak_alerts')
     .select('*')
@@ -102,7 +104,10 @@ export default async function ProtectionPage() {
         </Card>
       </div>
 
-      <ProtectionDashboard activeAlerts={activeAlerts as LeakAlert[]} />
+      <ProtectionDashboard
+        activeAlerts={activeAlerts as LeakAlert[]}
+        suggestedAlias={profile?.full_name?.trim() || null}
+      />
 
       {/* Resolved Alerts */}
       <Card className="border-border bg-card">

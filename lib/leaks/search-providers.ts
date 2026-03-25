@@ -5,7 +5,7 @@ export type SearchResult = {
 }
 
 export interface WebSearchProvider {
-  search(query: string, opts?: { limit?: number }): Promise<SearchResult[]>
+  search(query: string, opts?: { limit?: number; page?: number }): Promise<SearchResult[]>
 }
 
 export class SerperProvider implements WebSearchProvider {
@@ -14,15 +14,16 @@ export class SerperProvider implements WebSearchProvider {
     this.apiKey = apiKey
   }
 
-  async search(query: string, opts?: { limit?: number }): Promise<SearchResult[]> {
+  async search(query: string, opts?: { limit?: number; page?: number }): Promise<SearchResult[]> {
     const limit = Math.min(Math.max(opts?.limit ?? 10, 1), 20)
+    const page = Math.min(Math.max(opts?.page ?? 1, 1), 10)
     const res = await fetch('https://google.serper.dev/search', {
       method: 'POST',
       headers: {
         'X-API-KEY': this.apiKey,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ q: query, num: limit }),
+      body: JSON.stringify({ q: query, num: limit, page }),
     })
 
     if (!res.ok) {

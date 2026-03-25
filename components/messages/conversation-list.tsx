@@ -10,15 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Search, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { stripHtmlForPreview } from '@/lib/html-utils'
-
-// Proxy OnlyFans CDN images through our server to avoid CORS/403 issues
-function proxyImageUrl(url: string | null | undefined): string | undefined {
-  if (!url) return undefined
-  if (url.includes('onlyfans.com') || url.includes('cdn2.onlyfans.com') || url.includes('cdn3.onlyfans.com')) {
-    return `/api/proxy/image?url=${encodeURIComponent(url)}`
-  }
-  return url
-}
+import { proxyImageUrl } from '@/lib/proxy-image-url'
 
 interface OnlyFansConversation {
   user: {

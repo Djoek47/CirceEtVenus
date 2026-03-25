@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { runLeakScan } from '@/lib/leaks/run-scan'
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -410,6 +411,33 @@ const CHAT_TOOLS: Array<{
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'run_leak_scan',
+      description:
+        'Run a web search for leaked content using the creator\'s connected platform usernames plus optional extra handles, then add candidate URLs to Protection / leak alerts for DMCA review. Use only when they explicitly ask to scan for leaks, find stolen content, or prepare DMCA takedowns. Uses API quota; confirm they want to run it if they were vague.',
+      parameters: {
+        type: 'object',
+        properties: {
+          aliases: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Extra @handles or names to search (optional)',
+          },
+          urls: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Specific infringing URLs to add to the review list (optional)',
+          },
+          strict: {
+            type: 'boolean',
+            description: 'If true (default), filter search hits to likely matches. Manual URLs are always kept.',
+          },
+        },
+      },
+    },
+  },
 ]
 
 const AI_TOOL_NAME_TO_ID: Record<string, string> = {
@@ -443,14 +471,50 @@ async function runAITool(
   return { success: true, result: (data as { result?: unknown }).result }
 }
 
+type DivineContext = {
+  supabase: Awaited<ReturnType<typeof createClient>>
+  userId: string
+}
+
 async function runContextTool(
   name: string,
   args: Record<string, unknown>,
-  cookie: string
+  cookie: string,
+  ctx?: DivineContext,
 ): Promise<string> {
   const base = getBaseUrl()
   const headers = { Cookie: cookie }
   try {
+    if (name === 'run_leak_scan') {
+      if (!ctx) return 'Leak scan is unavailable in this context.'
+      const aliases = Array.isArray(args.aliases)
+        ? (args.aliases as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        : []
+      const urls = Array.isArray(args.urls)
+        ? (args.urls as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        : []
+      const strict = args.strict !== false
+      const result = await runLeakScan(ctx.supabase, {
+        userId: ctx.userId,
+        aliases,
+        urls,
+        strict,
+      })
+      if (!result.success) {
+        return `Leak scan failed: ${result.message ?? 'unknown error'}`
+      }
+      return [
+        `Leak scan finished.`,
+        `New alerts inserted: ${result.inserted}.`,
+        `Skipped (already listed or not new): ${result.skipped}.`,
+        `Filtered out by strict mode: ${result.filteredStrict}.`,
+        result.message ? `Note: ${result.message}` : '',
+        `Web search provider: ${result.providerConfigured ? 'configured' : 'not configured'}.`,
+        result.grokEnrichment ? 'Grok enrichment available on Pro.' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    }
     if (name === 'get_dm_conversations') {
       const limit = typeof args.limit === 'number' ? args.limit : 20
       const query =
@@ -625,7 +689,7 @@ You know their tasks, rules, and analytics. Speak as a manager, not as the creat
 Never claim you have already sent messages, changed prices, or executed actions. You may only recommend or suggest actions or rule changes.
 Respect the creator's boundaries, niches, and all platform safety rules.
 Avoid explicit or illegal content entirely. Use clear, practical language.
-You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm.
+You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item, run_leak_scan. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm. For run_leak_scan, only use when they want to find leaked content or prepare DMCA review; it uses search API quota.
 Fans and engagement: list_fans (filter: active, expired, latest, top) for "who are my fans", "top spenders", "expired subs"; get_fan_subscription_history for a fan's renewals; list_followings for who they follow; get_top_message for best-performing message and buyers; get_message_engagement (type direct or mass) for "how did my messages perform"; publish_queue_item to publish a saved post or saved mass message. Route: "who spent the most" → list_fans filter=top; "how did my mass message do" → get_message_engagement type=mass; "publish my saved post" → publish_queue_item.
 You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options for that chat. send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.
 
@@ -721,7 +785,13 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
       }
 
       const isAITool = name in AI_TOOL_NAME_TO_ID
-      const isContextTool = ['get_dm_conversations', 'get_dm_thread', 'get_reply_suggestions', 'list_content'].includes(name)
+      const isContextTool = [
+        'get_dm_conversations',
+        'get_dm_thread',
+        'get_reply_suggestions',
+        'list_content',
+        'run_leak_scan',
+      ].includes(name)
       if (isAITool) {
         const out = await runAITool(name, args, cookie)
         const summary = out.success
@@ -731,7 +801,7 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
           : (out.error ?? 'Tool failed')
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary })
       } else if (isContextTool) {
-        const summary = await runContextTool(name, args, cookie)
+        const summary = await runContextTool(name, args, cookie, { supabase, userId: user.id })
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: summary.slice(0, 1000) })
       } else {
         let intentBody: Record<string, unknown> = { ...args }

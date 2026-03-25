@@ -9,6 +9,7 @@ import { ArrowRight, MessageSquare, RefreshCw, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { stripHtmlForPreview } from '@/lib/html-utils'
+import { proxyImageUrl } from '@/lib/proxy-image-url'
 
 interface Conversation {
   user: {
@@ -25,15 +26,6 @@ interface Conversation {
   }
   unreadCount: number
   platform: 'onlyfans' | 'fansly'
-}
-
-// Proxy OnlyFans CDN images
-function proxyImageUrl(url: string | null | undefined): string | undefined {
-  if (!url) return undefined
-  if (url.includes('onlyfans.com') || url.includes('cdn2.onlyfans.com') || url.includes('cdn3.onlyfans.com')) {
-    return `/api/proxy/image?url=${encodeURIComponent(url)}`
-  }
-  return url
 }
 
 // Format time ago

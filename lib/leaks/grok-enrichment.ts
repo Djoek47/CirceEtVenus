@@ -16,7 +16,7 @@ export async function enrichWithGrok(opts: {
   const system =
     'You help identify likely leaked creator content links. Return concise structured JSON only.'
 
-  const prompt = `For each item, classify whether it is likely a leaked repost of a creator's paid content.\n\nReturn JSON array with objects:\n- url (string)\n- likelyLeak (boolean)\n- severity (one of critical/high/medium/low)\n- rationale (short string)\n- contactHint (short string; where to send DMCA/abuse if obvious, e.g., "Cloudflare abuse form", "Reddit report", "Telegram channel admin", "Hosting provider abuse@")\n\nItems:\n${JSON.stringify(items, null, 2)}`
+  const prompt = `For each item, classify whether it is likely a leaked repost of a creator's paid content.\n\nReturn a JSON object with key "items" whose value is an array of objects with:\n- url (string)\n- likelyLeak (boolean)\n- severity (one of critical/high/medium/low)\n- rationale (short string)\n- contactHint (short string; where to send DMCA/abuse if obvious, e.g., "Cloudflare abuse form", "Reddit report", "Telegram channel admin", "Hosting provider abuse@")\n\nItems:\n${JSON.stringify(items, null, 2)}`
 
   const res = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
@@ -46,8 +46,15 @@ export async function enrichWithGrok(opts: {
   if (!content || typeof content !== 'string') return []
 
   try {
-    const parsed = JSON.parse(content)
-    const arr = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.items) ? parsed.items : []
+    const parsed: unknown = JSON.parse(content)
+    const arr = Array.isArray(parsed)
+      ? parsed
+      : parsed &&
+          typeof parsed === 'object' &&
+          'items' in parsed &&
+          Array.isArray((parsed as { items: unknown }).items)
+        ? (parsed as { items: unknown[] }).items
+        : []
     return (arr as any[])
       .filter((x) => x && typeof x.url === 'string')
       .map((x) => ({

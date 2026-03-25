@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+/** Used for unsigned OF CDN URLs only. Signed CloudFront URLs are IP-bound; clients must load those directly (see lib/proxy-image-url.ts). */
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url')
   

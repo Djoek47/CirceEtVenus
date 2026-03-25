@@ -38,6 +38,12 @@ export interface Profile {
   former_usernames?: string[] | null
   /** Manual content title hints for leak search */
   leak_search_title_hints?: string[] | null
+  /** Manual @handles for reputation scans without OAuth */
+  reputation_manual_handles?: string[] | null
+  /** Optional real/stage name for indexed reputation search context */
+  reputation_display_name?: string | null
+  /** Optional platform usernames e.g. { "onlyfans": "x", "mym": "y" } */
+  reputation_platform_handles?: Record<string, string> | null
   created_at: string
   updated_at: string
 }

@@ -6,6 +6,7 @@ import { MentionsHeader } from '@/components/dashboard/mentions-header'
 import { MentionsListBody } from '@/components/dashboard/mentions-list-body'
 import { MentionsConnectBanner } from '@/components/dashboard/mentions-connect-banner'
 import { ReputationBriefingCard } from '@/components/dashboard/reputation-briefing-card'
+import { ReputationIdentityCard } from '@/components/dashboard/reputation-identity-card'
 import type { ReputationBriefingPayload } from '@/lib/reputation/briefing'
 
 const PRO_PLANS = ['venus-pro', 'circe-elite', 'divine-duo']
@@ -25,7 +26,9 @@ export default async function MentionsPage() {
     supabase.from('subscriptions').select('plan_id').eq('user_id', user.id).maybeSingle(),
     supabase
       .from('profiles')
-      .select('reputation_briefing, reputation_briefing_at')
+      .select(
+        'reputation_briefing, reputation_briefing_at, reputation_manual_handles, reputation_display_name, reputation_platform_handles',
+      )
       .eq('id', user.id)
       .maybeSingle(),
   ])
@@ -41,6 +44,15 @@ export default async function MentionsPage() {
       : null
   const briefingAt = (profileRow as { reputation_briefing_at?: string | null } | null)?.reputation_briefing_at ?? null
 
+  const plat = (profileRow as { reputation_platform_handles?: Record<string, string> | null } | null)
+    ?.reputation_platform_handles
+  const initialOnlyfans = plat?.onlyfans ?? ''
+  const initialMym = plat?.mym ?? ''
+  const initialManualHandles =
+    (profileRow as { reputation_manual_handles?: string[] | null } | null)?.reputation_manual_handles ?? []
+  const initialDisplayName =
+    (profileRow as { reputation_display_name?: string | null } | null)?.reputation_display_name ?? null
+
   const allMentions = (mentions || []) as ReputationMention[]
   const unreviewed = allMentions.filter(m => !m.is_reviewed)
   const reviewed = allMentions.filter(m => m.is_reviewed)
@@ -54,6 +66,13 @@ export default async function MentionsPage() {
       <MentionsHeader />
 
       <MentionsConnectBanner />
+
+      <ReputationIdentityCard
+        initialManualHandles={initialManualHandles}
+        initialDisplayName={initialDisplayName}
+        initialOnlyfans={initialOnlyfans}
+        initialMym={initialMym}
+      />
 
       <div className="rounded-xl border border-venus/15 bg-gradient-to-r from-venus/5 via-transparent to-transparent px-4 py-3 text-sm text-muted-foreground">
         <span className="font-medium text-foreground">Venus&apos; Watchful Gaze</span> turns indexed mentions into a

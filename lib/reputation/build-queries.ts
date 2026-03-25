@@ -73,6 +73,16 @@ export function buildWideWebQueries(usernames: string[]): string[] {
 /**
  * X, IG, TikTok, Reddit + gossip / thread discovery.
  */
+/**
+ * Extra indexed-web queries when the creator saved a real/stage name (not a @handle).
+ */
+export function buildDisplayNameQueries(displayName: string | null | undefined): string[] {
+  const d = displayName?.trim()
+  if (!d || d.length < 2) return []
+  const esc = d.replace(/"/g, '')
+  return [`"${esc}" content creator`, `"${esc}" interview OR podcast`, `"${esc}" news OR review`].slice(0, 8)
+}
+
 export function buildSocialQueries(usernames: string[]): string[] {
   const queries: string[] = []
   for (const name of usernames) {

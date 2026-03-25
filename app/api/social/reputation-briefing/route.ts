@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { compileReputationBriefing, type ReputationBriefingPayload } from '@/lib/reputation/briefing'
+import {
+  compileReputationBriefing,
+  type ReputationBriefingIdentity,
+  type ReputationBriefingPayload,
+} from '@/lib/reputation/briefing'
+import { runReputationScanCore } from '@/lib/reputation/run-reputation-scan'
+import { loadMergedHandlesForUser } from '@/lib/scan-identity'
 
 const PRO_PLANS = ['venus-pro', 'circe-elite', 'divine-duo']
 const MENTION_CAP = 80
@@ -37,7 +43,31 @@ export async function POST(req: NextRequest) {
   const since = new Date()
   since.setDate(since.getDate() - DAYS)
 
-  const { data: rows, error: fetchErr } = await supabase
+  const [{ data: profileRow }, nichesSet, mergedHandles] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('reputation_manual_handles, reputation_display_name, reputation_platform_handles')
+      .eq('id', user.id)
+      .maybeSingle(),
+    (async () => {
+      const set = new Set<string>()
+      const { data: platforms } = await supabase
+        .from('platform_connections')
+        .select('niches')
+        .eq('user_id', user.id)
+        .eq('is_connected', true)
+      for (const p of platforms || []) {
+        const n = (p as { niches?: string[] | null }).niches
+        if (Array.isArray(n)) {
+          for (const x of n) set.add(String(x))
+        }
+      }
+      return set
+    })(),
+    loadMergedHandlesForUser(supabase, user.id),
+  ])
+
+  let { data: rows, error: fetchErr } = await supabase
     .from('reputation_mentions')
     .select(
       'id, source_url, title, content_preview, platform, sentiment, ai_category, ai_rationale, ai_reputation_impact, ai_recommended_action, scan_channel, detected_at',
@@ -51,30 +81,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: fetchErr.message }, { status: 500 })
   }
 
-  const nichesSet = new Set<string>()
-  const { data: platforms } = await supabase
-    .from('platform_connections')
-    .select('niches')
-    .eq('user_id', user.id)
-    .eq('is_connected', true)
-
-  for (const p of platforms || []) {
-    const n = (p as { niches?: string[] | null }).niches
-    if (Array.isArray(n)) {
-      for (const x of n) nichesSet.add(String(x))
+  if ((!rows || rows.length === 0) && mergedHandles.size > 0) {
+    await runReputationScanCore(supabase, user.id, { mode: 'both' })
+    const second = await supabase
+      .from('reputation_mentions')
+      .select(
+        'id, source_url, title, content_preview, platform, sentiment, ai_category, ai_rationale, ai_reputation_impact, ai_recommended_action, scan_channel, detected_at',
+      )
+      .eq('user_id', user.id)
+      .gte('detected_at', since.toISOString())
+      .order('detected_at', { ascending: false })
+      .limit(MENTION_CAP)
+    rows = second.data
+    if (second.error) {
+      return NextResponse.json({ error: second.error.message }, { status: 500 })
     }
   }
 
   const list = rows || []
-  if (list.length === 0) {
-    return NextResponse.json({
-      success: true,
-      briefing: null as ReputationBriefingPayload | null,
-      onboarding: true,
-      message:
-        'No mentions in the last 30 days from indexed discovery. Run Refresh Vision or connect integrations, then scan.',
-      storedAt: null as string | null,
-    })
+
+  const plat = (profileRow as { reputation_platform_handles?: Record<string, string> | null })
+    ?.reputation_platform_handles
+  const identity: ReputationBriefingIdentity = {
+    manualHandles: Array.from(mergedHandles),
+    displayName: (profileRow as { reputation_display_name?: string | null })?.reputation_display_name ?? null,
+    platformHandles: plat && typeof plat === 'object' ? plat : null,
   }
 
   try {
@@ -94,6 +125,7 @@ export async function POST(req: NextRequest) {
         scan_channel: m.scan_channel,
       })),
       niches: Array.from(nichesSet),
+      identity,
     })
 
     if (!briefing) {
@@ -116,8 +148,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       briefing,
-      onboarding: false,
+      onboarding: list.length === 0,
+      message:
+        list.length === 0
+          ? 'Briefing saved. Indexed discovery had no snippets in the last 30 days—next steps are in the briefing.'
+          : undefined,
       storedAt: now,
+    } as {
+      success: boolean
+      briefing: ReputationBriefingPayload
+      onboarding: boolean
+      message?: string
+      storedAt: string
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Briefing failed'

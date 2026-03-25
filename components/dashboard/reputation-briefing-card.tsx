@@ -78,8 +78,8 @@ export function ReputationBriefingCard({
             size="sm"
             className="shrink-0 border-venus/40 text-venus hover:bg-venus/10"
             onClick={() => void handleRefresh()}
-            disabled={loading || mentionCount === 0}
-            title={mentionCount === 0 ? 'Run a scan first to collect mentions' : 'Regenerate briefing'}
+            disabled={loading}
+            title="Generate or refresh the aggregate AI briefing (runs a discovery pass if needed)"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {initialBriefing ? 'Refresh briefing' : 'Generate briefing'}
@@ -100,13 +100,14 @@ export function ReputationBriefingCard({
 
         {isPro && showEmptyPro && (
           <div className="rounded-lg border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">No mentions yet</p>
+            <p className="font-medium text-foreground">No indexed mentions yet</p>
             <p className="mt-1">
-              Connect integrations and run <span className="text-foreground">Refresh Vision</span> on the
-              Mentions page so we can compile themes from public search indexes.
+              Add <span className="text-foreground">search handles</span> above (OAuth optional), then tap{' '}
+              <span className="text-foreground">Generate briefing</span>—we run indexed discovery and save a Pro
+              snapshot even when the feed is empty.
             </p>
             <Button variant="link" className="mt-2 h-auto p-0 text-venus" asChild>
-              <Link href="/dashboard/settings?tab=integrations">Integrations</Link>
+              <Link href="/dashboard/settings?tab=integrations">Optional: Integrations</Link>
             </Button>
           </div>
         )}

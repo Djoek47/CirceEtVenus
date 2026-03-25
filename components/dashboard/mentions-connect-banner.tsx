@@ -9,8 +9,9 @@ export function MentionsConnectBanner() {
     <Card className="border-border bg-card">
       <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          Connect OnlyFans, Fansly, X, Instagram, or TikTok under Integrations so scans use each platform username.
-          Former names from Protection are included automatically when saved.
+          OAuth is optional: you can add manual search handles on this page for indexed reputation scans. Connecting
+          OnlyFans, Fansly, X, Instagram, or TikTok adds those usernames automatically. Former @names from Protection
+          are included when saved.
         </p>
         <Button asChild variant="outline" size="sm" className="shrink-0 border-venus/40 text-venus hover:bg-venus/10">
           <Link href="/dashboard/settings?tab=integrations">Connect platforms</Link>

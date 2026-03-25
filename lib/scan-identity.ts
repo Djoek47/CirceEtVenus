@@ -26,7 +26,13 @@ export async function loadMergedHandlesForUser(
       .select('platform_username')
       .eq('user_id', userId)
       .eq('is_connected', true),
-    supabase.from('profiles').select('former_usernames').eq('id', userId).maybeSingle(),
+    supabase
+      .from('profiles')
+      .select(
+        'former_usernames, reputation_manual_handles, reputation_platform_handles',
+      )
+      .eq('id', userId)
+      .maybeSingle(),
   ])
 
   for (const p of profiles || []) {
@@ -41,6 +47,19 @@ export async function loadMergedHandlesForUser(
   if (Array.isArray(former)) {
     for (const h of former) {
       if (h) add(String(h))
+    }
+  }
+  const manual = (profileRow as { reputation_manual_handles?: string[] | null })?.reputation_manual_handles
+  if (Array.isArray(manual)) {
+    for (const h of manual) {
+      if (h && String(h).trim()) add(String(h))
+    }
+  }
+  const platHandles = (profileRow as { reputation_platform_handles?: Record<string, string> | null })
+    ?.reputation_platform_handles
+  if (platHandles && typeof platHandles === 'object') {
+    for (const v of Object.values(platHandles)) {
+      if (v && String(v).trim()) add(String(v))
     }
   }
   return set
@@ -97,7 +116,11 @@ export async function loadScanIdentityHandles(
       .select('platform,platform_username')
       .eq('user_id', userId)
       .eq('is_connected', true),
-    supabase.from('profiles').select('former_usernames').eq('id', userId).maybeSingle(),
+    supabase
+      .from('profiles')
+      .select('former_usernames, reputation_manual_handles, reputation_platform_handles')
+      .eq('id', userId)
+      .maybeSingle(),
   ])
 
   const out: ScanIdentityHandle[] = []
@@ -130,6 +153,27 @@ export async function loadScanIdentityHandles(
   if (Array.isArray(former)) {
     for (const h of former) {
       if (h) push(String(h), 'former', `Former @${normalizeScanHandle(String(h))}`)
+    }
+  }
+
+  const manual = (profileRow as { reputation_manual_handles?: string[] | null })?.reputation_manual_handles
+  if (Array.isArray(manual)) {
+    for (const h of manual) {
+      if (h && String(h).trim()) {
+        const v = normalizeScanHandle(String(h))
+        push(v, 'reputation_manual', `Manual search @${v}`)
+      }
+    }
+  }
+
+  const platHandles = (profileRow as { reputation_platform_handles?: Record<string, string> | null })
+    ?.reputation_platform_handles
+  if (platHandles && typeof platHandles === 'object') {
+    for (const [k, v] of Object.entries(platHandles)) {
+      if (v && String(v).trim()) {
+        const vv = normalizeScanHandle(String(v))
+        push(vv, `reputation_${k}`, `${k} @${vv}`)
+      }
     }
   }
 

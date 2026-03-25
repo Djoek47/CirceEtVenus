@@ -24,6 +24,32 @@ export type ReputationBriefingPayload = {
 
 const MODEL = 'grok-4-1-fast-reasoning'
 
+/** Optional creator identity for prompts when indexed snippets are missing or sparse. */
+export type ReputationBriefingIdentity = {
+  manualHandles: string[]
+  displayName?: string | null
+  platformHandles?: Record<string, string> | null
+}
+
+function formatIdentityBlock(identity: ReputationBriefingIdentity | undefined): string {
+  if (!identity) return ''
+  const handles = identity.manualHandles?.filter(Boolean) ?? []
+  const plat = identity.platformHandles
+  const platStr =
+    plat && typeof plat === 'object'
+      ? Object.entries(plat)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('; ')
+      : ''
+  const lines = [
+    handles.length ? `Manual / merged search handles: ${handles.join(', ')}.` : '',
+    identity.displayName?.trim() ? `Display or stage name (for context only): ${identity.displayName.trim()}.` : '',
+    platStr ? `Platform usernames on file: ${platStr}.` : '',
+  ].filter(Boolean)
+  if (!lines.length) return ''
+  return `Creator identity context (for query targeting—not verified legal identity):\n${lines.join('\n')}\n`
+}
+
 export async function compileReputationBriefing(opts: {
   apiKey: string
   mentions: Array<{
@@ -40,9 +66,9 @@ export async function compileReputationBriefing(opts: {
     scan_channel?: string | null
   }>
   niches?: string[]
+  identity?: ReputationBriefingIdentity
 }): Promise<ReputationBriefingPayload | null> {
-  const { apiKey, mentions, niches } = opts
-  if (mentions.length === 0) return null
+  const { apiKey, mentions, niches, identity } = opts
 
   const nicheContext =
     niches && niches.length
@@ -50,11 +76,41 @@ export async function compileReputationBriefing(opts: {
       : 'Creator: adult/creator brand. Keep tone mythic (Venus/Circe) but professional.'
 
   const system =
-    'You are Venus from Circe & Venus: a sharp, glamorous reputation strategist. Return only JSON.'
+    'You are Venus from Circe & Venus: a sharp, glamorous reputation strategist. Return only JSON. Never invent specific URLs or quotes you did not receive in input. Do not defame real individuals.'
 
-  const user = `${nicheContext}
+  const identityBlock = formatIdentityBlock(identity)
+
+  const user =
+    mentions.length === 0
+      ? `${nicheContext}
+
+There are NO stored index snippets yet for this creator in the last window (or discovery returned no hits). You must still return a complete JSON object.
+
+Explain honestly that indexed discovery has not surfaced items yet (or the creator has not run Refresh Vision). themesPositive and themesNegative may be shorter (1-3 items) and can describe what to monitor in general terms, not fabricated incidents.
+
+watchlist and opportunities may be empty arrays [] if there is no real URL data.
+
+overallNextSteps MUST include practical bullets such as: run Refresh Vision on the Mentions page, confirm manual search handles (OnlyFans/MYM/social @names) are saved, understand that snippets are not live social feeds, and revisit after the next scan.
+
+${identityBlock}
+
+Return JSON object with:
+- headline: one compelling line (max 120 chars)
+- summary: 2-4 sentences
+- themesPositive: string[]
+- themesNegative: string[]
+- watchlist: array of { url, title (optional), snippet, note } — empty array if no real URLs in input
+- opportunities: same — empty array if none
+- overallNextSteps: string[] (3-7 bullets; include scanning / handle hygiene / limitations of snippet-only discovery)
+- disclaimer: one sentence that results are from indexed discovery only and the creator decides all responses
+
+Input mentions (empty array):
+[]`
+      : `${nicheContext}
 
 Data is from web search index snippets (not live APIs). Summarize for the creator.
+
+${identityBlock}
 
 Return JSON object with:
 - headline: one compelling line (max 120 chars)

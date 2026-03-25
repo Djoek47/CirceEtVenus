@@ -5,9 +5,12 @@ import { cn } from '@/lib/utils'
 
 export function DivineWorkingLogo({
   working,
+  phaseHint,
   className,
 }: {
   working: boolean
+  /** When working, replaces the default “Divine is working…” line (e.g. tools vs reply). */
+  phaseHint?: string | null
   className?: string
 }) {
   return (
@@ -29,7 +32,7 @@ export function DivineWorkingLogo({
       <div className="flex flex-col leading-tight">
         <span className="font-medium text-foreground">Divine</span>
         <span className="text-[11px]">
-          {working ? 'Divine is working…' : 'Idle'}
+          {working ? (phaseHint ?? 'Divine is working…') : 'Idle'}
         </span>
       </div>
     </div>

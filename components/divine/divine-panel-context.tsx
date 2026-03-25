@@ -7,7 +7,27 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
+
+type DivineUiAction = { type: 'navigate'; path: string } | { type: 'focus_fan'; fanId: string }
+
+function applyDivineUiActions(
+  actions: DivineUiAction[] | undefined,
+  router: ReturnType<typeof useRouter>,
+  setFocusedFan: (fan: FocusedFan | null) => void,
+) {
+  if (!actions?.length) return
+  for (const a of actions) {
+    if (a.type === 'navigate' && a.path.startsWith('/dashboard')) {
+      router.push(a.path)
+    }
+    if (a.type === 'focus_fan' && a.fanId) {
+      setFocusedFan({ id: a.fanId })
+      router.push('/dashboard/messages')
+    }
+  }
+}
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
@@ -29,6 +49,7 @@ type DivinePanelContextValue = {
   chatInput: string
   setChatInput: (value: string) => void
   chatLoading: boolean
+  chatWorkingHint: string | null
   sendChat: () => Promise<void>
   generatedText: string | null
   setGeneratedText: (text: string | null) => void
@@ -52,12 +73,14 @@ export function DivinePanelProvider({
   user: User
   children: ReactNode
 }) {
+  const router = useRouter()
   const [panelOpen, setPanelOpen] = useState(false)
   const [panelCollapsed, setPanelCollapsed] = useState(true)
   const [focusedFan, setFocusedFan] = useState<FocusedFan | null>(null)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [chatWorkingHint, setChatWorkingHint] = useState<string | null>(null)
   const [generatedText, setGeneratedText] = useState<string | null>(null)
   const [generatePrompt, setGeneratePrompt] = useState('')
   const [generateLoading, setGenerateLoading] = useState(false)
@@ -72,6 +95,7 @@ export function DivinePanelProvider({
     setChatMessages(nextMessages)
     setChatInput('')
     setChatLoading(true)
+    setChatWorkingHint('Thinking…')
     try {
       const res = await fetch('/api/ai/divine-manager-chat', {
         method: 'POST',
@@ -79,19 +103,83 @@ export function DivinePanelProvider({
         body: JSON.stringify({
           messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
           focusedFan,
+          stream: true,
         }),
       })
       if (!res.ok) throw new Error('Chat request failed')
-      const data = (await res.json()) as { reply?: string; error?: string }
-      if (data.reply) {
-        setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply! }])
+      const ct = res.headers.get('content-type') || ''
+      if (ct.includes('text/event-stream') && res.body) {
+        setChatMessages((prev) => [...prev, { role: 'assistant', content: '' }])
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let assembled = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const chunks = buffer.split('\n\n')
+          buffer = chunks.pop() ?? ''
+          for (const block of chunks) {
+            const line = block.trim()
+            if (!line.startsWith('data: ')) continue
+            let payload: { type?: string; text?: string; actions?: unknown; ui_actions?: DivineUiAction[]; message?: string }
+            try {
+              payload = JSON.parse(line.slice(6)) as typeof payload
+            } catch {
+              continue
+            }
+            if (payload.type === 'tools_done') {
+              setChatWorkingHint('Drafting reply…')
+            }
+            if (payload.type === 'token' && payload.text) {
+              assembled += payload.text
+              setChatMessages((prev) => {
+                const copy = [...prev]
+                const last = copy[copy.length - 1]
+                if (last?.role === 'assistant') {
+                  copy[copy.length - 1] = { role: 'assistant', content: assembled }
+                }
+                return copy
+              })
+            }
+            if (payload.type === 'done') {
+              applyDivineUiActions(payload.ui_actions, router, setFocusedFan)
+            }
+            if (payload.type === 'error') {
+              throw new Error(payload.message || 'Stream error')
+            }
+          }
+        }
+        if (!assembled.trim()) {
+          setChatMessages((prev) => {
+            const copy = [...prev]
+            const last = copy[copy.length - 1]
+            if (last?.role === 'assistant' && !last.content.trim()) {
+              copy.pop()
+            }
+            return copy
+          })
+        }
+      } else {
+        const data = (await res.json()) as {
+          reply?: string
+          error?: string
+          ui_actions?: DivineUiAction[]
+        }
+        if (data.error) throw new Error(data.error)
+        if (data.reply) {
+          setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
+        }
+        applyDivineUiActions(data.ui_actions, router, setFocusedFan)
       }
     } catch (e) {
       console.error(e)
     } finally {
       setChatLoading(false)
+      setChatWorkingHint(null)
     }
-  }, [chatInput, chatMessages, chatLoading, focusedFan])
+  }, [chatInput, chatMessages, chatLoading, focusedFan, router])
 
   const requestGenerate = useCallback(async () => {
     const prompt = generatePrompt.trim()
@@ -141,6 +229,7 @@ export function DivinePanelProvider({
     chatInput,
     setChatInput,
     chatLoading,
+    chatWorkingHint,
     sendChat,
     generatedText,
     setGeneratedText,

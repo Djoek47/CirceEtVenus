@@ -41,6 +41,7 @@ export function DivinePanel() {
     setChatInput,
     chatInput,
     chatLoading,
+    chatWorkingHint,
     sendChat,
     generatedText,
     setGeneratedText,
@@ -104,6 +105,7 @@ export function DivinePanel() {
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           <DivineWorkingLogo
             working={chatLoading || generateLoading}
+            phaseHint={chatWorkingHint}
             className="mb-1"
           />
           {focusedFan && (

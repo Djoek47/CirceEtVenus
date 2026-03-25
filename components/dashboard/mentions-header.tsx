@@ -41,7 +41,7 @@ export function MentionsHeader() {
       await fetch('/api/social/scan-reputation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ mode: 'both' }),
       })
       router.refresh()
     } catch {

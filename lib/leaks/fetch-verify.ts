@@ -42,3 +42,37 @@ export async function pageLikelyMentionsAliases(
 function stripTags(html: string): string {
   return html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')
 }
+
+/** Plain text excerpt for LLM verification (critical-page scrape). */
+export async function fetchPageTextExcerpt(
+  url: string,
+  opts?: { timeoutMs?: number; maxBytes?: number; maxChars?: number },
+): Promise<string | null> {
+  const timeoutMs = opts?.timeoutMs ?? 12000
+  const maxBytes = opts?.maxBytes ?? 200_000
+  const maxChars = opts?.maxChars ?? 12_000
+
+  const ac = new AbortController()
+  const t = setTimeout(() => ac.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, {
+      signal: ac.signal,
+      redirect: 'follow',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+      },
+    })
+    if (!res.ok) return null
+    const buf = await res.arrayBuffer()
+    const slice = buf.byteLength > maxBytes ? buf.slice(0, maxBytes) : buf
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(slice)
+    const plain = stripTags(text).replace(/\s+/g, ' ').trim()
+    return plain.slice(0, maxChars) || null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(t)
+  }
+}

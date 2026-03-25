@@ -1,3 +1,6 @@
+export type ReputationImpact = 'harmful' | 'helpful' | 'neutral'
+export type RecommendedReputationAction = 'reply' | 'report' | 'monitor' | 'ignore'
+
 export type ReputationGrokEnrichment = {
   id?: string
   url: string
@@ -6,6 +9,18 @@ export type ReputationGrokEnrichment = {
   category?: string
   rationale?: string
   suggestedReply?: string
+  reputationImpact?: ReputationImpact
+  recommendedAction?: RecommendedReputationAction
+}
+
+function normalizeImpact(v: unknown): ReputationImpact | undefined {
+  if (v === 'harmful' || v === 'helpful' || v === 'neutral') return v
+  return undefined
+}
+
+function normalizeAction(v: unknown): RecommendedReputationAction | undefined {
+  if (v === 'reply' || v === 'report' || v === 'monitor' || v === 'ignore') return v
+  return undefined
 }
 
 export async function enrichReputationWithGrok(opts: {
@@ -19,22 +34,28 @@ export async function enrichReputationWithGrok(opts: {
   const system =
     'You are Venus, goddess of attraction, analyzing online mentions of a creator. Return only JSON; no extra text.'
 
-  const nicheContext = niches && niches.length
-    ? `Creator niches/tone: ${niches.join(', ')}.\nTreat these as normal for the brand, but still follow all safety rules.`
-    : 'Creator niches/tone: generic adult creator. Follow safety rules.'
+  const nicheContext =
+    niches && niches.length
+      ? `Creator niches/tone: ${niches.join(', ')}.\nTreat these as normal for the brand, but still follow all safety rules.`
+      : 'Creator niches/tone: generic adult creator. Follow safety rules.'
 
   const prompt = `For each mention, classify:
 - sentiment: positive | neutral | negative
-- category: short tag like \"praise\", \"criticism\", \"question\", \"nsfw review\", etc.
+- category: short tag like "praise", "criticism", "question", "nsfw review", etc.
 - rationale: short explanation
-- suggestedReply: a short, in-character reply that improves reputation and engagement, matching the creator's niche and boundaries.
+- reputationImpact: harmful | helpful | neutral — does this mention damage or improve the creator's reputation in the public eye?
+- recommendedAction: reply | report | monitor | ignore
+  - reply: worth engaging with a public or private response
+  - report: likely abuse, harassment, defamation, or ToS violation — user should use the platform's report flow (not legal advice)
+  - monitor: watch but no immediate action
+  - ignore: low stakes or noise
+- suggestedReply: if recommendedAction is reply, a short in-character reply that improves reputation and engagement. If recommendedAction is report, a one-line platform-agnostic note only (e.g. consider the platform's abuse or harassment reporting tools) — not legal advice. Otherwise null or omit.
 
 ${nicheContext}
 
-Return JSON array like:
-[
-  { "id": "...", "url": "...", "platform": "twitter", "sentiment": "positive", "category": "praise", "rationale": "...", "suggestedReply": "..." }
-]
+Return JSON object: { "items": [ ... ] }
+Each item:
+{ "id": "...", "url": "...", "platform": "twitter", "sentiment": "positive", "category": "praise", "rationale": "...", "reputationImpact": "helpful", "recommendedAction": "reply", "suggestedReply": "..." }
 
 Mentions:
 ${JSON.stringify(items, null, 2)}`
@@ -46,7 +67,6 @@ ${JSON.stringify(items, null, 2)}`
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      // Updated Grok model; old grok-2-* models are deprecated
       model: 'grok-4-1-fast-reasoning',
       temperature: 0.2,
       messages: [
@@ -79,9 +99,10 @@ ${JSON.stringify(items, null, 2)}`
         category: x.category,
         rationale: x.rationale,
         suggestedReply: x.suggestedReply,
+        reputationImpact: normalizeImpact(x.reputationImpact),
+        recommendedAction: normalizeAction(x.recommendedAction),
       }))
   } catch {
     return []
   }
 }
-

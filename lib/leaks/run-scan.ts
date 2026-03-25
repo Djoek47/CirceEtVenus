@@ -1,15 +1,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { buildQueries, buildTitleQueries, sanitizeTitleForSearch } from '@/lib/leaks/build-queries'
 import { SerperProvider } from '@/lib/leaks/search-providers'
 import { guessSourcePlatform, normalizeUrl } from '@/lib/leaks/url-utils'
 import { enrichWithGrok, type GrokLeakEnrichment } from '@/lib/leaks/grok-enrichment'
-import { pageLikelyMentionsAliases } from '@/lib/leaks/fetch-verify'
+import { verifyLeakPagesWithGrok } from '@/lib/leaks/grok-page-verify'
+import { fetchPageTextExcerpt, pageLikelyMentionsAliases } from '@/lib/leaks/fetch-verify'
 
 export type RunLeakScanParams = {
   userId: string
   urls?: string[]
   aliases?: string[]
+  /** Extra handles for this run only (merged with profile former_usernames) */
+  former_usernames?: string[]
+  /** Extra title phrases for this run (merged with profile + content library) */
+  title_hints?: string[]
+  /** Load published/scheduled titles from content table (default true) */
+  include_content_titles?: boolean
   limitPerQuery?: number
-  /** When true, search hits are filtered (Grok for Pro, keyword gate otherwise). Manual URLs are never filtered. Default true. */
   strict?: boolean
 }
 
@@ -21,8 +28,8 @@ export type RunLeakScanResult = {
   message?: string
   providerConfigured: boolean
   grokEnrichment: boolean
-  /** Number of unique URLs checked with optional HTML fetch (when LEAK_SCAN_FETCH_VERIFY_TOP_N is set) */
   fetchVerified?: number
+  pageVerifyCount?: number
 }
 
 function parseIntEnv(name: string, fallback: number, min: number, max: number): number {
@@ -30,39 +37,6 @@ function parseIntEnv(name: string, fallback: number, min: number, max: number): 
   const v = raw ? parseInt(raw, 10) : NaN
   if (Number.isNaN(v)) return fallback
   return Math.min(Math.max(v, min), max)
-}
-
-/** Expanded leak-oriented query templates (OF + Fansly + common leak venues). */
-export function buildQueries(usernames: string[]): string[] {
-  const baseKeywords = [
-    'onlyfans leak',
-    'onlyfans leaked',
-    'fansly leak',
-    'fansly leaked',
-    'mega',
-    'telegram',
-    'reddit',
-    'site:reddit.com',
-    'download',
-    'free onlyfans',
-    'coomer',
-    'kemono',
-    'simpcity',
-    'forums',
-    'discord',
-  ]
-
-  const queries: string[] = []
-  for (const u of usernames) {
-    const clean = u.replace(/^@/, '').trim()
-    if (!clean) continue
-    for (const kw of baseKeywords) {
-      queries.push(`"${clean}" ${kw}`)
-      queries.push(`onlyfans ${clean} ${kw}`)
-      queries.push(`fansly ${clean} ${kw}`)
-    }
-  }
-  return Array.from(new Set(queries))
 }
 
 function safeJsonParse(input: string) {
@@ -76,27 +50,52 @@ function safeJsonParse(input: string) {
 function matchesKeywordGate(
   c: { url: string; title?: string; snippet?: string },
   usernames: string[],
+  titleNeedles: string[],
 ): boolean {
   const hay = `${c.title ?? ''} ${c.snippet ?? ''} ${c.url}`.toLowerCase()
   for (const u of usernames) {
     const clean = u.replace(/^@/, '').trim().toLowerCase()
     if (clean.length >= 2 && hay.includes(clean)) return true
   }
+  for (const needle of titleNeedles) {
+    const n = needle.toLowerCase().trim()
+    if (n.length >= 4 && hay.includes(n)) return true
+  }
   return false
+}
+
+function titleNeedlesFromList(titles: string[]): string[] {
+  const out: string[] = []
+  for (const raw of titles) {
+    const s = sanitizeTitleForSearch(raw)
+    if (s) out.push(s)
+  }
+  return out
 }
 
 export async function runLeakScan(
   supabase: SupabaseClient,
   params: RunLeakScanParams,
 ): Promise<RunLeakScanResult> {
-  const { userId, urls: bodyUrls, aliases: bodyAliases, limitPerQuery: bodyLimit } = params
+  const {
+    userId,
+    urls: bodyUrls,
+    aliases: bodyAliases,
+    former_usernames: bodyFormer,
+    title_hints: bodyTitleHints,
+    limitPerQuery: bodyLimit,
+  } = params
   const strict = params.strict !== false
+  const includeContentTitles = params.include_content_titles !== false
 
   const limitPerQuery = Math.min(Math.max(bodyLimit ?? parseIntEnv('LEAK_SCAN_RESULTS_PER_QUERY', 10, 1, 20), 1), 20)
   const maxQueries = parseIntEnv('LEAK_SCAN_MAX_QUERIES', 45, 1, 80)
+  const maxTitleQueries = parseIntEnv('LEAK_SCAN_MAX_TITLE_QUERIES', 20, 0, 60)
   const maxPagesPerQuery = parseIntEnv('LEAK_SCAN_MAX_PAGES', 1, 1, 3)
   const maxCandidates = parseIntEnv('LEAK_SCAN_MAX_CANDIDATES', 250, 50, 500)
   const fetchVerifyTopN = parseIntEnv('LEAK_SCAN_FETCH_VERIFY_TOP_N', 0, 0, 25)
+  const scrapeMaxPages = parseIntEnv('LEAK_SCAN_SCRAPE_MAX_PAGES', 8, 0, 25)
+  const maxContentTitles = parseIntEnv('LEAK_SCAN_CONTENT_TITLE_LIMIT', 40, 0, 80)
 
   const { data: subRow } = await supabase
     .from('subscriptions')
@@ -109,6 +108,19 @@ export async function runLeakScan(
     normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId),
   )
 
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('former_usernames, leak_search_title_hints')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const profileFormer = Array.isArray((profileRow as { former_usernames?: string[] })?.former_usernames)
+    ? ((profileRow as { former_usernames: string[] }).former_usernames ?? []).filter(Boolean)
+    : []
+  const profileTitleHints = Array.isArray((profileRow as { leak_search_title_hints?: string[] })?.leak_search_title_hints)
+    ? ((profileRow as { leak_search_title_hints: string[] }).leak_search_title_hints ?? []).filter(Boolean)
+    : []
+
   const { data: connections } = await supabase
     .from('platform_connections')
     .select('platform, platform_username')
@@ -119,7 +131,33 @@ export async function runLeakScan(
     .filter((c) => typeof c.platform_username === 'string' && c.platform_username.length > 0)
     .map((c) => c.platform_username as string)
 
-  const usernames = Array.from(new Set([...connectedUsernames, ...(bodyAliases || [])]))
+  const formerFromBody = Array.isArray(bodyFormer) ? bodyFormer.filter((s) => typeof s === 'string' && s.trim()) : []
+  const usernames = Array.from(
+    new Set([...connectedUsernames, ...(bodyAliases || []), ...profileFormer, ...formerFromBody].map((s) => s.trim()).filter(Boolean)),
+  )
+
+  let contentTitles: string[] = []
+  if (includeContentTitles && maxContentTitles > 0) {
+    const { data: contentRows } = await supabase
+      .from('content')
+      .select('title')
+      .eq('user_id', userId)
+      .in('status', ['published', 'scheduled'])
+      .order('created_at', { ascending: false })
+      .limit(maxContentTitles)
+
+    contentTitles = (contentRows || [])
+      .map((r: { title?: string }) => r.title)
+      .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+  }
+
+  const hintsFromBody = Array.isArray(bodyTitleHints) ? bodyTitleHints.filter((s) => typeof s === 'string' && s.trim()) : []
+  const mergedTitles = Array.from(
+    new Set([...contentTitles, ...profileTitleHints, ...hintsFromBody].map((t) => t.trim()).filter(Boolean)),
+  )
+
+  const titleNeedles = titleNeedlesFromList(mergedTitles)
+  const primaryHandle = connectedUsernames[0] || usernames[0]
 
   const userUrls = (bodyUrls || []).map((u) => normalizeUrl(u)).filter(Boolean) as string[]
   const manualSet = new Set(userUrls)
@@ -134,9 +172,15 @@ export async function runLeakScan(
     snippet?: string
   }> = []
 
-  if (provider && usernames.length > 0) {
-    const queries = buildQueries(usernames).slice(0, maxQueries)
-    for (const q of queries) {
+  const handleQueries = buildQueries(usernames).slice(0, maxQueries)
+  const titleQueries =
+    mergedTitles.length > 0 && maxTitleQueries > 0
+      ? buildTitleQueries(mergedTitles, primaryHandle, maxTitleQueries)
+      : []
+  const queriesToRun = Array.from(new Set([...handleQueries, ...titleQueries]))
+
+  if (provider && queriesToRun.length > 0) {
+    for (const q of queriesToRun) {
       for (let page = 1; page <= maxPagesPerQuery; page++) {
         try {
           const results = await provider.search(q, { limit: limitPerQuery, page })
@@ -152,7 +196,6 @@ export async function runLeakScan(
     }
   }
 
-  // Optional fetch-verify: first N unique URLs must mention an alias in fetched HTML; others pass through
   let fetchVerified = 0
   const aliasNeedles = usernames
   if (fetchVerifyTopN > 0 && aliasNeedles.length > 0) {
@@ -185,12 +228,23 @@ export async function runLeakScan(
   const preGrokByUrl = new Map<string, GrokLeakEnrichment>()
 
   if (candidates.length === 0) {
+    const hasManual = userUrls.length > 0
+    let message: string
+    if (!provider) {
+      message =
+        'Serper web search is not configured: add SERPER_API_KEY to your environment (e.g. Vercel Project → Settings → Environment Variables; key from serper.dev). Until then, use “Bring your own link” to add URLs to your leak list.'
+    } else if (usernames.length === 0 && mergedTitles.length === 0 && !hasManual) {
+      message =
+        'Nothing to search: connect OnlyFans/Fansly, add aliases or former usernames, add content title hints, or paste a URL under “Bring your own link”.'
+    } else {
+      message = 'No results found for the current queries.'
+    }
     return {
       success: true,
       inserted: 0,
       skipped: 0,
       filteredStrict: 0,
-      message: provider ? 'No results found' : 'Search provider not configured and no URLs provided',
+      message,
       providerConfigured: Boolean(provider),
       grokEnrichment: isPro && Boolean(process.env.XAI_API_KEY),
       fetchVerified: fetchVerifyTopN > 0 ? fetchVerified : undefined,
@@ -224,7 +278,7 @@ export async function runLeakScan(
             }
           } catch {
             for (const c of batch) {
-              if (matchesKeywordGate(c, usernames)) preApproved.push(c)
+              if (matchesKeywordGate(c, usernames, titleNeedles)) preApproved.push(c)
               else filteredStrict++
             }
           }
@@ -232,7 +286,7 @@ export async function runLeakScan(
         passedSearch = preApproved
       } else {
         passedSearch = searchOnly.filter((c) => {
-          const ok = matchesKeywordGate(c, usernames)
+          const ok = matchesKeywordGate(c, usernames, titleNeedles)
           if (!ok) filteredStrict++
           return ok
         })
@@ -286,6 +340,7 @@ export async function runLeakScan(
       }
     })
 
+  let pageVerifyCount = 0
   if (inserts.length > 0) {
     const { data: insertedRows, error: insertErr } = await supabase
       .from('leak_alerts')
@@ -337,6 +392,73 @@ export async function runLeakScan(
         }
       }
     }
+
+    // Critical / high: optional page fetch + second Grok pass (Pro + XAI)
+    if (scrapeMaxPages > 0 && isPro && grokKey && insertedRows && insertedRows.length > 0) {
+      const { data: freshRows } = await supabase
+        .from('leak_alerts')
+        .select('id,source_url,notes')
+        .eq('user_id', userId)
+        .in(
+          'id',
+          insertedRows.map((r: { id: string }) => r.id),
+        )
+
+      const toScrape: Array<{ id: string; source_url: string; notes: string | null }> = []
+      for (const row of freshRows || []) {
+        const n = safeJsonParse(row.notes || '{}')
+        const sev = n.grok?.severity as string | undefined
+        if (sev === 'critical' || sev === 'high') {
+          toScrape.push(row)
+          if (toScrape.length >= scrapeMaxPages) break
+        }
+      }
+
+      if (toScrape.length > 0) {
+        const items: Array<{ url: string; pageExcerpt: string; title?: string; snippet?: string }> = []
+        for (const row of toScrape) {
+          const n = safeJsonParse(row.notes || '{}')
+          const excerpt = await fetchPageTextExcerpt(row.source_url)
+          if (excerpt) {
+            items.push({
+              url: row.source_url,
+              pageExcerpt: excerpt,
+              title: n.title,
+              snippet: n.snippet,
+            })
+          }
+        }
+
+        if (items.length > 0) {
+          try {
+            const verified = await verifyLeakPagesWithGrok({
+              apiKey: grokKey,
+              items,
+              knownHandles: usernames,
+              knownTitlesSample: mergedTitles.slice(0, 20),
+            })
+            const byUrlV = new Map(verified.map((v) => [v.url, v]))
+            for (const row of toScrape) {
+              const v = byUrlV.get(row.source_url)
+              if (!v) continue
+              const n = safeJsonParse(row.notes || '{}')
+              const nextNotes = {
+                ...n,
+                pageVerify: {
+                  verifiedLikelyMatch: v.verifiedLikelyMatch,
+                  rationale: v.rationale,
+                  checkedAt: new Date().toISOString(),
+                },
+              }
+              await supabase.from('leak_alerts').update({ notes: JSON.stringify(nextNotes) }).eq('id', row.id)
+              pageVerifyCount++
+            }
+          } catch {
+            // best-effort
+          }
+        }
+      }
+    }
   }
 
   return {
@@ -347,5 +469,6 @@ export async function runLeakScan(
     providerConfigured: Boolean(provider),
     grokEnrichment: isPro && Boolean(process.env.XAI_API_KEY),
     fetchVerified: fetchVerifyTopN > 0 ? fetchVerified : undefined,
+    pageVerifyCount: pageVerifyCount > 0 ? pageVerifyCount : undefined,
   }
 }

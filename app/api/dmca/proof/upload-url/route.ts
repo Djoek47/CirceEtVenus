@@ -3,7 +3,7 @@ import { createClient as createAuthedClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 type Body = {
   claimId: string
@@ -31,16 +31,32 @@ export async function POST(req: NextRequest) {
 
   if (!claim) return NextResponse.json({ error: 'Claim not found' }, { status: 404 })
 
+  if (!supabaseUrl || !serviceKey) {
+    return NextResponse.json(
+      {
+        error:
+          'Server misconfiguration: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (Vercel env) to upload DMCA proofs.',
+      },
+      { status: 500 },
+    )
+  }
+
   const service = createServiceClient(supabaseUrl, serviceKey)
   const safeName = body.filename.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `dmca-proofs/${user.id}/${body.claimId}/${Date.now()}-${safeName}`
+  // Path inside bucket dmca-proofs: {userId}/{claimId}/{file} — bucket must exist (see scripts/021_dmca_proofs_storage_bucket.sql)
+  const path = `${user.id}/${body.claimId}/${Date.now()}-${safeName}`
 
   const { data, error } = await service.storage
     .from('dmca-proofs')
     .createSignedUploadUrl(path)
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const msg = error.message || 'Storage error'
+    const hint =
+      /not exist|NoSuchBucket|Bucket not found/i.test(msg)
+        ? ' Create the private Storage bucket `dmca-proofs` in Supabase (SQL in scripts/021_dmca_proofs_storage_bucket.sql), then retry.'
+        : ''
+    return NextResponse.json({ error: msg + hint }, { status: 500 })
   }
 
   return NextResponse.json({

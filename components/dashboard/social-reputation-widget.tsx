@@ -6,7 +6,20 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Search, TrendingUp, TrendingDown, Users, Eye, MessageCircle, Heart, Share2, RefreshCw } from 'lucide-react'
+import {
+  Loader2,
+  Search,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Eye,
+  MessageCircle,
+  Heart,
+  Share2,
+  RefreshCw,
+  Newspaper,
+  AtSign,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +62,8 @@ interface ConnectedPlatform {
   is_connected: boolean
   niches?: string[] | null
 }
+
+type ReputationScanMode = 'wide' | 'social' | 'both'
 
 interface ReputationAnalysis {
   overall_score: number
@@ -199,8 +214,10 @@ export function SocialReputationWidget() {
     }
   }
 
-  const handleScanReputation = async () => {
-    setAnalyzing('scan')
+  const scanKey = (m: ReputationScanMode) => `scan-${m}`
+
+  const handleScanReputation = async (mode: ReputationScanMode) => {
+    setAnalyzing(scanKey(mode))
     setError(null)
     setLastScanSummary(null)
 
@@ -217,8 +234,8 @@ export function SocialReputationWidget() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // Give Pro users a slightly higher per-query limit
           limitPerQuery: isPro ? 10 : 4,
+          mode,
         }),
       })
 
@@ -228,8 +245,13 @@ export function SocialReputationWidget() {
         throw new Error(data.error || 'Failed to scan reputation')
       }
 
+      const by = data.insertedByChannel as { web_wide?: number; social?: number } | undefined
+      const channelPart =
+        by && typeof by.web_wide === 'number' && typeof by.social === 'number'
+          ? ` (${by.web_wide} web, ${by.social} social)`
+          : ''
       setLastScanSummary(
-        `Scan complete: ${data.inserted} new mentions, ${data.skipped} already known${data.enriched ? `, ${data.enriched} enriched by Venus` : ''}.`
+        `Scan complete: ${data.inserted} new mentions, ${data.skipped} already known${channelPart}${data.enriched ? `, ${data.enriched} enriched by Venus` : ''}.`,
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to scan reputation')
@@ -365,22 +387,52 @@ export function SocialReputationWidget() {
               Track your presence and reputation across social platforms
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {(profiles.length > 0 || connectedPlatforms.length > 0) && (
               <>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleScanReputation}
-                  disabled={analyzing === 'scan'}
+                  onClick={() => handleScanReputation('wide')}
+                  disabled={analyzing?.startsWith('scan-')}
+                  className="gap-1.5"
+                  title="News, magazines, and general web"
+                >
+                  {analyzing === scanKey('wide') ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Newspaper className="h-4 w-4" />
+                  )}
+                  News & web
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleScanReputation('social')}
+                  disabled={analyzing?.startsWith('scan-')}
+                  className="gap-1.5"
+                  title="X, Instagram, TikTok, Reddit-style discovery"
+                >
+                  {analyzing === scanKey('social') ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <AtSign className="h-4 w-4" />
+                  )}
+                  Scan social
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleScanReputation('both')}
+                  disabled={analyzing?.startsWith('scan-')}
                   className="gap-1.5"
                 >
-                  {analyzing === 'scan' ? (
+                  {analyzing === scanKey('both') ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  Scan Web
+                  Scan both
                 </Button>
                 {isPro && (
                   <Button 

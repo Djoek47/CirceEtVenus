@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { LeakAlert } from '@/lib/types'
@@ -34,14 +34,67 @@ function parseAliases(raw: string): string[] {
     .filter(Boolean)
 }
 
+function parseTitleHints(raw: string): string[] {
+  return raw
+    .split(/[\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function parseLeakMeta(notes: string | null): {
+  urgency?: string
+  rationale?: string
+  pageVerified?: boolean
+} {
+  try {
+    const j = JSON.parse(notes || '{}') as {
+      grok?: { urgency?: string; rationale?: string }
+      pageVerify?: { verifiedLikelyMatch?: boolean }
+    }
+    return {
+      urgency: j.grok?.urgency,
+      rationale: j.grok?.rationale,
+      pageVerified: j.pageVerify?.verifiedLikelyMatch,
+    }
+  } catch {
+    return {}
+  }
+}
+
+function formatNotesLine(notes: string | null): string {
+  const m = parseLeakMeta(notes)
+  const parts: string[] = []
+  if (m.urgency) parts.push(`Urgency: ${m.urgency}`)
+  if (m.rationale) parts.push(m.rationale)
+  if (m.pageVerified != null) parts.push(`Page verify: ${m.pageVerified ? 'likely match' : 'unclear'}`)
+  if (parts.length) return parts.join(' · ')
+  try {
+    const j = JSON.parse(notes || '{}') as { title?: string; snippet?: string }
+    return [j.title, j.snippet].filter(Boolean).join(' · ').slice(0, 280)
+  } catch {
+    return notes?.slice(0, 200) || ''
+  }
+}
+
+function urgencyRank(u: string | undefined): number {
+  if (u === 'immediate') return 0
+  if (u === 'soon') return 1
+  if (u === 'backlog') return 2
+  return 3
+}
+
 export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
   const [scanLoading, setScanLoading] = useState(false)
   const [aliasInput, setAliasInput] = useState(() => suggestedAlias?.trim() ?? '')
+  const [formerInput, setFormerInput] = useState('')
+  const [titleHintsInput, setTitleHintsInput] = useState('')
+  const [includeContentTitles, setIncludeContentTitles] = useState(true)
   const [strictScan, setStrictScan] = useState(true)
   const [scanSummary, setScanSummary] = useState<string | null>(null)
+  const [saveIdentityLoading, setSaveIdentityLoading] = useState(false)
   const [manualUrl, setManualUrl] = useState('')
   const [manualLoading, setManualLoading] = useState(false)
 
@@ -82,6 +135,63 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
     loadSubscription()
   }, [supabase])
 
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase
+          .from('profiles')
+          .select('former_usernames, leak_search_title_hints')
+          .eq('id', user.id)
+          .maybeSingle()
+        const row = data as {
+          former_usernames?: string[] | null
+          leak_search_title_hints?: string[] | null
+        } | null
+        if (row?.former_usernames?.length) {
+          setFormerInput(row.former_usernames.join(', '))
+        }
+        if (row?.leak_search_title_hints?.length) {
+          setTitleHintsInput(row.leak_search_title_hints.join('\n'))
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadProfile()
+  }, [supabase])
+
+  const saveSearchIdentity = useCallback(async () => {
+    setSaveIdentityLoading(true)
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+      await supabase
+        .from('profiles')
+        .update({
+          former_usernames: parseAliases(formerInput),
+          leak_search_title_hints: parseTitleHints(titleHintsInput),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+    } finally {
+      setSaveIdentityLoading(false)
+    }
+  }, [supabase, formerInput, titleHintsInput])
+
+  const sortedAlerts = useMemo(() => {
+    return [...activeAlerts].sort((a, b) => {
+      const ua = parseLeakMeta(a.notes).urgency
+      const ub = parseLeakMeta(b.notes).urgency
+      return urgencyRank(ua) - urgencyRank(ub)
+    })
+  }, [activeAlerts])
+
   const runScan = async () => {
     setScanLoading(true)
     setScanSummary(null)
@@ -90,12 +200,19 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
       const res = await fetch('/api/leaks/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aliases, strict: strictScan }),
+        body: JSON.stringify({
+          aliases,
+          former_usernames: parseAliases(formerInput),
+          title_hints: parseTitleHints(titleHintsInput),
+          include_content_titles: includeContentTitles,
+          strict: strictScan,
+        }),
       })
       const data = (await res.json().catch(() => ({}))) as {
         inserted?: number
         skipped?: number
         filteredStrict?: number
+        pageVerifyCount?: number
         message?: string
         error?: string
       }
@@ -103,6 +220,9 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
         setScanSummary(
           `Added ${data.inserted ?? 0} new alert(s). Skipped duplicates: ${data.skipped ?? 0}.` +
             (typeof data.filteredStrict === 'number' ? ` Filtered by strict mode: ${data.filteredStrict}.` : '') +
+            (typeof data.pageVerifyCount === 'number' && data.pageVerifyCount > 0
+              ? ` Critical pages verified: ${data.pageVerifyCount}.`
+              : '') +
             (data.message ? ` ${data.message}` : ''),
         )
       } else {
@@ -203,6 +323,55 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
         />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="former-input" className="text-xs text-muted-foreground">
+          Former / old usernames (comma or line; saved to your profile for every scan)
+        </Label>
+        <Textarea
+          id="former-input"
+          value={formerInput}
+          onChange={(e) => setFormerInput(e.target.value)}
+          placeholder="Handles you used before a rebrand"
+          className="min-h-[56px] text-sm"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="title-hints" className="text-xs text-muted-foreground">
+          Content titles / phrases to search (one per line; merged with your library titles when enabled below)
+        </Label>
+        <Textarea
+          id="title-hints"
+          value={titleHintsInput}
+          onChange={(e) => setTitleHintsInput(e.target.value)}
+          placeholder="Exact or partial video or set titles that might appear on leak sites"
+          className="min-h-[72px] text-sm"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="include-content-titles"
+            checked={includeContentTitles}
+            onCheckedChange={(v) => setIncludeContentTitles(v === true)}
+          />
+          <label htmlFor="include-content-titles" className="text-xs text-muted-foreground leading-snug cursor-pointer">
+            Include published / scheduled titles from your content library in search queries (caps apply).
+          </label>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={saveIdentityLoading}
+          onClick={saveSearchIdentity}
+        >
+          {saveIdentityLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Save former names &amp; title hints
+        </Button>
+      </div>
+
       <div className="flex items-start gap-2">
         <Checkbox
           id="strict-scan"
@@ -249,8 +418,16 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
 
       {/* Active Alerts list (actionable) */}
       <div className="space-y-3">
-        {activeAlerts.map((alert) => (
-          <div
+        {sortedAlerts.map((alert) => {
+          const meta = parseLeakMeta(alert.notes)
+          const urgencyClass =
+            meta.urgency === 'immediate'
+              ? 'border-destructive text-destructive'
+              : meta.urgency === 'soon'
+                ? 'border-orange-500 text-orange-400'
+                : 'border-muted-foreground/50 text-muted-foreground'
+          return (
+            <div
             key={alert.id}
             className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/30 p-4 sm:flex-row sm:items-start sm:justify-between"
           >
@@ -262,6 +439,11 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
                 >
                   {alert.severity || 'unknown'}
                 </Badge>
+                {meta.urgency ? (
+                  <Badge variant="outline" className={cn('text-xs capitalize', urgencyClass)}>
+                    {meta.urgency}
+                  </Badge>
+                ) : null}
                 <Badge variant="outline" className="text-xs capitalize">
                   {alert.status.replace('_', ' ')}
                 </Badge>
@@ -269,7 +451,7 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
               </div>
               <div className="text-sm break-all">{alert.source_url}</div>
               {alert.notes ? (
-                <div className="text-xs text-muted-foreground line-clamp-2">{alert.notes}</div>
+                <div className="text-xs text-muted-foreground line-clamp-3">{formatNotesLine(alert.notes)}</div>
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -284,7 +466,8 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
               </Button>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* DMCA modal */}

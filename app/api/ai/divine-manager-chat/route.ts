@@ -425,6 +425,20 @@ const CHAT_TOOLS: Array<{
             items: { type: 'string' },
             description: 'Extra @handles or names to search (optional)',
           },
+          former_usernames: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Old / prior handles before rebrand (optional)',
+          },
+          title_hints: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Content titles or phrases to search for leaks (optional)',
+          },
+          include_content_titles: {
+            type: 'boolean',
+            description: 'If true (default), include titles from the creator content library in queries.',
+          },
           urls: {
             type: 'array',
             items: { type: 'string' },
@@ -490,13 +504,23 @@ async function runContextTool(
       const aliases = Array.isArray(args.aliases)
         ? (args.aliases as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
         : []
+      const former_usernames = Array.isArray(args.former_usernames)
+        ? (args.former_usernames as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        : []
+      const title_hints = Array.isArray(args.title_hints)
+        ? (args.title_hints as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        : []
       const urls = Array.isArray(args.urls)
         ? (args.urls as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
         : []
       const strict = args.strict !== false
+      const include_content_titles = args.include_content_titles !== false
       const result = await runLeakScan(ctx.supabase, {
         userId: ctx.userId,
         aliases,
+        former_usernames,
+        title_hints,
+        include_content_titles,
         urls,
         strict,
       })
@@ -511,6 +535,9 @@ async function runContextTool(
         result.message ? `Note: ${result.message}` : '',
         `Web search provider: ${result.providerConfigured ? 'configured' : 'not configured'}.`,
         result.grokEnrichment ? 'Grok enrichment available on Pro.' : '',
+        typeof result.pageVerifyCount === 'number' && result.pageVerifyCount > 0
+          ? `Critical/high pages re-checked: ${result.pageVerifyCount}.`
+          : '',
       ]
         .filter(Boolean)
         .join(' ')

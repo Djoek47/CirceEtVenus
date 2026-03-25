@@ -3,52 +3,73 @@ import { createClient } from '@/lib/supabase/server'
 import { SerperProvider } from '@/lib/leaks/search-providers'
 import { normalizeUrl, guessSourcePlatform } from '@/lib/leaks/url-utils'
 import { enrichReputationWithGrok } from '@/lib/reputation/grok-enrichment'
+import {
+  buildWideWebQueries,
+  buildSocialQueries,
+  type ScanChannel,
+} from '@/lib/reputation/build-queries'
+
+type ScanMode = 'wide' | 'social' | 'both'
 
 type ScanBody = {
   limitPerQuery?: number
+  mode?: ScanMode
 }
 
-function buildQueries(usernames: string[]) {
-  const queries: string[] = []
-  const base = [
-    'reviews',
-    'drama',
-    'controversy',
-    'scam',
-    'worth it',
-    'subscribed',
-    'leak',
-    'reddit thread',
-  ]
-  for (const name of usernames) {
-    const clean = name.replace(/^@/, '').trim()
-    if (!clean) continue
-    // Broad queries
-    queries.push(`"${clean}" onlyfans`)
-    queries.push(`"${clean}" fansly`)
-    queries.push(`"${clean}" creator`)
-    for (const kw of base) {
-      queries.push(`"${clean}" ${kw}`)
+const GLOBAL_CANDIDATE_CAP = 250
+
+type SearchHit = { url: string; title?: string; snippet?: string; scan_channel: ScanChannel }
+
+async function runSerperQueries(
+  provider: SerperProvider,
+  queries: string[],
+  channel: ScanChannel,
+  limitPerQuery: number,
+): Promise<SearchHit[]> {
+  const results: SearchHit[] = []
+  for (const q of queries) {
+    try {
+      const r = await provider.search(q, { limit: limitPerQuery })
+      for (const item of r) {
+        const norm = normalizeUrl(item.link)
+        if (!norm) continue
+        results.push({
+          url: norm,
+          title: item.title,
+          snippet: item.snippet,
+          scan_channel: channel,
+        })
+      }
+    } catch {
+      // continue
     }
-    // Platform-specific
-    queries.push(`"${clean}" site:twitter.com`)
-    queries.push(`"${clean}" site:x.com`)
-    queries.push(`"${clean}" site:reddit.com`)
-    queries.push(`"${clean}" site:tiktok.com`)
-    queries.push(`"${clean}" site:instagram.com`)
   }
-  return Array.from(new Set(queries))
+  return results
+}
+
+/**
+ * Merge by URL: later entries overwrite earlier. Run wide first, then social so
+ * duplicate URLs are classified as social (per plan).
+ */
+function mergeHitsByUrl(hits: SearchHit[]): Map<string, SearchHit> {
+  const merged = new Map<string, SearchHit>()
+  for (const h of hits) {
+    merged.set(h.url, h)
+  }
+  return merged
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body: ScanBody = await req.json().catch(() => ({} as any))
+  const body: ScanBody = await req.json().catch(() => ({} as ScanBody))
   const limitPerQuery = Math.min(Math.max(body.limitPerQuery ?? 5, 1), 15)
+  const mode: ScanMode = body.mode === 'wide' || body.mode === 'social' ? body.mode : 'both'
 
-  // Determine plan to gate Grok enrichment for Pro users only
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('plan_id')
@@ -61,25 +82,31 @@ export async function POST(req: NextRequest) {
     normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId),
   )
 
-  // Gather usernames from social_profiles + platform_connections
-  const [{ data: profiles }, { data: platforms }] = await Promise.all([
+  const [{ data: profiles }, { data: platforms }, { data: profileRow }] = await Promise.all([
     supabase.from('social_profiles').select('platform,username').eq('user_id', user.id),
     supabase
       .from('platform_connections')
       .select('platform,platform_username,niches')
       .eq('user_id', user.id)
       .eq('is_connected', true),
+    supabase.from('profiles').select('former_usernames').eq('id', user.id).maybeSingle(),
   ])
 
   const usernames = new Set<string>()
+  const niches = new Set<string>()
   for (const p of profiles || []) {
     if ((p as any).username) usernames.add((p as any).username)
   }
-  const niches = new Set<string>()
   for (const p of platforms || []) {
     if ((p as any).platform_username) usernames.add((p as any).platform_username)
     if (Array.isArray((p as any).niches)) {
       for (const n of (p as any).niches) niches.add(String(n))
+    }
+  }
+  const former = (profileRow as any)?.former_usernames as string[] | null | undefined
+  if (Array.isArray(former)) {
+    for (const h of former) {
+      if (h && String(h).trim()) usernames.add(String(h).trim())
     }
   }
 
@@ -89,60 +116,79 @@ export async function POST(req: NextRequest) {
 
   const serperKey = process.env.SERPER_API_KEY
   if (!serperKey) {
-    return NextResponse.json({ error: 'Search provider not configured' }, { status: 500 })
+    return NextResponse.json(
+      {
+        error:
+          'Serper web search is not configured. Add SERPER_API_KEY to your server environment (e.g. Vercel → Settings → Environment Variables), then redeploy. Create a key at https://serper.dev — the same key powers leak scans and reputation scans.',
+      },
+      { status: 503 },
+    )
   }
   const provider = new SerperProvider(serperKey)
+  const handleList = Array.from(usernames)
 
-  const queries = buildQueries(Array.from(usernames)).slice(0, 30)
-  const results: Array<{ url: string; title?: string; snippet?: string }> = []
+  const wideQueries = mode === 'social' ? [] : buildWideWebQueries(handleList)
+  const socialQueries = mode === 'wide' ? [] : buildSocialQueries(handleList)
 
-  for (const q of queries) {
-    try {
-      const r = await provider.search(q, { limit: limitPerQuery })
-      for (const item of r) {
-        const norm = normalizeUrl(item.link)
-        if (!norm) continue
-        results.push({ url: norm, title: item.title, snippet: item.snippet })
-      }
-    } catch {
-      // continue
-    }
+  const wideHits =
+    wideQueries.length > 0
+      ? await runSerperQueries(provider, wideQueries, 'web_wide', limitPerQuery)
+      : []
+  const socialHits =
+    socialQueries.length > 0
+      ? await runSerperQueries(provider, socialQueries, 'social', limitPerQuery)
+      : []
+
+  const mergedMap = mergeHitsByUrl([...wideHits, ...socialHits])
+  const candidates = Array.from(mergedMap.values()).slice(0, GLOBAL_CANDIDATE_CAP)
+
+  if (candidates.length === 0) {
+    return NextResponse.json({
+      success: true,
+      inserted: 0,
+      skipped: 0,
+      insertedByChannel: { web_wide: 0, social: 0 },
+      mode,
+    })
   }
-
-  if (results.length === 0) {
-    return NextResponse.json({ success: true, inserted: 0, skipped: 0 })
-  }
-
-  const merged = new Map<string, { url: string; title?: string; snippet?: string }>()
-  for (const r of results) {
-    if (!merged.has(r.url)) merged.set(r.url, r)
-  }
-  const candidates = Array.from(merged.values()).slice(0, 250)
 
   const { data: existing } = await supabase
     .from('reputation_mentions')
     .select('source_url')
     .eq('user_id', user.id)
-    .in('source_url', candidates.map((c) => c.url))
+    .in(
+      'source_url',
+      candidates.map((c) => c.url),
+    )
 
   const existingSet = new Set((existing || []).map((e: any) => e.source_url))
 
   const inserts = candidates
     .filter((c) => !existingSet.has(c.url))
-    .map((c) => ({
-      user_id: user.id,
-      platform: guessSourcePlatform(c.url),
-      source_url: c.url,
-      title: c.title || null,
-      content_preview: c.snippet || '',
-      sentiment: 'neutral',
-      detected_at: new Date().toISOString(),
-      is_read: false,
-      is_reviewed: false,
-      author: null,
-    }))
+    .map((c) => {
+      const platform = guessSourcePlatform(c.url)
+      return {
+        user_id: user.id,
+        source: platform || 'web_search',
+        platform,
+        source_url: c.url,
+        title: c.title || null,
+        content_preview: c.snippet || '',
+        sentiment: 'neutral',
+        detected_at: new Date().toISOString(),
+        is_read: false,
+        is_reviewed: false,
+        author: null,
+        scan_channel: c.scan_channel,
+      }
+    })
 
-  let insertedRows: Array<{ id: string; source_url: string; platform?: string | null; content_preview: string }> = []
+  let insertedRows: Array<{
+    id: string
+    source_url: string
+    platform?: string | null
+    content_preview: string
+  }> = []
 
   if (inserts.length > 0) {
     const { data: rows } = await supabase
@@ -155,7 +201,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Pro-only Grok enrichment for newly inserted mentions
+  const insertedByChannel = { web_wide: 0, social: 0 }
+  for (const row of inserts) {
+    if (row.scan_channel === 'web_wide') insertedByChannel.web_wide += 1
+    else insertedByChannel.social += 1
+  }
+
   let enrichedCount = 0
   const xaiKey = process.env.XAI_API_KEY
 
@@ -186,14 +237,16 @@ export async function POST(req: NextRequest) {
                 ai_category: e.category || null,
                 ai_rationale: e.rationale || null,
                 ai_suggested_reply: e.suggestedReply || null,
+                ai_reputation_impact: e.reputationImpact || null,
+                ai_recommended_action: e.recommendedAction || null,
               })
               .eq('user_id', user.id)
-              .eq('id', e.id || '')
-          )
+              .eq('id', e.id || ''),
+          ),
         )
       }
     } catch {
-      // Grok enrichment is best-effort; ignore failures so base scan still succeeds
+      // Grok enrichment is best-effort
     }
   }
 
@@ -201,8 +254,9 @@ export async function POST(req: NextRequest) {
     success: true,
     inserted: inserts.length,
     skipped: candidates.length - inserts.length,
+    insertedByChannel,
     enriched: enrichedCount,
     pro: isProPlan,
+    mode,
   })
 }
-

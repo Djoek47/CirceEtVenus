@@ -17,6 +17,10 @@ export interface Profile {
   encrypted_birthday: string | null
   birthday_passphrase_hash: string | null
   has_birthday_set: boolean
+  /** Prior platform handles for leak search (rebrands) */
+  former_usernames?: string[] | null
+  /** Manual content title hints for leak search */
+  leak_search_title_hints?: string[] | null
   created_at: string
   updated_at: string
 }
@@ -109,6 +113,10 @@ export interface LeakAlert {
   notes: string | null
 }
 
+export type ReputationScanChannel = 'web_wide' | 'social'
+export type AiReputationImpact = 'harmful' | 'helpful' | 'neutral'
+export type AiRecommendedReputationAction = 'reply' | 'report' | 'monitor' | 'ignore'
+
 export interface ReputationMention {
   id: string
   user_id: string
@@ -122,10 +130,14 @@ export interface ReputationMention {
   author: string | null
   detected_at: string
   is_reviewed: boolean
+  /** Serper pass: wide web vs social-focused */
+  scan_channel?: ReputationScanChannel | null
   // Optional AI enrichment fields (filled by Grok for Pro users)
   ai_category?: string | null
   ai_rationale?: string | null
   ai_suggested_reply?: string | null
+  ai_reputation_impact?: AiReputationImpact | null
+  ai_recommended_action?: AiRecommendedReputationAction | null
 }
 
 export interface AnalyticsSnapshot {

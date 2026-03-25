@@ -5,6 +5,10 @@ import { runLeakScan } from '@/lib/leaks/run-scan'
 type ScanBody = {
   urls?: string[]
   aliases?: string[]
+  former_usernames?: string[]
+  title_hints?: string[]
+  /** Default true: include titles from content library */
+  include_content_titles?: boolean
   limitPerQuery?: number
   /** Default true: filter search hits (Grok for Pro, keyword match otherwise). Manual URLs are always kept. */
   strict?: boolean
@@ -23,6 +27,9 @@ export async function POST(req: NextRequest) {
     userId: user.id,
     urls: body.urls,
     aliases: body.aliases,
+    former_usernames: body.former_usernames,
+    title_hints: body.title_hints,
+    include_content_titles: body.include_content_titles,
     limitPerQuery: body.limitPerQuery,
     strict: body.strict,
   })
@@ -49,5 +56,6 @@ export async function POST(req: NextRequest) {
     providerConfigured: result.providerConfigured,
     grokEnrichment: result.grokEnrichment,
     fetchVerified: result.fetchVerified,
+    pageVerifyCount: result.pageVerifyCount,
   })
 }

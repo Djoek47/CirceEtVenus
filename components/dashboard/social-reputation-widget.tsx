@@ -276,6 +276,14 @@ export function SocialReputationWidget() {
         throw new Error(data.error || 'Failed to scan reputation')
       }
 
+      if (isPro && typeof data.inserted === 'number' && data.inserted > 0) {
+        try {
+          await fetch('/api/social/reputation-briefing', { method: 'POST' })
+        } catch {
+          // Briefing is best-effort
+        }
+      }
+
       const by = data.insertedByChannel as { web_wide?: number; social?: number } | undefined
       const channelPart =
         by && typeof by.web_wide === 'number' && typeof by.social === 'number'

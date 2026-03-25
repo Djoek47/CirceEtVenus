@@ -420,6 +420,11 @@ export async function runLeakScan(
             ? { grok: grokPre }
             : null
 
+      const nuanceLine =
+        grokPre?.distributionNuance && grokPre.distributionNuance.trim()
+          ? grokPre.distributionNuance.trim().slice(0, 500)
+          : null
+
       return {
         user_id: userId,
         source_url: c.url,
@@ -430,6 +435,7 @@ export async function runLeakScan(
         detected_by: fromSearch ? 'search_api' : 'user_report',
         query: c.query || null,
         notes: baseNotes ? JSON.stringify(baseNotes) : null,
+        ai_nuance_summary: nuanceLine,
       }
     })
 
@@ -472,11 +478,16 @@ export async function runLeakScan(
               ...(row.notes ? safeJsonParse(row.notes) : {}),
               grok: e,
             }
+            const summary =
+              e.distributionNuance && e.distributionNuance.trim()
+                ? e.distributionNuance.trim().slice(0, 500)
+                : null
             await supabase
               .from('leak_alerts')
               .update({
                 severity: e.severity || 'medium',
                 notes: JSON.stringify(nextNotes),
+                ai_nuance_summary: summary,
               })
               .eq('id', row.id)
           }

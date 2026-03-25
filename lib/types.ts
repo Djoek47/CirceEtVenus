@@ -5,6 +5,23 @@ export type FanTier = 'whale' | 'regular' | 'new' | 'inactive'
 export type ContentStatus = 'draft' | 'scheduled' | 'published' | 'archived'
 export type ConversationStatus = 'active' | 'pending' | 'archived'
 export type LeakSeverity = 'critical' | 'high' | 'medium' | 'low'
+
+/** Creator workflow on a leak alert (distinct from detection status) */
+export type LeakUserCaseStatus =
+  | 'open'
+  | 'resolved'
+  | 'contacted'
+  | 'unresolved'
+  | 'needs_help'
+  | 'snoozed'
+  | 'waived'
+
+/** How the creator wants distribution interpreted for this case */
+export type LeakDistributionIntent =
+  | 'unspecified'
+  | 'paid_only_elsewhere'
+  | 'ok_if_free'
+  | 'cross_post_consented'
 export type MentionSentiment = 'positive' | 'neutral' | 'negative'
 
 export interface Profile {
@@ -107,15 +124,29 @@ export interface LeakAlert {
   source_platform: string
   matched_content_id: string | null
   severity: LeakSeverity
-  status: 'detected' | 'reviewing' | 'resolved' | 'false_positive'
+  /** Detection pipeline status (e.g. detected, reviewing, resolved) */
+  status: string
   detected_at: string
   resolved_at: string | null
   notes: string | null
+  user_case_status?: LeakUserCaseStatus
+  snooze_until?: string | null
+  creator_distribution_intent?: LeakDistributionIntent | null
+  /** One-line from Grok for list views */
+  ai_nuance_summary?: string | null
 }
 
 export type ReputationScanChannel = 'web_wide' | 'social'
 export type AiReputationImpact = 'harmful' | 'helpful' | 'neutral'
 export type AiRecommendedReputationAction = 'reply' | 'report' | 'monitor' | 'ignore'
+
+/** Grok multi-tone replies (optional); primary mirrors ai_suggested_reply */
+export type AiReplyVariants = {
+  warm?: string
+  professional?: string
+  witty?: string
+  primary?: string
+}
 
 export interface ReputationMention {
   id: string
@@ -138,6 +169,7 @@ export interface ReputationMention {
   ai_suggested_reply?: string | null
   ai_reputation_impact?: AiReputationImpact | null
   ai_recommended_action?: AiRecommendedReputationAction | null
+  ai_reply_variants?: AiReplyVariants | null
 }
 
 export interface AnalyticsSnapshot {

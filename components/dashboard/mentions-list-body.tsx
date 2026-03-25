@@ -1,9 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Bell,
   ThumbsUp,
@@ -17,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ReputationMention } from '@/lib/types'
+import { formatMentionPlatform } from '@/lib/reputation/platform-display'
 
 type ChannelFilter = 'all' | 'web_wide' | 'social'
 
@@ -45,12 +48,111 @@ function sortMentions(list: ReputationMention[]) {
 const REPORTING_TIPS =
   'Use the platform’s built-in report or abuse tools for harassment, impersonation, or non-consensual content. For serious defamation or threats, consider documenting links and timestamps and speaking with a qualified attorney — this is general information, not legal advice.'
 
+function ReplySuggestions({ mention }: { mention: ReputationMention }) {
+  const v = mention.ai_reply_variants
+  const warm = v?.warm?.trim()
+  const professional = v?.professional?.trim()
+  const witty = v?.witty?.trim()
+  const count = [warm, professional, witty].filter(Boolean).length
+  const fallback = mention.ai_suggested_reply?.trim()
+  const singleText = fallback || warm || professional || witty || ''
+
+  if (count > 1 && (warm || professional || witty)) {
+    const defaultTab = warm ? 'warm' : professional ? 'professional' : 'witty'
+    return (
+      <div className="mt-2 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs">
+        <div className="font-medium text-primary">Response tones (copy one you own)</div>
+        <Tabs defaultValue={defaultTab} className="w-full">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
+            {warm ? <TabsTrigger value="warm">Warm</TabsTrigger> : null}
+            {professional ? <TabsTrigger value="professional">Professional</TabsTrigger> : null}
+            {witty ? <TabsTrigger value="witty">Witty</TabsTrigger> : null}
+          </TabsList>
+          {warm ? (
+            <TabsContent value="warm" className="mt-2 space-y-2">
+              <p className="whitespace-pre-wrap text-muted-foreground">{warm}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                onClick={() => void navigator.clipboard.writeText(warm)}
+              >
+                <Copy className="h-3 w-3" />
+                Copy
+              </Button>
+            </TabsContent>
+          ) : null}
+          {professional ? (
+            <TabsContent value="professional" className="mt-2 space-y-2">
+              <p className="whitespace-pre-wrap text-muted-foreground">{professional}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                onClick={() => void navigator.clipboard.writeText(professional)}
+              >
+                <Copy className="h-3 w-3" />
+                Copy
+              </Button>
+            </TabsContent>
+          ) : null}
+          {witty ? (
+            <TabsContent value="witty" className="mt-2 space-y-2">
+              <p className="whitespace-pre-wrap text-muted-foreground">{witty}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                onClick={() => void navigator.clipboard.writeText(witty)}
+              >
+                <Copy className="h-3 w-3" />
+                Copy
+              </Button>
+            </TabsContent>
+          ) : null}
+        </Tabs>
+      </div>
+    )
+  }
+
+  if (singleText) {
+    return (
+      <div className="mt-2 space-y-1 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs">
+        <div className="flex items-center gap-1 font-medium text-primary">
+          <MessageCircle className="h-3 w-3" />
+          Suggested reply from Venus
+        </div>
+        <p className="whitespace-pre-wrap text-muted-foreground">{singleText}</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-1 h-8 gap-1"
+          onClick={() => void navigator.clipboard.writeText(singleText)}
+        >
+          <Copy className="h-3 w-3" />
+          Copy reply
+        </Button>
+      </div>
+    )
+  }
+
+  return null
+}
+
 export function MentionsListBody({
   unreviewed,
   reviewed,
+  totalMentionCount,
+  hasBriefing,
 }: {
   unreviewed: ReputationMention[]
   reviewed: ReputationMention[]
+  totalMentionCount: number
+  hasBriefing: boolean
 }) {
   const [channel, setChannel] = useState<ChannelFilter>('all')
 
@@ -100,18 +202,39 @@ export function MentionsListBody({
           {filteredUnreviewed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <Check className="mb-4 h-12 w-12 text-chart-2" />
-              <p className="font-medium">All caught up!</p>
-              <p className="text-sm text-muted-foreground">
-                {channel === 'all'
-                  ? 'No new mentions to review'
-                  : 'No mentions in this filter'}
-              </p>
+              {totalMentionCount === 0 ? (
+                <>
+                  <p className="font-medium">No mentions from indexed discovery yet</p>
+                  <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                    Connect X, Instagram, TikTok, or creator platforms in Integrations, then run{' '}
+                    <span className="text-foreground">Refresh Vision</span> on this page. Results come from public
+                    search indexes—not live timelines.
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-4" asChild>
+                    <Link href="/dashboard/settings?tab=integrations">Open Integrations</Link>
+                  </Button>
+                </>
+              ) : channel !== 'all' ? (
+                <>
+                  <p className="font-medium">Nothing in this filter</p>
+                  <p className="text-sm text-muted-foreground">Try &quot;All&quot; or the other channel tab.</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">Inbox clear</p>
+                  <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                    {hasBriefing
+                      ? 'Nice work—use the AI briefing above for your latest snapshot and next steps.'
+                      : 'You’ve reviewed what’s in queue. Generate an AI briefing above (Pro) for themes and opportunities.'}
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
               {filteredUnreviewed.map((mention) => {
                 const SentimentIcon = sentimentIcons[mention.sentiment]
-                const channelLabel = mention.scan_channel === 'web_wide' ? 'Web' : 'Social'
+                const channelLabel = mention.scan_channel === 'web_wide' ? 'Web index' : 'Social index'
                 const showReportTips =
                   mention.ai_recommended_action === 'report' ||
                   mention.ai_reputation_impact === 'harmful'
@@ -130,8 +253,11 @@ export function MentionsListBody({
                           <SentimentIcon className="mr-1 h-3 w-3" />
                           {mention.sentiment}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {mention.platform}
+                        <Badge
+                          variant="outline"
+                          className="border-primary/25 bg-primary/5 text-xs font-semibold text-foreground"
+                        >
+                          {formatMentionPlatform(mention.platform)}
                         </Badge>
                         {mention.scan_channel && (
                           <Badge variant="secondary" className="text-xs">
@@ -150,7 +276,7 @@ export function MentionsListBody({
                             )}
                           >
                             {mention.ai_reputation_impact === 'harmful'
-                              ? 'Reputation risk'
+                              ? 'High-risk'
                               : mention.ai_reputation_impact === 'helpful'
                                 ? 'Helps reputation'
                                 : 'Neutral impact'}
@@ -166,29 +292,7 @@ export function MentionsListBody({
                         )}
                       </div>
                       <p className="text-sm">{mention.content_preview}</p>
-                      {mention.ai_suggested_reply && (
-                        <div className="mt-2 space-y-1 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs">
-                          <div className="flex items-center gap-1 font-medium text-primary">
-                            <MessageCircle className="h-3 w-3" />
-                            Suggested reply from Venus
-                          </div>
-                          <p className="whitespace-pre-wrap text-muted-foreground">
-                            {mention.ai_suggested_reply}
-                          </p>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="mt-1 h-8 gap-1"
-                            onClick={() =>
-                              void navigator.clipboard.writeText(mention.ai_suggested_reply || '')
-                            }
-                          >
-                            <Copy className="h-3 w-3" />
-                            Copy reply
-                          </Button>
-                        </div>
-                      )}
+                      <ReplySuggestions mention={mention} />
                       {showReportTips && (
                         <details className="rounded-md border border-border bg-muted/30 p-2 text-xs">
                           <summary className="cursor-pointer font-medium text-muted-foreground">
@@ -248,12 +352,15 @@ export function MentionsListBody({
                           <SentimentIcon className="mr-1 h-3 w-3" />
                           {mention.sentiment}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {mention.platform}
+                        <Badge
+                          variant="outline"
+                          className="border-primary/25 bg-primary/5 text-xs font-semibold text-foreground"
+                        >
+                          {formatMentionPlatform(mention.platform)}
                         </Badge>
                         {mention.scan_channel && (
                           <Badge variant="secondary" className="text-xs">
-                            {mention.scan_channel === 'web_wide' ? 'Web' : 'Social'}
+                            {mention.scan_channel === 'web_wide' ? 'Web index' : 'Social index'}
                           </Badge>
                         )}
                       </div>

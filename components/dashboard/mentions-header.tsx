@@ -63,7 +63,7 @@ export function MentionsHeader() {
         identityHandles.length > 0 && !useAllHandles && selectedHandles.size > 0
           ? Array.from(selectedHandles)
           : undefined
-      await fetch('/api/social/scan-reputation', {
+      const res = await fetch('/api/social/scan-reputation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,6 +71,14 @@ export function MentionsHeader() {
           ...(handlePayload ? { handles: handlePayload } : {}),
         }),
       })
+      const data = await res.json().catch(() => ({}))
+      if (isPro && data?.success && typeof data.inserted === 'number' && data.inserted > 0) {
+        try {
+          await fetch('/api/social/reputation-briefing', { method: 'POST' })
+        } catch {
+          // best-effort
+        }
+      }
       router.refresh()
     } catch {
       // silent fail; existing data remains
@@ -86,8 +94,9 @@ export function MentionsHeader() {
           <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <span className="text-venus">Venus&apos;</span> Watchful Gaze
           </h2>
-          <p className="text-muted-foreground">
-            The goddess tracks your reputation and sentiment across the realm
+          <p className="max-w-2xl text-muted-foreground">
+            Monitors indexed mentions (search discovery), triages risk, and suggests replies you send yourself—no
+            auto-posting.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

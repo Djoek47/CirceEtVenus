@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { LeakAlert } from '@/lib/types'
+import type { LeakAlert, LeakDistributionIntent, LeakUserCaseStatus } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -55,20 +55,86 @@ function parseLeakMeta(notes: string | null): {
   urgency?: string
   rationale?: string
   pageVerified?: boolean
+  evidenceAccessibility?: string
+  reviewConclusion?: string
+  distributionNuance?: string
+  suggestedUserAction?: string
 } {
   try {
     const j = JSON.parse(notes || '{}') as {
-      grok?: { urgency?: string; rationale?: string }
+      grok?: {
+        urgency?: string
+        rationale?: string
+        evidenceAccessibility?: string
+        reviewConclusion?: string
+        distributionNuance?: string
+        suggestedUserAction?: string
+      }
       pageVerify?: { verifiedLikelyMatch?: boolean }
     }
+    const g = j.grok
     return {
-      urgency: j.grok?.urgency,
-      rationale: j.grok?.rationale,
+      urgency: g?.urgency,
+      rationale: g?.rationale,
       pageVerified: j.pageVerify?.verifiedLikelyMatch,
+      evidenceAccessibility: g?.evidenceAccessibility,
+      reviewConclusion: g?.reviewConclusion,
+      distributionNuance: g?.distributionNuance,
+      suggestedUserAction: g?.suggestedUserAction,
     }
   } catch {
     return {}
   }
+}
+
+const REVIEW_BADGE: Record<string, string> = {
+  likely_infringing: 'Likely infringing',
+  non_conclusive: 'Non-conclusive',
+  non_conclusive_needs_access: 'Needs sign-in to verify',
+}
+
+const ACCESS_BADGE: Record<string, string> = {
+  public_snippet: 'Public snippet',
+  likely_paywall_or_sign_in: 'Paywall / sign-in likely',
+  unknown: 'Unknown access',
+}
+
+const SUGGESTED_ACTION_LABEL: Record<string, string> = {
+  review_when_signed_in: 'Review when signed in',
+  dmca_if_confirmed_match: 'DMCA if you confirm a match',
+  monitor: 'Monitor',
+  ignore_if_intentionally_public: 'OK if intentionally public',
+}
+
+const CASE_STATUS_OPTIONS: { value: LeakUserCaseStatus; label: string }[] = [
+  { value: 'open', label: 'Open' },
+  { value: 'contacted', label: 'Contacted platform' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'unresolved', label: 'Unresolved' },
+  { value: 'needs_help', label: 'Needs more help' },
+  { value: 'snoozed', label: 'Snoozed' },
+  { value: 'waived', label: 'Not pursuing (waived)' },
+]
+
+const DISTRIBUTION_OPTIONS: { value: LeakDistributionIntent; label: string }[] = [
+  { value: 'unspecified', label: 'Not specified' },
+  { value: 'paid_only_elsewhere', label: 'Paid / exclusive elsewhere' },
+  { value: 'ok_if_free', label: 'OK if free everywhere I choose' },
+  { value: 'cross_post_consented', label: 'Cross-post / consent nuance' },
+]
+
+function defaultSnoozeIso(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return d.toISOString()
+}
+
+function toDatetimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function formatNotesLine(notes: string | null): string {
@@ -116,6 +182,7 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
   const [proofUploading, setProofUploading] = useState(false)
   const [proofPaths, setProofPaths] = useState<string[]>([])
   const [isPro, setIsPro] = useState(false)
+  const [alertUpdateError, setAlertUpdateError] = useState<string | null>(null)
 
   const { handles: identityHandles, contentTitles } = useScanIdentity()
   const [useAllLeakHandles, setUseAllLeakHandles] = useState(true)
@@ -227,6 +294,24 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
       return urgencyRank(ua) - urgencyRank(ub)
     })
   }, [activeAlerts])
+
+  const patchLeakAlert = useCallback(
+    async (alertId: string, body: Record<string, unknown>) => {
+      setAlertUpdateError(null)
+      const res = await fetch(`/api/leaks/alerts/${alertId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAlertUpdateError(typeof data.error === 'string' ? data.error : 'Could not update alert.')
+        return
+      }
+      router.refresh()
+    },
+    [router],
+  )
 
   const runScan = async () => {
     setScanLoading(true)
@@ -540,58 +625,182 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
       </div>
 
       {/* Active Alerts list (actionable) */}
+      {alertUpdateError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {alertUpdateError}
+        </p>
+      ) : null}
       <div className="space-y-3">
         {sortedAlerts.map((alert) => {
           const meta = parseLeakMeta(alert.notes)
+          const caseStatus = (alert.user_case_status as LeakUserCaseStatus | undefined) || 'open'
+          const distIntent =
+            (alert.creator_distribution_intent as LeakDistributionIntent | undefined) || 'unspecified'
           const urgencyClass =
             meta.urgency === 'immediate'
               ? 'border-destructive text-destructive'
               : meta.urgency === 'soon'
                 ? 'border-orange-500 text-orange-400'
                 : 'border-muted-foreground/50 text-muted-foreground'
+          const nuanceText = meta.distributionNuance || alert.ai_nuance_summary || ''
           return (
             <div
-            key={alert.id}
-            className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/30 p-4 sm:flex-row sm:items-start sm:justify-between"
-          >
-            <div className="flex-1 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className={cn('text-xs capitalize', severityColors[alert.severity] || 'bg-muted text-muted-foreground')}
-                >
-                  {alert.severity || 'unknown'}
-                </Badge>
-                {meta.urgency ? (
-                  <Badge variant="outline" className={cn('text-xs capitalize', urgencyClass)}>
-                    {meta.urgency}
+              key={alert.id}
+              className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/30 p-4 sm:flex-row sm:items-start sm:justify-between"
+            >
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-xs capitalize',
+                      severityColors[alert.severity] || 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {alert.severity || 'unknown'}
                   </Badge>
+                  {meta.urgency ? (
+                    <Badge variant="outline" className={cn('text-xs capitalize', urgencyClass)}>
+                      {meta.urgency}
+                    </Badge>
+                  ) : null}
+                  <Badge variant="outline" className="text-xs capitalize">
+                    {alert.status.replace('_', ' ')}
+                  </Badge>
+                  {meta.reviewConclusion ? (
+                    <Badge variant="secondary" className="text-xs">
+                      {REVIEW_BADGE[meta.reviewConclusion] || meta.reviewConclusion}
+                    </Badge>
+                  ) : null}
+                  {meta.evidenceAccessibility && meta.evidenceAccessibility !== 'public_snippet' ? (
+                    <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-600 dark:text-amber-400">
+                      {ACCESS_BADGE[meta.evidenceAccessibility] || meta.evidenceAccessibility}
+                    </Badge>
+                  ) : null}
+                  <span className="text-xs text-muted-foreground">{alert.source_platform}</span>
+                </div>
+                <div className="text-sm break-all">{alert.source_url}</div>
+                {nuanceText ? (
+                  <p className="text-xs text-muted-foreground line-clamp-4">{nuanceText}</p>
                 ) : null}
-                <Badge variant="outline" className="text-xs capitalize">
-                  {alert.status.replace('_', ' ')}
-                </Badge>
-                <span className="text-xs text-muted-foreground">{alert.source_platform}</span>
+                {alert.notes ? (
+                  <div className="text-xs text-muted-foreground line-clamp-2">{formatNotesLine(alert.notes)}</div>
+                ) : null}
+                {(meta.distributionNuance || meta.suggestedUserAction || meta.rationale) && (
+                  <details className="rounded-md border border-border bg-muted/20 p-2 text-xs">
+                    <summary className="cursor-pointer font-medium text-foreground">AI triage detail</summary>
+                    <div className="mt-2 space-y-2 text-muted-foreground">
+                      {meta.suggestedUserAction ? (
+                        <p>
+                          <span className="font-medium text-foreground">Suggested action: </span>
+                          {SUGGESTED_ACTION_LABEL[meta.suggestedUserAction] || meta.suggestedUserAction}
+                        </p>
+                      ) : null}
+                      {meta.distributionNuance ? (
+                        <p>
+                          <span className="font-medium text-foreground">Distribution nuance: </span>
+                          {meta.distributionNuance}
+                        </p>
+                      ) : null}
+                      {meta.rationale ? (
+                        <p>
+                          <span className="font-medium text-foreground">Rationale: </span>
+                          {meta.rationale}
+                        </p>
+                      ) : null}
+                      <p className="text-[11px] italic">
+                        AI uses search snippets only—not legal advice. You confirm before any DMCA.
+                      </p>
+                    </div>
+                  </details>
+                )}
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap sm:items-end">
+                  <div className="space-y-1 min-w-[160px]">
+                    <Label className="text-[10px] text-muted-foreground">Your case status</Label>
+                    <Select
+                      value={caseStatus}
+                      onValueChange={(v) => {
+                        const next = v as LeakUserCaseStatus
+                        const payload: Record<string, unknown> = { user_case_status: next }
+                        if (next === 'snoozed') {
+                          payload.snooze_until = alert.snooze_until || defaultSnoozeIso()
+                        }
+                        void patchLeakAlert(alert.id, payload)
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CASE_STATUS_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {caseStatus === 'snoozed' ? (
+                    <div className="space-y-1 min-w-[200px]">
+                      <Label className="text-[10px] text-muted-foreground">Snooze until (local time)</Label>
+                      <Input
+                        type="datetime-local"
+                        className="h-9 text-xs"
+                        defaultValue={toDatetimeLocalValue(alert.snooze_until)}
+                        key={`${alert.id}-${alert.snooze_until ?? 'none'}`}
+                        onBlur={(e) => {
+                          const v = e.target.value
+                          if (!v) return
+                          const iso = new Date(v).toISOString()
+                          void patchLeakAlert(alert.id, { user_case_status: 'snoozed', snooze_until: iso })
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="space-y-1 min-w-[180px]">
+                    <Label className="text-[10px] text-muted-foreground">Your content intent</Label>
+                    <Select
+                      value={distIntent}
+                      onValueChange={(v) => {
+                        void patchLeakAlert(alert.id, {
+                          creator_distribution_intent: v as LeakDistributionIntent,
+                        })
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DISTRIBUTION_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
-              <div className="text-sm break-all">{alert.source_url}</div>
-              {alert.notes ? (
-                <div className="text-xs text-muted-foreground line-clamp-3">{formatNotesLine(alert.notes)}</div>
-              ) : null}
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Button asChild variant="outline" size="sm">
+                  <a href={alert.source_url} target="_blank" rel="noreferrer">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    View
+                  </a>
+                </Button>
+                <Button size="sm" onClick={() => startDmcaFromAlert(alert)}>
+                  Send DMCA
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm">
-                <a href={alert.source_url} target="_blank" rel="noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  View
-                </a>
-              </Button>
-              <Button size="sm" onClick={() => startDmcaFromAlert(alert)}>
-                Send DMCA
-              </Button>
-            </div>
-          </div>
           )
         })}
       </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        Circe does not log into paywalled or member-only pages. When a result looks like ads or sign-in walls, treat
+        triage as non-conclusive until you can verify while signed in. DMCA notices are yours to send; this tool only
+        helps draft and track.
+      </p>
 
       {/* DMCA modal */}
       <Dialog open={dmcaOpen} onOpenChange={setDmcaOpen}>

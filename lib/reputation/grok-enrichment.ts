@@ -9,6 +9,10 @@ export type ReputationGrokEnrichment = {
   category?: string
   rationale?: string
   suggestedReply?: string
+  /** When recommendedAction is reply: warm / professional / witty copy-paste options */
+  replyWarm?: string
+  replyProfessional?: string
+  replyWitty?: string
   reputationImpact?: ReputationImpact
   recommendedAction?: RecommendedReputationAction
 }
@@ -49,13 +53,15 @@ export async function enrichReputationWithGrok(opts: {
   - report: likely abuse, harassment, defamation, or ToS violation — user should use the platform's report flow (not legal advice)
   - monitor: watch but no immediate action
   - ignore: low stakes or noise
-- suggestedReply: if recommendedAction is reply, a short in-character reply that improves reputation and engagement. If recommendedAction is report, a one-line platform-agnostic note only (e.g. consider the platform's abuse or harassment reporting tools) — not legal advice. Otherwise null or omit.
+- If recommendedAction is reply: provide replyWarm (warm, gracious Venus tone), replyProfessional (polished, business-safe), replyWitty (playful clapback that stays winning — never petty or harassing), and suggestedReply (same as replyProfessional for backward compatibility). Keep each under ~280 chars.
+- If recommendedAction is report: suggestedReply is one-line platform-agnostic note only (e.g. consider the platform's abuse tools) — not legal advice. Omit replyWarm/replyProfessional/replyWitty.
+- Otherwise omit suggestedReply and reply variants.
 
 ${nicheContext}
 
 Return JSON object: { "items": [ ... ] }
 Each item:
-{ "id": "...", "url": "...", "platform": "twitter", "sentiment": "positive", "category": "praise", "rationale": "...", "reputationImpact": "helpful", "recommendedAction": "reply", "suggestedReply": "..." }
+{ "id": "...", "url": "...", "platform": "twitter", "sentiment": "positive", "category": "praise", "rationale": "...", "reputationImpact": "helpful", "recommendedAction": "reply", "suggestedReply": "...", "replyWarm": "...", "replyProfessional": "...", "replyWitty": "..." }
 
 Mentions:
 ${JSON.stringify(items, null, 2)}`
@@ -99,6 +105,9 @@ ${JSON.stringify(items, null, 2)}`
         category: x.category,
         rationale: x.rationale,
         suggestedReply: x.suggestedReply,
+        replyWarm: typeof x.replyWarm === 'string' ? x.replyWarm : undefined,
+        replyProfessional: typeof x.replyProfessional === 'string' ? x.replyProfessional : undefined,
+        replyWitty: typeof x.replyWitty === 'string' ? x.replyWitty : undefined,
         reputationImpact: normalizeImpact(x.reputationImpact),
         recommendedAction: normalizeAction(x.recommendedAction),
       }))

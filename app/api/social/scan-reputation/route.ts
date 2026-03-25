@@ -247,20 +247,33 @@ export async function POST(req: NextRequest) {
         enrichedCount = enrichments.length
 
         await Promise.all(
-          enrichments.map((e) =>
-            supabase
+          enrichments.map((e) => {
+            const primary =
+              e.replyProfessional || e.suggestedReply || e.replyWarm || e.replyWitty || null
+            let ai_reply_variants: Record<string, string> | null = null
+            if (e.recommendedAction === 'reply') {
+              const v: Record<string, string> = {}
+              if (e.replyWarm) v.warm = e.replyWarm
+              if (e.replyProfessional || e.suggestedReply)
+                v.professional = e.replyProfessional || e.suggestedReply || ''
+              if (e.replyWitty) v.witty = e.replyWitty
+              if (primary) v.primary = primary
+              if (Object.keys(v).length > 0) ai_reply_variants = v
+            }
+            return supabase
               .from('reputation_mentions')
               .update({
                 sentiment: e.sentiment,
                 ai_category: e.category || null,
                 ai_rationale: e.rationale || null,
-                ai_suggested_reply: e.suggestedReply || null,
+                ai_suggested_reply: primary,
+                ai_reply_variants,
                 ai_reputation_impact: e.reputationImpact || null,
                 ai_recommended_action: e.recommendedAction || null,
               })
               .eq('user_id', user.id)
-              .eq('id', e.id || ''),
-          ),
+              .eq('id', e.id || '')
+          }),
         )
       }
     } catch {

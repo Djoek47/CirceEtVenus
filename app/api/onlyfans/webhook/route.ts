@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { getPrefsForWebhook } from '@/lib/notification-preferences'
+import { maybeCreateWhaleTipUrgentTask } from '@/lib/divine/urgent-alerts'
 
 // Configure OnlyFans API webhook URL to: https://<your-domain>/api/onlyfans/webhook (POST only; do not use site root).
 
@@ -332,6 +333,8 @@ async function handleTip(supabase: ReturnType<typeof createClient> extends Promi
       avatar_url: fromUser.avatar || undefined,
     })
   }
+
+  await maybeCreateWhaleTipUrgentTask(supabase, connection.user_id, data.tip.amount, data.tip.fromUser).catch(() => undefined)
 }
 
 // Handle purchase (PPV, etc.)

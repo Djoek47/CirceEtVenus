@@ -135,22 +135,31 @@ export async function executeScheduledTasksForUser(
       const type = t.type as string
       const category = (t.category as string | null) ?? null
 
-      // NOTE: For now we only mark as executed. Real implementations should:
-      // - For dm_welcome / dm_followup: call mass DM endpoints with safe caps
-      // - For post_suggestion: schedule posts using content APIs
-      // - For pricing_change: call pricing optimizer / apply bounded changes
+      // NOTE: Placeholder execution — replace with real platform calls when wiring APIs.
+      let executorNote = 'Auto-executed placeholder'
+      if (type === 'vault_resale_campaign') {
+        executorNote =
+          'Vault resale: confirm media IDs, price, and schedule in Content; never auto-send without review.'
+      } else if (type === 'mass_dm_batch') {
+        executorNote =
+          'Mass DM batch: confirm segment, copy, and rate limits in Messages before sending.'
+      } else if (type === 'scheduled_post') {
+        executorNote = 'Scheduled post: verify time and platforms in Content calendar.'
+      } else if (type === 'dm_welcome' || type === 'dm_followup') {
+        executorNote = 'DM auto-executed placeholder'
+      } else if (category === 'content') {
+        executorNote = 'Content scheduling placeholder'
+      } else if (category === 'pricing') {
+        executorNote = 'Pricing adjustment placeholder'
+      }
 
       await updateTask(supabase, t.id, {
         status: 'executed',
         executed_at: new Date().toISOString(),
         payload: {
           ...(t.payload ?? {}),
-          executorNote:
-            (category === 'dm' && 'DM auto-executed placeholder') ||
-            (category === 'content' && 'Content scheduling placeholder') ||
-            (category === 'pricing' && 'Pricing adjustment placeholder') ||
-            'Auto-executed placeholder',
-        } as any,
+          executorNote,
+        } as Record<string, unknown>,
       })
       executed += 1
     } catch {

@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
 
     const focusedFanLine = focusedFan?.id
       ? `\n\nFocused DM fan (from UI): id=${focusedFan.id}, username=${focusedFan.username ?? 'unknown'}, name=${focusedFan.name ?? 'unknown'}.\nIf a focused fan is provided, assume all DM questions refer to this fan unless the creator names someone else. Do not run a broad search first. When using DM tools (get_dm_thread, get_reply_suggestions, send_message), use this fan's id directly unless the creator clearly asks for someone else. Prefer this fan over running get_dm_conversations when they are already in this chat.`
-      : ''
+      : '\n\nNo focused fan in the UI: if they ask to read a specific thread, use get_dm_conversations to find fanId or ask them to open Messages and pick a fan first.'
 
     const instructions = `You are the Divine Manager, a Jarvis-style voice companion for a creator. You speak in real time over voice. Be a calm, confident manager. Never role-play as the creator; never claim to have already sent messages or changed prices. You only describe what you see and what you recommend. Respect boundaries and platform safety. Avoid explicit or illegal content.
 
@@ -136,9 +136,9 @@ You have access to the creator's analytics: fans, revenue, and platform breakdow
 
 You have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. If a DM thread is not found (for example, the fan or conversation was deleted), tell the creator that the thread is no longer available and suggest picking another fan instead of treating it as a generic error. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options (the creator will see three buttons to choose while you read). send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.${focusedFanLine}
 
-Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation.
+Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation. Text chat has the full tool list; voice uses the same server-side tools—if something fails, suggest using Divine text chat for that action.
 
-    The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). When they say "write a caption", "caption this", or "what should I say", use generate_caption. When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice or list_fans with filter=top. For "which fans spent the most", "top 10 fans", or "who are my biggest spenders" use list_fans with filter=top (and optional sort). For "how did my mass message perform" or "last mass DM stats" use get_message_engagement with type=mass. For "publish my saved post" or "send my saved mass DM" use publish_queue_item with the queue id (you may need to describe that they should confirm in the app if you do not have the queue id). You can create in-app reminders with send_notification. Do NOT call end_call until you have finished speaking after any tools (including slow ones like analyze_content, pricing, or publish). After completing their request—or if they interrupt—still ask out loud: "Is there anything else you want me to do?" and wait for their answer. Only after they clearly indicate they are done or say goodbye, say a brief goodbye and then call end_call. Never end_call in the same turn as a tool before you have verbally confirmed they need nothing else. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish, publish_queue_item) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
+    The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). For a Supabase storage image URL they paste, use analyze_image_from_url. When they say "write a caption", "caption this", or "what should I say", use generate_caption. Prefer get_dm_thread_and_suggestions when they need both thread context and reply ideas. draft_fan_reply drafts a fan-facing line from Mimic Test (review only). When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice or list_fans with filter=top. For "which fans spent the most", "top 10 fans", or "who are my biggest spenders" use list_fans with filter=top (and optional sort). For "how did my mass message perform" or "last mass DM stats" use get_message_engagement with type=mass. For "publish my saved post" or "send my saved mass DM" use publish_queue_item with the queue id (you may need to describe that they should confirm in the app if you do not have the queue id). You can create in-app reminders with send_notification. For leaks/DMCA review use list_leak_alerts or run_leak_scan only when they ask. Do NOT call end_call until you have finished speaking after any tools (including slow ones like analyze_content, pricing, or publish). After completing their request—or if they interrupt—still ask out loud: "Is there anything else you want me to do?" and wait for their answer. Only after they clearly indicate they are done or say goodbye, say a brief goodbye and then call end_call. Never end_call in the same turn as a tool before you have verbally confirmed they need nothing else. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish, publish_queue_item) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
 
     const tools = [
       {
@@ -253,6 +253,39 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
             fanId: { type: 'string', description: 'Fan id from get_dm_conversations' },
           },
           required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_dm_thread_and_suggestions',
+        description:
+          'Preferred: fetch DM thread and Circe/Venus/Flirt reply suggestions in one step (faster than separate calls). Use fanId from get_dm_conversations.',
+        parameters: {
+          type: 'object',
+          properties: { fanId: { type: 'string', description: 'Fan id from get_dm_conversations' } },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'draft_fan_reply',
+        description:
+          'Draft a fan-facing DM in the creator\'s voice using Mimic Test settings. Review only; does not send. Requires Mimic consent. Use fanId from get_dm_conversations.',
+        parameters: {
+          type: 'object',
+          properties: { fanId: { type: 'string' } },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'analyze_image_from_url',
+        description:
+          'Vision analysis for an image at a Supabase storage or project-hosted URL (Divine full). Not for arbitrary external sites.',
+        parameters: {
+          type: 'object',
+          properties: { url: { type: 'string', description: 'https image URL' } },
+          required: ['url'],
         },
       },
       {
@@ -509,6 +542,106 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
             queueId: { type: 'string', description: 'Queue item id to publish' },
           },
           required: ['queueId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_leak_alerts',
+        description: 'List recent leak / DMCA candidate alerts from Protection.',
+        parameters: {
+          type: 'object',
+          properties: { limit: { type: 'number' } },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'run_leak_scan',
+        description:
+          'Search for leaked content and add candidates to Protection. Only when the creator asks to scan for leaks or prepare DMCA review.',
+        parameters: {
+          type: 'object',
+          properties: {
+            aliases: { type: 'array', items: { type: 'string' } },
+            urls: { type: 'array', items: { type: 'string' } },
+            strict: { type: 'boolean' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'trigger_reputation_briefing',
+        description: 'Generate or refresh the AI reputation briefing (Mentions).',
+        parameters: { type: 'object', properties: {} },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_reputation_mentions',
+        description: 'List recent reputation mentions.',
+        parameters: {
+          type: 'object',
+          properties: { limit: { type: 'number' } },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_integrations_summary',
+        description: 'Summarize connected platforms and social handles.',
+        parameters: { type: 'object', properties: {} },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_scheduled_content_summary',
+        description: 'List scheduled content items (Cosmic calendar).',
+        parameters: {
+          type: 'object',
+          properties: { limit: { type: 'number' } },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_cosmic_calendar',
+        description: 'Same as scheduled content summary.',
+        parameters: {
+          type: 'object',
+          properties: { limit: { type: 'number' } },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'ui_navigate',
+        description: 'Open a dashboard screen in the app (Divine full).',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              enum: [
+                '/dashboard',
+                '/dashboard/messages',
+                '/dashboard/content',
+                '/dashboard/protection',
+                '/dashboard/mentions',
+                '/dashboard/fans',
+                '/dashboard/analytics',
+                '/dashboard/divine-manager',
+                '/dashboard/ai-studio',
+                '/dashboard/social',
+                '/dashboard/settings',
+                '/dashboard/guide',
+              ],
+            },
+          },
+          required: ['path'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'ui_focus_fan',
+        description: 'Open Messages and focus a fan by id.',
+        parameters: {
+          type: 'object',
+          properties: { fanId: { type: 'string' } },
+          required: ['fanId'],
         },
       },
       {

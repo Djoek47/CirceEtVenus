@@ -37,13 +37,34 @@ export interface DivineManagerVoiceAuto {
   [key: string]: boolean | undefined
 }
 
+/** Optional alerts + job hints stored in automation_rules JSONB. */
+export interface DivineManagerAutomationAlerts {
+  /** Create a Divine Manager task when a tip exceeds the threshold (default on). */
+  tasks_for_whale_tips?: boolean
+  /** Minimum tip (USD) to create an urgent task (default 100). */
+  whale_tip_min_dollars?: number
+  /** If true, DMCA / leak workflows only create drafts until you confirm (default true). */
+  dmca_draft_requires_confirmation?: boolean
+  [key: string]: unknown
+}
+
+export interface DivineManagerAutomationJobs {
+  /** Future: schedule vault resale campaigns via tasks (off by default). */
+  vault_resale_enabled?: boolean
+  /** Future: batch mass DM segments (off by default). */
+  mass_dm_batch_enabled?: boolean
+  [key: string]: unknown
+}
+
 export interface DivineManagerAutomationRules {
   autoPostSchedule?: AutomationRule
   autoWelcomeDm?: AutomationRule
   autoFollowUpAfterTips?: AutomationRule
   /** Voice control: allow auto-execute for these intents (otherwise requires confirmation). */
   voice_auto?: DivineManagerVoiceAuto
-  [key: string]: AutomationRule | DivineManagerVoiceAuto | undefined
+  alerts?: DivineManagerAutomationAlerts
+  jobs?: DivineManagerAutomationJobs
+  [key: string]: AutomationRule | DivineManagerVoiceAuto | DivineManagerAutomationAlerts | DivineManagerAutomationJobs | undefined
 }
 
 export interface DivineManagerSettingsRow {
@@ -51,6 +72,8 @@ export interface DivineManagerSettingsRow {
   persona: DivineManagerPersona
   goals: DivineManagerGoals
   automation_rules: DivineManagerAutomationRules
+  /** Mimic Test profile (fan-facing draft style). See lib/divine/mimic-types.ts */
+  mimic_profile?: unknown
   manager_archetype: string
   notification_settings: {
     level?: 'none' | 'only_issues' | 'daily_digest' | 'all'

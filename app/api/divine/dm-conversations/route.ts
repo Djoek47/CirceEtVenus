@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+/** Short-lived cache to reduce OnlyFans API churn (per user + query). */
+const dmConversationsCache = new Map<string, { expires: number; body: unknown }>()
+const DM_CONV_CACHE_TTL_MS = 50_000
+
 /**
  * GET: List recent DM conversations for Divine (voice/chat) context.
  * Returns a short summary suitable for the AI to reference.
@@ -33,6 +37,12 @@ export async function GET(request: Request) {
     const limit = Math.min(Number(url.searchParams.get('limit')) || 30, 50)
     const rawQuery = (url.searchParams.get('query') || '').trim()
     const query = rawQuery.toLowerCase()
+
+    const cacheKey = `${user.id}:${limit}:${rawQuery}`
+    const cached = dmConversationsCache.get(cacheKey)
+    if (cached && cached.expires > Date.now()) {
+      return NextResponse.json(cached.body)
+    }
 
     const { createOnlyFansAPI } = await import('@/lib/onlyfans-api')
     const api = createOnlyFansAPI(connection.access_token)
@@ -68,7 +78,16 @@ export async function GET(request: Request) {
 
     conversations = conversations.slice(0, limit)
 
-    return NextResponse.json({ conversations })
+    const body = { conversations }
+    dmConversationsCache.set(cacheKey, { expires: Date.now() + DM_CONV_CACHE_TTL_MS, body })
+    if (dmConversationsCache.size > 200) {
+      const now = Date.now()
+      for (const [k, v] of dmConversationsCache) {
+        if (v.expires <= now) dmConversationsCache.delete(k)
+      }
+    }
+
+    return NextResponse.json(body)
   } catch (e) {
     console.error('[divine/dm-conversations]', e)
     return NextResponse.json(

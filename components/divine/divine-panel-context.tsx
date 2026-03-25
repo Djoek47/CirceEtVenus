@@ -10,9 +10,9 @@ import {
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 
-type DivineUiAction = { type: 'navigate'; path: string } | { type: 'focus_fan'; fanId: string }
+export type DivineUiAction = { type: 'navigate'; path: string } | { type: 'focus_fan'; fanId: string }
 
-function applyDivineUiActions(
+export function applyDivineUiActions(
   actions: DivineUiAction[] | undefined,
   router: ReturnType<typeof useRouter>,
   setFocusedFan: (fan: FocusedFan | null) => void,

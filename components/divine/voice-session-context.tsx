@@ -9,7 +9,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { FocusedFan } from '@/components/divine/divine-panel-context'
+import { useRouter } from 'next/navigation'
+import { useDivinePanel, applyDivineUiActions, type FocusedFan } from '@/components/divine/divine-panel-context'
 
 type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -40,6 +41,8 @@ export function useVoiceSession(): VoiceSessionContextValue | null {
 }
 
 export function VoiceSessionProvider({ children }: { children: ReactNode }) {
+  const router = useRouter()
+  const divinePanel = useDivinePanel()
   const [status, setStatus] = useState<VoiceStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [remoteVoiceStream, setRemoteVoiceStream] = useState<MediaStream | null>(null)
@@ -258,113 +261,40 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
               scheduleGracefulEndCall()
               return 'Call ended.'
             }
-            if (name === 'get_dm_conversations') {
-              const limit = typeof args.limit === 'number' ? args.limit : 20
-              const queryParam =
-                typeof args.query === 'string' && args.query.trim().length
-                  ? `&query=${encodeURIComponent(args.query.trim())}`
-                  : ''
-              try {
-                const res = await fetch(
-                  `/api/divine/dm-conversations?limit=${limit}${queryParam}`,
+            try {
+              const res = await fetch('/api/divine/voice-tool', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name, arguments: args }),
+              })
+              const data = (await res.json().catch(() => ({}))) as {
+                error?: string
+                content?: string
+                ui_actions?: { type: string; path?: string; fanId?: string }[]
+                pending_confirmations?: { type: string; intent_id: string; summary?: string }[]
+              }
+              if (!res.ok) {
+                return data.error ? `Error: ${data.error}` : 'Tool failed.'
+              }
+              if (Array.isArray(data.ui_actions) && data.ui_actions.length) {
+                applyDivineUiActions(
+                  data.ui_actions as Parameters<typeof applyDivineUiActions>[0],
+                  router,
+                  divinePanel?.setFocusedFan ?? (() => undefined),
                 )
-                const data = await res.json().catch(() => ({}))
-                if (!res.ok) {
-                  const msg = (data as { error?: string }).error
-                  return msg ? `Error loading conversations: ${msg}` : 'Failed to load conversations.'
-                }
-                const conversations = (data as { conversations?: any[] }).conversations ?? []
-                const preview = conversations.slice(0, 5).map((c) => {
-                  const username = c?.username ?? 'unknown'
-                  const name = c?.name ?? null
-                  const fanId = c?.fanId ?? c?.id ?? 'unknown'
-                  const unread = c?.unreadCount ?? 0
-                  const label = name ? `${name} (@${username})` : `@${username}`
-                  return `${label} id=${fanId} unread=${unread}`
-                })
-                const suffix = preview.length ? ` Top: ${preview.join('; ')}.` : ''
-                return `Loaded ${conversations.length} DM conversations.${suffix}`
-              } catch {
-                return 'Failed to load conversations.'
               }
-            } else if (name === 'get_dm_thread') {
-              const fanId = (args as { fanId?: unknown }).fanId
-              if (!fanId || typeof fanId !== 'string') return 'fanId is required for get_dm_thread.'
-              try {
-                const res = await fetch('/api/divine/dm-thread', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ fanId }),
-                })
-                const data = await res.json().catch(() => ({} as { error?: string; thread?: any[] }))
-                if (res.status === 404) {
-                  return (data as { error?: string }).error
-                    || `This fan's thread is no longer available on OnlyFans.`
-                }
-                if (!res.ok) {
-                  const msg = (data as { error?: string }).error
-                  return msg ? `Error loading thread: ${msg}` : 'Failed to load thread.'
-                }
-                const thread = (data as { thread?: any[] }).thread ?? []
-                const last = thread[thread.length - 1]
-                const lastSnippet =
-                  last && last.text
-                    ? ` Last message: ${String(last.text).slice(0, 120)}`
-                    : ''
-                return `Loaded DM thread with ${thread.length} messages.${lastSnippet}`
-              } catch {
-                return 'Failed to load thread.'
+              let out = typeof data.content === 'string' ? data.content.trim() : ''
+              if (Array.isArray(data.pending_confirmations) && data.pending_confirmations.length) {
+                const note = data.pending_confirmations
+                  .map((p) => `${p.type}${p.summary ? `: ${p.summary}` : ''}`)
+                  .join('; ')
+                out = out ? `${out}\n\n(Confirmation required in app: ${note})` : `Confirmation required in app: ${note}`
               }
-            } else if (name === 'get_reply_suggestions') {
-              const fanId = (args as { fanId?: unknown }).fanId
-              if (!fanId || typeof fanId !== 'string') {
-                return 'fanId is required for get_reply_suggestions.'
-              }
-              try {
-                const res = await fetch('/api/divine/dm-reply-suggestions', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ fanId }),
-                })
-                const data = await res.json().catch(() => ({}))
-                if (!res.ok) {
-                  const msg = (data as { error?: string }).error
-                  return msg
-                    ? `Error loading reply suggestions: ${msg}`
-                    : 'Failed to load reply suggestions.'
-                }
-                const rec = (data as { recommendation?: string }).recommendation
-                const suggestions = (data as { suggestions?: string[] }).suggestions ?? []
-                const firstSuggestion =
-                  suggestions.length > 0 ? ` Suggestion: ${suggestions[0]}` : ''
-                const recText = rec ? `Recommendation: ${rec}.` : ''
-                return recText || (firstSuggestion ? `Reply suggestion ready.${firstSuggestion}` : 'Reply suggestions ready.')
-              } catch {
-                return 'Failed to load reply suggestions.'
-              }
-            } else if (name === 'list_content') {
-              const limit = typeof args.limit === 'number' ? args.limit : 20
-              const status = typeof (args as { status?: unknown }).status === 'string'
-                ? (args as { status?: string }).status
-                : ''
-              const q = new URLSearchParams({ limit: String(limit) })
-              if (status) q.set('status', status)
-              try {
-                const res = await fetch(`/api/divine/content-list?${q.toString()}`)
-                const data = await res.json().catch(() => ({}))
-                if (!res.ok) {
-                  const msg = (data as { error?: string }).error
-                  return msg
-                    ? `Error loading content list: ${msg}`
-                    : 'Failed to load content list.'
-                }
-                const content = (data as { content?: any[] }).content ?? []
-                return `Loaded ${content.length} content items.`
-              } catch {
-                return 'Failed to load content list.'
-              }
+              return out || 'Done.'
+            } catch {
+              return 'Tool failed.'
             }
-            return null
           }
           const toolCalls =
             payload?.tool_calls ??
@@ -480,7 +410,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setStatus('error')
       playCue('error')
     }
-  }, [endVoiceCall, playCue, status])
+  }, [endVoiceCall, playCue, status, router, divinePanel])
 
   useEffect(() => {
     if (status !== 'connected') return

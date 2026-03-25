@@ -34,6 +34,7 @@ import { Crown, Loader2, ChevronRight, ChevronLeft, Check, Sparkles, Pause, Sett
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { useVoiceSession } from '@/components/divine/voice-session-context'
 import { DivineReplyDialog } from '@/components/divine/divine-reply-dialog'
+import { MimicTestWizard } from '@/components/divine/mimic-test-wizard'
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -77,6 +78,12 @@ export default function DivineManagerPage() {
     autoWelcomeDm: { enabled: false, maxPerDay: 50 },
     autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
     voice_auto: { mass_dm: false, pricing_changes: false, content_publish: false },
+    alerts: {
+      tasks_for_whale_tips: true,
+      whale_tip_min_dollars: 100,
+      dmca_draft_requires_confirmation: true,
+    },
+    jobs: { vault_resale_enabled: false, mass_dm_batch_enabled: false },
   })
   const [selectedMode, setSelectedMode] = useState<DivineManagerMode>('suggest_only')
   const [managerArchetype, setManagerArchetype] = useState<string>('hermes')
@@ -144,7 +151,29 @@ export default function DivineManagerPage() {
         if (s) {
           setPersona(s.persona ?? {})
           setGoals(s.goals ?? {})
-          setAutomationRules(s.automation_rules ?? {})
+          const merged = (s.automation_rules ?? {}) as DivineManagerAutomationRules
+          setAutomationRules({
+            autoPostSchedule: { enabled: false, maxPerDay: 2, ...merged.autoPostSchedule },
+            autoWelcomeDm: { enabled: false, maxPerDay: 50, ...merged.autoWelcomeDm },
+            autoFollowUpAfterTips: { enabled: false, maxPerDay: 20, ...merged.autoFollowUpAfterTips },
+            voice_auto: {
+              mass_dm: false,
+              pricing_changes: false,
+              content_publish: false,
+              ...merged.voice_auto,
+            },
+            alerts: {
+              tasks_for_whale_tips: true,
+              whale_tip_min_dollars: 100,
+              dmca_draft_requires_confirmation: true,
+              ...merged.alerts,
+            },
+            jobs: {
+              vault_resale_enabled: false,
+              mass_dm_batch_enabled: false,
+              ...merged.jobs,
+            },
+          })
           setSelectedMode(s.mode)
           setManagerArchetype(s.manager_archetype || 'hermes')
           if (s.notification_settings?.level) {
@@ -192,6 +221,18 @@ export default function DivineManagerPage() {
     try {
       const supabase = createClient()
       const row = await upsertSettings(supabase, userId, { mode })
+      setSettings(row)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const persistAutomationRules = async (next: DivineManagerAutomationRules) => {
+    if (!userId) return
+    setAutomationRules(next)
+    try {
+      const supabase = createClient()
+      const row = await upsertSettings(supabase, userId, { automation_rules: next })
       setSettings(row)
     } catch (e) {
       console.error(e)
@@ -349,6 +390,13 @@ export default function DivineManagerPage() {
         autoPostSchedule: { enabled: false, maxPerDay: 2 },
         autoWelcomeDm: { enabled: false, maxPerDay: 50 },
         autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
+        voice_auto: { mass_dm: false, pricing_changes: false, content_publish: false },
+        alerts: {
+          tasks_for_whale_tips: true,
+          whale_tip_min_dollars: 100,
+          dmca_draft_requires_confirmation: true,
+        },
+        jobs: { vault_resale_enabled: false, mass_dm_batch_enabled: false },
       })
       setSelectedMode('suggest_only')
       setManagerArchetype('hermes')
@@ -1231,6 +1279,103 @@ export default function DivineManagerPage() {
 
         <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" aria-hidden />
 
+        <MimicTestWizard />
+
+        <Card className="divine-card">
+          <CardHeader>
+            <CardTitle className="font-serif text-lg">Urgent alerts &amp; jobs</CardTitle>
+            <CardDescription>
+              Large tips can create Divine tasks. DMCA and sensitive flows default to confirmation-first. Job toggles
+              reserve future vault/mass-DM automation (cron uses scheduled tasks).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="font-medium">Tasks for large tips</p>
+                <p className="text-xs text-muted-foreground">Create a task when a tip exceeds the minimum (webhook).</p>
+              </div>
+              <Switch
+                checked={automationRules.alerts?.tasks_for_whale_tips !== false}
+                onCheckedChange={(c) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    alerts: { ...automationRules.alerts, tasks_for_whale_tips: c },
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-2 max-w-xs">
+              <Label>Minimum tip (USD)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={automationRules.alerts?.whale_tip_min_dollars ?? 100}
+                onChange={(e) => {
+                  const v = Math.max(1, Number(e.target.value) || 100)
+                  setAutomationRules((r) => ({
+                    ...r,
+                    alerts: { ...r.alerts, whale_tip_min_dollars: v },
+                  }))
+                }}
+                onBlur={(e) => {
+                  const v = Math.max(1, Number(e.target.value) || 100)
+                  void persistAutomationRules({
+                    ...automationRules,
+                    alerts: { ...automationRules.alerts, whale_tip_min_dollars: v },
+                  })
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="font-medium">DMCA drafts require confirmation</p>
+                <p className="text-xs text-muted-foreground">Keep auto-filing off unless you explicitly enable per claim.</p>
+              </div>
+              <Switch
+                checked={automationRules.alerts?.dmca_draft_requires_confirmation !== false}
+                onCheckedChange={(c) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    alerts: { ...automationRules.alerts, dmca_draft_requires_confirmation: c },
+                  })
+                }
+              />
+            </div>
+            <p className="text-xs font-medium text-foreground pt-1">Planned jobs (stored for semi-auto / cron)</p>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="font-medium">Vault resale campaigns</p>
+                <p className="text-xs text-muted-foreground">When wired, creates scheduled tasks for vault pushes.</p>
+              </div>
+              <Switch
+                checked={!!automationRules.jobs?.vault_resale_enabled}
+                onCheckedChange={(c) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    jobs: { ...automationRules.jobs, vault_resale_enabled: c },
+                  })
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="font-medium">Mass DM batches</p>
+                <p className="text-xs text-muted-foreground">When wired, batches respect platform rate limits.</p>
+              </div>
+              <Switch
+                checked={!!automationRules.jobs?.mass_dm_batch_enabled}
+                onCheckedChange={(c) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    jobs: { ...automationRules.jobs, mass_dm_batch_enabled: c },
+                  })
+                }
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {pendingIntentId && (
           <Card className="divine-card border-primary/40 bg-primary/5">
             <CardContent className="pt-4">
@@ -1434,6 +1579,12 @@ export default function DivineManagerPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {realtimeStatus === 'connected' && !panelCtx?.focusedFan?.id && (
+              <p className="text-xs text-amber-800 dark:text-amber-200/90 rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5">
+                For DM thread readouts, open Messages and select a fan (or focus one from Divine chat). Otherwise Divine can
+                list conversations by name.
+              </p>
+            )}
             {!introBriefingPlayed && (
               <p className="text-xs text-muted-foreground rounded-md bg-muted/50 border border-border p-2">
                 New to Divine? Play intro briefing to see what you can do, then try What next?

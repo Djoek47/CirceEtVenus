@@ -124,6 +124,13 @@ export async function runReputationScanCore(
   }
 
   const requested = Array.isArray(body.handles) ? body.handles.filter((h) => typeof h === 'string') : []
+  if (Array.isArray(body.handles) && requested.length === 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Select at least one identity handle before running reputation scan.',
+    }
+  }
   let handleList: string[]
   if (requested.length > 0) {
     const filtered = filterHandlesToAllowed(requested, allowedFromDb)

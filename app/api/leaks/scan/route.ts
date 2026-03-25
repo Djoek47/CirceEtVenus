@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body: ScanBody = await req.json().catch(() => ({}))
+  if (Array.isArray(body.focus_handles) && body.focus_handles.length === 0) {
+    return NextResponse.json(
+      { success: false, error: 'Select at least one identity before running Protection scan.' },
+      { status: 400 },
+    )
+  }
 
   const result = await runLeakScan(supabase, {
     userId: user.id,

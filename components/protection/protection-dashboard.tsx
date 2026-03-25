@@ -185,7 +185,7 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
   const [alertUpdateError, setAlertUpdateError] = useState<string | null>(null)
 
   const { handles: identityHandles, contentTitles } = useScanIdentity()
-  const [useAllLeakHandles, setUseAllLeakHandles] = useState(true)
+  const [useAllLeakHandles] = useState(false)
   const [selectedLeakHandles, setSelectedLeakHandles] = useState<Set<string>>(new Set())
   const [focusContentId, setFocusContentId] = useState<string>('')
   const [focusTitleFilter, setFocusTitleFilter] = useState('')
@@ -205,9 +205,19 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
   }, [identityHandles, aliasInput])
 
   useEffect(() => {
-    if (leakHandlesInit.current || identityHandles.length === 0) return
+    if (typeof window === 'undefined') return
+    if (leakHandlesInit.current) return
     leakHandlesInit.current = true
-    setSelectedLeakHandles(new Set(identityHandles.map((h) => h.value)))
+    try {
+      const raw = window.localStorage.getItem('protection_selected_handles')
+      if (!raw) return
+      const parsed = JSON.parse(raw) as string[]
+      if (!Array.isArray(parsed)) return
+      const allowed = new Set(identityHandles.map((h) => h.value))
+      setSelectedLeakHandles(new Set(parsed.filter((h) => allowed.has(h))))
+    } catch {
+      // ignore malformed storage
+    }
   }, [identityHandles])
 
   const severityColors: Record<string, string> = {
@@ -318,10 +328,11 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
     setScanSummary(null)
     try {
       const aliases = parseAliases(aliasInput)
-      const focusHandlesPayload =
-        !useAllLeakHandles && selectedLeakHandles.size > 0
-          ? Array.from(selectedLeakHandles)
-          : undefined
+      if (selectedLeakHandles.size === 0) {
+        setScanSummary('Select at least one identity before running Protection scan.')
+        return
+      }
+      const focusHandlesPayload = Array.from(selectedLeakHandles)
       const focusTitlesPayload = parseTitleHints(focusTitleFilter)
       const body: Record<string, unknown> = {
         aliases,
@@ -330,9 +341,7 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
         include_content_titles: includeContentTitles,
         strict: strictScan,
       }
-      if (focusHandlesPayload?.length) {
-        body.focus_handles = focusHandlesPayload
-      }
+      body.focus_handles = focusHandlesPayload
       if (focusContentId) {
         body.content_ids = [focusContentId]
       }
@@ -517,6 +526,39 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
           {saveIdentityLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Save former names &amp; title hints
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={saveIdentityLoading}
+          onClick={async () => {
+            setSaveIdentityLoading(true)
+            try {
+              const {
+                data: { user },
+              } = await supabase.auth.getUser()
+              if (!user) return
+              await supabase
+                .from('profiles')
+                .update({
+                  former_usernames: [],
+                  leak_search_title_hints: [],
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', user.id)
+              setFormerInput('')
+              setTitleHintsInput('')
+              setAliasInput('')
+              if (typeof window !== 'undefined') {
+                window.localStorage.removeItem('protection_selected_handles')
+              }
+            } finally {
+              setSaveIdentityLoading(false)
+            }
+          }}
+        >
+          Delete saved identities
+        </Button>
       </div>
 
       <div className="flex items-start gap-2">
@@ -536,10 +578,7 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
           handles={displayHandles}
           useAll={useAllLeakHandles}
           onUseAllChange={(v) => {
-            setUseAllLeakHandles(v)
-            if (!v && displayHandles.length) {
-              setSelectedLeakHandles(new Set(displayHandles.map((h) => h.value)))
-            }
+            if (!v) return
           }}
           selected={selectedLeakHandles}
           onToggle={(value) => {
@@ -547,6 +586,12 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
               const next = new Set(prev)
               if (next.has(value)) next.delete(value)
               else next.add(value)
+              if (typeof window !== 'undefined') {
+                window.localStorage.setItem(
+                  'protection_selected_handles',
+                  JSON.stringify(Array.from(next)),
+                )
+              }
               return next
             })
           }}
@@ -592,7 +637,7 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
             onClick={runScan}
             disabled={
               scanLoading ||
-              (displayHandles.length > 0 && !useAllLeakHandles && selectedLeakHandles.size === 0)
+              selectedLeakHandles.size === 0
             }
           >
             {scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

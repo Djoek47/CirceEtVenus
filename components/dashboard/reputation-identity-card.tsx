@@ -119,6 +119,46 @@ export function ReputationIdentityCard({
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Save identity
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={async () => {
+            setHandles('')
+            setDisplayName('')
+            setOnlyfans('')
+            setMym('')
+            setSaving(true)
+            setError(null)
+            try {
+              const res = await fetch('/api/social/reputation-identity', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  reputation_manual_handles: [],
+                  reputation_display_name: null,
+                  reputation_platform_handles: null,
+                }),
+              })
+              const data = await res.json().catch(() => ({}))
+              if (!res.ok) {
+                setError(typeof data.error === 'string' ? data.error : 'Could not clear identities')
+                return
+              }
+              if (typeof window !== 'undefined') {
+                window.localStorage.removeItem('mentions_selected_handles')
+              }
+              router.refresh()
+            } catch {
+              setError('Network error')
+            } finally {
+              setSaving(false)
+            }
+          }}
+          disabled={saving}
+        >
+          Delete saved identities
+        </Button>
       </CardContent>
     </Card>
   )

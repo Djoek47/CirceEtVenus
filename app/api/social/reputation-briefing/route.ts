@@ -6,7 +6,7 @@ import {
   type ReputationBriefingPayload,
 } from '@/lib/reputation/briefing'
 import { runReputationScanCore } from '@/lib/reputation/run-reputation-scan'
-import { loadMergedHandlesForUser } from '@/lib/scan-identity'
+import { filterHandlesToAllowed, loadMergedHandlesForUser } from '@/lib/scan-identity'
 
 const PRO_PLANS = ['venus-pro', 'circe-elite', 'divine-duo']
 const MENTION_CAP = 80
@@ -18,6 +18,7 @@ function isProPlan(planId: string | null | undefined): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const body = (await req.json().catch(() => ({}))) as { handles?: string[] }
   const supabase = await createClient()
   const {
     data: { user },
@@ -66,6 +67,25 @@ export async function POST(req: NextRequest) {
     })(),
     loadMergedHandlesForUser(supabase, user.id),
   ])
+  const requestedHandles = Array.isArray(body.handles)
+    ? body.handles.filter((h): h is string => typeof h === 'string' && h.trim().length > 0)
+    : undefined
+  if (Array.isArray(body.handles) && requestedHandles && requestedHandles.length === 0) {
+    return NextResponse.json(
+      { error: 'Select at least one identity before generating a briefing.' },
+      { status: 400 },
+    )
+  }
+  const selectedHandles =
+    requestedHandles && requestedHandles.length > 0
+      ? filterHandlesToAllowed(requestedHandles, mergedHandles)
+      : Array.from(mergedHandles)
+  if (selectedHandles.length === 0) {
+    return NextResponse.json(
+      { error: 'No valid identities selected. Add or select at least one handle.' },
+      { status: 400 },
+    )
+  }
 
   let { data: rows, error: fetchErr } = await supabase
     .from('reputation_mentions')
@@ -81,8 +101,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: fetchErr.message }, { status: 500 })
   }
 
-  if ((!rows || rows.length === 0) && mergedHandles.size > 0) {
-    await runReputationScanCore(supabase, user.id, { mode: 'both' })
+  if (!rows || rows.length === 0) {
+    await runReputationScanCore(supabase, user.id, {
+      mode: 'both',
+      handles: selectedHandles,
+    })
     const second = await supabase
       .from('reputation_mentions')
       .select(
@@ -103,7 +126,7 @@ export async function POST(req: NextRequest) {
   const plat = (profileRow as { reputation_platform_handles?: Record<string, string> | null })
     ?.reputation_platform_handles
   const identity: ReputationBriefingIdentity = {
-    manualHandles: Array.from(mergedHandles),
+    manualHandles: selectedHandles,
     displayName: (profileRow as { reputation_display_name?: string | null })?.reputation_display_name ?? null,
     platformHandles: plat && typeof plat === 'object' ? plat : null,
   }

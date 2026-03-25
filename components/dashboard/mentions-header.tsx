@@ -15,7 +15,7 @@ export function MentionsHeader() {
   const router = useRouter()
   const [isPro, setIsPro] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [useAllHandles, setUseAllHandles] = useState(true)
+  const [useAllHandles] = useState(false)
   const [selectedHandles, setSelectedHandles] = useState<Set<string>>(new Set())
   const { handles: identityHandles } = useScanIdentity()
 
@@ -38,31 +38,40 @@ export function MentionsHeader() {
     loadSubscription()
   }, [supabase])
 
-  useEffect(() => {
-    if (identityHandles.length) {
-      setSelectedHandles(new Set(identityHandles.map((h) => h.value)))
-    }
-  }, [identityHandles])
-
   const toggleSelectedHandle = (value: string) => {
     setSelectedHandles((prev) => {
       const next = new Set(prev)
       if (next.has(value)) next.delete(value)
       else next.add(value)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('mentions_selected_handles', JSON.stringify(Array.from(next)))
+      }
       return next
     })
   }
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem('mentions_selected_handles')
+      if (!raw) return
+      const parsed = JSON.parse(raw) as string[]
+      if (!Array.isArray(parsed)) return
+      const allowed = new Set(identityHandles.map((h) => h.value))
+      const picked = parsed.filter((h) => allowed.has(h))
+      setSelectedHandles(new Set(picked))
+    } catch {
+      // ignore malformed storage
+    }
+  }, [identityHandles])
+
   const handleRefreshVision = async () => {
-    if (identityHandles.length > 0 && !useAllHandles && selectedHandles.size === 0) {
+    if (identityHandles.length === 0 || selectedHandles.size === 0) {
       return
     }
     setLoading(true)
     try {
-      const handlePayload =
-        identityHandles.length > 0 && !useAllHandles && selectedHandles.size > 0
-          ? Array.from(selectedHandles)
-          : undefined
+      const handlePayload = Array.from(selectedHandles)
       const res = await fetch('/api/social/scan-reputation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,7 +135,7 @@ export function MentionsHeader() {
             onClick={handleRefreshVision}
             disabled={
               loading ||
-              (identityHandles.length > 0 && !useAllHandles && selectedHandles.size === 0)
+              identityHandles.length === 0 || selectedHandles.size === 0
             }
           >
             <RefreshCw className="h-4 w-4" />
@@ -139,12 +148,7 @@ export function MentionsHeader() {
         <ScanHandlePicker
           handles={identityHandles}
           useAll={useAllHandles}
-          onUseAllChange={(v) => {
-            setUseAllHandles(v)
-            if (!v && identityHandles.length) {
-              setSelectedHandles(new Set(identityHandles.map((h) => h.value)))
-            }
-          }}
+          onUseAllChange={() => undefined}
           selected={selectedHandles}
           onToggle={toggleSelectedHandle}
           idPrefix="mentions-header"

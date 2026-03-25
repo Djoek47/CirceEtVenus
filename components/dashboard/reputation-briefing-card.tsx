@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, RefreshCw, Sparkles, ExternalLink, AlertTriangle } from 'lucide-react'
 import type { ReputationBriefingPayload } from '@/lib/reputation/briefing'
+import { useScanIdentity } from '@/hooks/use-scan-identity'
+import { ScanHandlePicker } from '@/components/dashboard/scan-handle-picker'
 
 type Props = {
   initialBriefing: ReputationBriefingPayload | null
@@ -25,13 +27,47 @@ export function ReputationBriefingCard({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [useAllHandles] = useState(false)
+  const [selectedHandles, setSelectedHandles] = useState<Set<string>>(new Set())
+  const { handles: identityHandles } = useScanIdentity()
+
+  const toggleSelectedHandle = (value: string) => {
+    setSelectedHandles((prev) => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('mentions_selected_handles', JSON.stringify(Array.from(next)))
+      }
+      return next
+    })
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem('mentions_selected_handles')
+      if (!raw) return
+      const parsed = JSON.parse(raw) as string[]
+      if (!Array.isArray(parsed)) return
+      const allowed = new Set(identityHandles.map((h) => h.value))
+      setSelectedHandles(new Set(parsed.filter((h) => allowed.has(h))))
+    } catch {
+      // ignore
+    }
+  }, [identityHandles])
 
   const handleRefresh = async () => {
     if (!isPro) return
+    if (identityHandles.length === 0 || selectedHandles.size === 0) return
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/social/reputation-briefing', { method: 'POST' })
+      const res = await fetch('/api/social/reputation-briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handles: Array.from(selectedHandles) }),
+      })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(typeof data.error === 'string' ? data.error : 'Could not refresh briefing')
@@ -78,7 +114,7 @@ export function ReputationBriefingCard({
             size="sm"
             className="shrink-0 border-venus/40 text-venus hover:bg-venus/10"
             onClick={() => void handleRefresh()}
-            disabled={loading}
+            disabled={loading || identityHandles.length === 0 || selectedHandles.size === 0}
             title="Generate or refresh the aggregate AI briefing (runs a discovery pass if needed)"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -88,6 +124,17 @@ export function ReputationBriefingCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {identityHandles.length > 0 && (
+          <ScanHandlePicker
+            handles={identityHandles}
+            useAll={useAllHandles}
+            onUseAllChange={() => undefined}
+            selected={selectedHandles}
+            onToggle={toggleSelectedHandle}
+            idPrefix="mentions-briefing"
+          />
+        )}
 
         {!isPro && (
           <p className="text-sm text-muted-foreground">

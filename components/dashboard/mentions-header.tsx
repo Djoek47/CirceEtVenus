@@ -7,23 +7,26 @@ import { RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useScanIdentity } from '@/hooks/use-scan-identity'
+import { ScanHandlePicker } from '@/components/dashboard/scan-handle-picker'
 
 export function MentionsHeader() {
   const supabase = createClient()
   const router = useRouter()
   const [isPro, setIsPro] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [useAllHandles, setUseAllHandles] = useState(true)
+  const [selectedHandles, setSelectedHandles] = useState<Set<string>>(new Set())
+  const { handles: identityHandles } = useScanIdentity()
 
   useEffect(() => {
     const loadSubscription = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
         if (!user) return
-        const { data } = await supabase
-          .from('subscriptions')
-          .select('plan_id')
-          .eq('user_id', user.id)
-          .maybeSingle()
+        const { data } = await supabase.from('subscriptions').select('plan_id').eq('user_id', user.id).maybeSingle()
         const planId = (data as any)?.plan_id
         if (planId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(planId)) {
           setIsPro(true)
@@ -35,13 +38,38 @@ export function MentionsHeader() {
     loadSubscription()
   }, [supabase])
 
+  useEffect(() => {
+    if (identityHandles.length) {
+      setSelectedHandles(new Set(identityHandles.map((h) => h.value)))
+    }
+  }, [identityHandles])
+
+  const toggleSelectedHandle = (value: string) => {
+    setSelectedHandles((prev) => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  }
+
   const handleRefreshVision = async () => {
+    if (identityHandles.length > 0 && !useAllHandles && selectedHandles.size === 0) {
+      return
+    }
     setLoading(true)
     try {
+      const handlePayload =
+        identityHandles.length > 0 && !useAllHandles && selectedHandles.size > 0
+          ? Array.from(selectedHandles)
+          : undefined
       await fetch('/api/social/scan-reputation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'both' }),
+        body: JSON.stringify({
+          mode: 'both',
+          ...(handlePayload ? { handles: handlePayload } : {}),
+        }),
       })
       router.refresh()
     } catch {
@@ -52,41 +80,67 @@ export function MentionsHeader() {
   }
 
   return (
-    <div className="flex items-center justify-between">
-      <div>
-        <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <span className="text-venus">Venus'</span> Watchful Gaze
-        </h2>
-        <p className="text-muted-foreground">
-          The goddess tracks your reputation and sentiment across the realm
-        </p>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <span className="text-venus">Venus&apos;</span> Watchful Gaze
+          </h2>
+          <p className="text-muted-foreground">
+            The goddess tracks your reputation and sentiment across the realm
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {isPro && (
+            <Badge variant="outline" className="text-[10px] border-venus/40 text-venus">
+              Grok Pro
+            </Badge>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="border-venus/40 text-venus hover:bg-venus/10"
+          >
+            <Link href="/dashboard/ai-studio?ai=venus">Open Venus Pro</Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="border-venus/40 text-venus hover:bg-venus/10"
+          >
+            <Link href="/dashboard/settings?tab=integrations">Integrations</Link>
+          </Button>
+          <Button
+            className="gap-2 bg-venus hover:bg-venus/90 text-background"
+            onClick={handleRefreshVision}
+            disabled={
+              loading ||
+              (identityHandles.length > 0 && !useAllHandles && selectedHandles.size === 0)
+            }
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh Vision
+          </Button>
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        {isPro && (
-          <Badge variant="outline" className="text-[10px] border-venus/40 text-venus">
-            Grok Pro
-          </Badge>
-        )}
-        <Button
-          variant="outline"
-          size="sm"
-          asChild
-          className="border-venus/40 text-venus hover:bg-venus/10"
-        >
-          <Link href="/dashboard/ai-studio?ai=venus">
-            Open Venus Pro
-          </Link>
-        </Button>
-        <Button
-          className="gap-2 bg-venus hover:bg-venus/90 text-background"
-          onClick={handleRefreshVision}
-          disabled={loading}
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh Vision
-        </Button>
-      </div>
+
+      {identityHandles.length > 1 && (
+        <ScanHandlePicker
+          handles={identityHandles}
+          useAll={useAllHandles}
+          onUseAllChange={(v) => {
+            setUseAllHandles(v)
+            if (!v && identityHandles.length) {
+              setSelectedHandles(new Set(identityHandles.map((h) => h.value)))
+            }
+          }}
+          selected={selectedHandles}
+          onToggle={toggleSelectedHandle}
+          idPrefix="mentions-header"
+        />
+      )}
     </div>
   )
 }
-

@@ -8,12 +8,15 @@ import {
   buildSocialQueries,
   type ScanChannel,
 } from '@/lib/reputation/build-queries'
+import { filterHandlesToAllowed, loadMergedHandlesForUser, normalizeScanHandle } from '@/lib/scan-identity'
 
 type ScanMode = 'wide' | 'social' | 'both'
 
 type ScanBody = {
   limitPerQuery?: number
   mode?: ScanMode
+  /** Optional subset; each must match a connected / manual / former handle (server-validated). */
+  handles?: string[]
 }
 
 const GLOBAL_CANDIDATE_CAP = 250
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
     normalizedPlanId && ['venus-pro', 'circe-elite', 'divine-duo'].includes(normalizedPlanId),
   )
 
-  const [{ data: profiles }, { data: platforms }, { data: profileRow }] = await Promise.all([
+  const [{ data: profiles }, { data: platforms }, { data: profileRow }, allowedFromDb] = await Promise.all([
     supabase.from('social_profiles').select('platform,username').eq('user_id', user.id),
     supabase
       .from('platform_connections')
@@ -90,15 +93,16 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .eq('is_connected', true),
     supabase.from('profiles').select('former_usernames').eq('id', user.id).maybeSingle(),
+    loadMergedHandlesForUser(supabase, user.id),
   ])
 
   const usernames = new Set<string>()
   const niches = new Set<string>()
   for (const p of profiles || []) {
-    if ((p as any).username) usernames.add((p as any).username)
+    if ((p as any).username) usernames.add(normalizeScanHandle((p as any).username))
   }
   for (const p of platforms || []) {
-    if ((p as any).platform_username) usernames.add((p as any).platform_username)
+    if ((p as any).platform_username) usernames.add(normalizeScanHandle((p as any).platform_username))
     if (Array.isArray((p as any).niches)) {
       for (const n of (p as any).niches) niches.add(String(n))
     }
@@ -106,12 +110,27 @@ export async function POST(req: NextRequest) {
   const former = (profileRow as any)?.former_usernames as string[] | null | undefined
   if (Array.isArray(former)) {
     for (const h of former) {
-      if (h && String(h).trim()) usernames.add(String(h).trim())
+      if (h && String(h).trim()) usernames.add(normalizeScanHandle(String(h)))
     }
   }
 
   if (usernames.size === 0) {
     return NextResponse.json({ error: 'No usernames connected for reputation scan' }, { status: 400 })
+  }
+
+  const requested = Array.isArray(body.handles) ? body.handles.filter((h) => typeof h === 'string') : []
+  let handleList: string[]
+  if (requested.length > 0) {
+    const filtered = filterHandlesToAllowed(requested, allowedFromDb)
+    if (filtered.length === 0) {
+      return NextResponse.json(
+        { error: 'No valid handles selected. Use only handles from your connected accounts, manual social profiles, or former usernames.' },
+        { status: 400 },
+      )
+    }
+    handleList = filtered
+  } else {
+    handleList = Array.from(usernames)
   }
 
   const serperKey = process.env.SERPER_API_KEY
@@ -125,7 +144,6 @@ export async function POST(req: NextRequest) {
     )
   }
   const provider = new SerperProvider(serperKey)
-  const handleList = Array.from(usernames)
 
   const wideQueries = mode === 'social' ? [] : buildWideWebQueries(handleList)
   const socialQueries = mode === 'wide' ? [] : buildSocialQueries(handleList)

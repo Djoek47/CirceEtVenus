@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { LeakAlert } from '@/lib/types'
@@ -20,6 +21,15 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Loader2, ExternalLink, Upload, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useScanIdentity } from '@/hooks/use-scan-identity'
+import { ScanHandlePicker } from '@/components/dashboard/scan-handle-picker'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 type Props = {
   activeAlerts: LeakAlert[]
@@ -106,6 +116,32 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
   const [proofUploading, setProofUploading] = useState(false)
   const [proofPaths, setProofPaths] = useState<string[]>([])
   const [isPro, setIsPro] = useState(false)
+
+  const { handles: identityHandles, contentTitles } = useScanIdentity()
+  const [useAllLeakHandles, setUseAllLeakHandles] = useState(true)
+  const [selectedLeakHandles, setSelectedLeakHandles] = useState<Set<string>>(new Set())
+  const [focusContentId, setFocusContentId] = useState<string>('')
+  const [focusTitleFilter, setFocusTitleFilter] = useState('')
+  const leakHandlesInit = useRef(false)
+
+  const displayHandles = useMemo(() => {
+    const aliases = parseAliases(aliasInput)
+    const extras = aliases.filter(
+      (a) => !identityHandles.some((h) => h.value.toLowerCase() === a.toLowerCase()),
+    )
+    const extraRows = extras.map((a) => ({
+      value: a,
+      source: 'alias_extra',
+      label: `Extra alias @${a}`,
+    }))
+    return [...identityHandles, ...extraRows]
+  }, [identityHandles, aliasInput])
+
+  useEffect(() => {
+    if (leakHandlesInit.current || identityHandles.length === 0) return
+    leakHandlesInit.current = true
+    setSelectedLeakHandles(new Set(identityHandles.map((h) => h.value)))
+  }, [identityHandles])
 
   const severityColors: Record<string, string> = {
     critical: 'bg-destructive/20 text-destructive border-destructive/30',
@@ -197,16 +233,32 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
     setScanSummary(null)
     try {
       const aliases = parseAliases(aliasInput)
+      const focusHandlesPayload =
+        !useAllLeakHandles && selectedLeakHandles.size > 0
+          ? Array.from(selectedLeakHandles)
+          : undefined
+      const focusTitlesPayload = parseTitleHints(focusTitleFilter)
+      const body: Record<string, unknown> = {
+        aliases,
+        former_usernames: parseAliases(formerInput),
+        title_hints: parseTitleHints(titleHintsInput),
+        include_content_titles: includeContentTitles,
+        strict: strictScan,
+      }
+      if (focusHandlesPayload?.length) {
+        body.focus_handles = focusHandlesPayload
+      }
+      if (focusContentId) {
+        body.content_ids = [focusContentId]
+      }
+      if (focusTitlesPayload.length) {
+        body.focus_title_hints = focusTitlesPayload
+      }
+
       const res = await fetch('/api/leaks/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          aliases,
-          former_usernames: parseAliases(formerInput),
-          title_hints: parseTitleHints(titleHintsInput),
-          include_content_titles: includeContentTitles,
-          strict: strictScan,
-        }),
+        body: JSON.stringify(body),
       })
       const data = (await res.json().catch(() => ({}))) as {
         inserted?: number
@@ -310,6 +362,16 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
         Automated search surfaces candidates for your review. Confirm each link before sending a DMCA notice.
       </p>
 
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">
+          Connect creator and social accounts under Integrations so scans include every OAuth username (X, IG, TikTok,
+          OnlyFans, Fansly…).
+        </p>
+        <Button variant="outline" size="sm" className="shrink-0" asChild>
+          <Link href="/dashboard/settings?tab=integrations">Open Integrations</Link>
+        </Button>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="alias-input" className="text-xs text-muted-foreground">
           Extra names and handles (comma or line; searched in addition to connected platforms)
@@ -384,9 +446,70 @@ export function ProtectionDashboard({ activeAlerts, suggestedAlias }: Props) {
         </label>
       </div>
 
+      {displayHandles.length > 0 && (
+        <ScanHandlePicker
+          handles={displayHandles}
+          useAll={useAllLeakHandles}
+          onUseAllChange={(v) => {
+            setUseAllLeakHandles(v)
+            if (!v && displayHandles.length) {
+              setSelectedLeakHandles(new Set(displayHandles.map((h) => h.value)))
+            }
+          }}
+          selected={selectedLeakHandles}
+          onToggle={(value) => {
+            setSelectedLeakHandles((prev) => {
+              const next = new Set(prev)
+              if (next.has(value)) next.delete(value)
+              else next.add(value)
+              return next
+            })
+          }}
+          idPrefix="leak-scan"
+        />
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Optional: one library item (adds its title to the scan)</Label>
+          <Select value={focusContentId || '__none__'} onValueChange={(v) => setFocusContentId(v === '__none__' ? '' : v)}>
+            <SelectTrigger className="text-sm">
+              <SelectValue placeholder="All library titles (or pick one)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">No single-item focus</SelectItem>
+              {contentTitles.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.title.length > 64 ? `${c.title.slice(0, 64)}…` : c.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="focus-title-filter" className="text-xs text-muted-foreground">
+            Optional: narrow title queries (one phrase per line; must match merged titles)
+          </Label>
+          <Textarea
+            id="focus-title-filter"
+            value={focusTitleFilter}
+            onChange={(e) => setFocusTitleFilter(e.target.value)}
+            placeholder="e.g. part of a video title"
+            className="min-h-[56px] text-sm"
+          />
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Button className="gap-2 bg-circe hover:bg-circe/90" onClick={runScan} disabled={scanLoading}>
+          <Button
+            className="gap-2 bg-circe hover:bg-circe/90"
+            onClick={runScan}
+            disabled={
+              scanLoading ||
+              (displayHandles.length > 0 && !useAllLeakHandles && selectedLeakHandles.size === 0)
+            }
+          >
             {scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Invoke Scan
             {isPro && (

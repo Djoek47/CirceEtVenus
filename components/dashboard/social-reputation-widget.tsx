@@ -20,8 +20,11 @@ import {
   Newspaper,
   AtSign,
 } from 'lucide-react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { useScanIdentity } from '@/hooks/use-scan-identity'
+import { ScanHandlePicker } from '@/components/dashboard/scan-handle-picker'
 
 // Real SVG Icons for social platforms
 const InstagramIcon = () => (
@@ -102,13 +105,22 @@ export function SocialReputationWidget() {
   const [reputationData, setReputationData] = useState<ReputationAnalysis | null>(null)
   const [isPro, setIsPro] = useState(false)
   const [lastScanSummary, setLastScanSummary] = useState<string | null>(null)
+  const [useAllHandles, setUseAllHandles] = useState(true)
+  const [selectedHandles, setSelectedHandles] = useState<Set<string>>(new Set())
   const supabase = createClient()
+  const { handles: identityHandles, reload: reloadIdentity } = useScanIdentity()
 
   useEffect(() => {
     loadProfiles()
     loadConnectedPlatforms()
     loadSubscription()
   }, [])
+
+  useEffect(() => {
+    if (identityHandles.length) {
+      setSelectedHandles(new Set(identityHandles.map((h) => h.value)))
+    }
+  }, [identityHandles])
 
   const loadProfiles = async () => {
     setLoading(true)
@@ -205,6 +217,8 @@ export function SocialReputationWidget() {
       }
 
       await loadProfiles()
+      await loadConnectedPlatforms()
+      await reloadIdentity()
       setNewUsername('')
       setShowAddForm(false)
     } catch (err) {
@@ -216,19 +230,35 @@ export function SocialReputationWidget() {
 
   const scanKey = (m: ReputationScanMode) => `scan-${m}`
 
+  const toggleSelectedHandle = (value: string) => {
+    setSelectedHandles((prev) => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  }
+
   const handleScanReputation = async (mode: ReputationScanMode) => {
     setAnalyzing(scanKey(mode))
     setError(null)
     setLastScanSummary(null)
 
     try {
-      const allUsernames = getAllUsernames()
-
-      if (allUsernames.length === 0) {
-        setError('No usernames to scan. Connect a platform or add a social profile first.')
+      if (identityHandles.length === 0) {
+        setError('No usernames to scan. Connect a platform in Settings → Integrations or add a social handle below.')
         setAnalyzing(null)
         return
       }
+
+      if (!useAllHandles && selectedHandles.size === 0) {
+        setError('Select at least one handle, or choose “All identities”.')
+        setAnalyzing(null)
+        return
+      }
+
+      const handlePayload =
+        !useAllHandles && selectedHandles.size > 0 ? Array.from(selectedHandles) : undefined
 
       const response = await fetch('/api/social/scan-reputation', {
         method: 'POST',
@@ -236,6 +266,7 @@ export function SocialReputationWidget() {
         body: JSON.stringify({
           limitPerQuery: isPro ? 10 : 4,
           mode,
+          ...(handlePayload ? { handles: handlePayload } : {}),
         }),
       })
 
@@ -388,7 +419,7 @@ export function SocialReputationWidget() {
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(profiles.length > 0 || connectedPlatforms.length > 0) && (
+            {(identityHandles.length > 0 || profiles.length > 0 || connectedPlatforms.length > 0) && (
               <>
                 <Button
                   variant="outline"
@@ -452,7 +483,8 @@ export function SocialReputationWidget() {
                 )}
               </>
             )}
-            {!isPro && (profiles.length > 0 || connectedPlatforms.length > 0) && (
+            {!isPro &&
+              (identityHandles.length > 0 || profiles.length > 0 || connectedPlatforms.length > 0) && (
               <Badge variant="outline" className="text-xs">
                 Pro scan available with Venus Pro
               </Badge>
@@ -472,6 +504,31 @@ export function SocialReputationWidget() {
           <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
+        )}
+
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/20 p-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground">
+            Use OAuth usernames from Settings (X, Instagram, TikTok, OnlyFans, Fansly…). Former handles come from Protection when saved.
+          </p>
+          <Button variant="outline" size="sm" className="shrink-0" asChild>
+            <Link href="/dashboard/settings?tab=integrations">Open Integrations</Link>
+          </Button>
+        </div>
+
+        {identityHandles.length > 0 && (
+          <ScanHandlePicker
+            handles={identityHandles}
+            useAll={useAllHandles}
+            onUseAllChange={(v) => {
+              setUseAllHandles(v)
+              if (!v && identityHandles.length) {
+                setSelectedHandles(new Set(identityHandles.map((h) => h.value)))
+              }
+            }}
+            selected={selectedHandles}
+            onToggle={toggleSelectedHandle}
+            idPrefix="dash-rep"
+          />
         )}
 
         {lastScanSummary && (

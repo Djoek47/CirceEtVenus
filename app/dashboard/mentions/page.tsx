@@ -4,6 +4,7 @@ import { Bell, ThumbsUp, Minus, ThumbsDown } from 'lucide-react'
 import type { ReputationMention } from '@/lib/types'
 import { MentionsHeader } from '@/components/dashboard/mentions-header'
 import { MentionsListBody } from '@/components/dashboard/mentions-list-body'
+import { MentionsConnectBanner } from '@/components/dashboard/mentions-connect-banner'
 
 export default async function MentionsPage() {
   const supabase = await createClient()
@@ -28,6 +29,8 @@ export default async function MentionsPage() {
   return (
     <div className="space-y-6 min-w-0">
       <MentionsHeader />
+
+      <MentionsConnectBanner />
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

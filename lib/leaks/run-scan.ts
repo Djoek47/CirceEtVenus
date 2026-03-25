@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeScanHandle } from '@/lib/scan-identity'
 import { buildQueries, buildTitleQueries, sanitizeTitleForSearch } from '@/lib/leaks/build-queries'
 import { SerperProvider } from '@/lib/leaks/search-providers'
 import { guessSourcePlatform, normalizeUrl } from '@/lib/leaks/url-utils'
@@ -14,10 +15,16 @@ export type RunLeakScanParams = {
   former_usernames?: string[]
   /** Extra title phrases for this run (merged with profile + content library) */
   title_hints?: string[]
-  /** Load published/scheduled titles from content table (default true) */
+  /** Load published/scheduled titles from content table (default true unless content_ids set) */
   include_content_titles?: boolean
   limitPerQuery?: number
   strict?: boolean
+  /** Restrict handle-based queries to this subset (must match merged username list for this run). */
+  focus_handles?: string[]
+  /** Only search these content rows’ titles (owned by user). When set, full library pull is off unless include_content_titles is true. */
+  content_ids?: string[]
+  /** Filter merged title list to those matching these phrases (substring). */
+  focus_title_hints?: string[]
 }
 
 export type RunLeakScanResult = {
@@ -26,6 +33,8 @@ export type RunLeakScanResult = {
   skipped: number
   filteredStrict: number
   message?: string
+  /** When set, API route should use this status (e.g. 400 for validation). */
+  statusCode?: number
   providerConfigured: boolean
   grokEnrichment: boolean
   fetchVerified?: number
@@ -86,7 +95,12 @@ export async function runLeakScan(
     limitPerQuery: bodyLimit,
   } = params
   const strict = params.strict !== false
-  const includeContentTitles = params.include_content_titles !== false
+  const contentIdsParam = Array.isArray(params.content_ids)
+    ? params.content_ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : []
+  const includeBulkContentTitles =
+    params.include_content_titles === true ||
+    (params.include_content_titles !== false && contentIdsParam.length === 0)
 
   const limitPerQuery = Math.min(Math.max(bodyLimit ?? parseIntEnv('LEAK_SCAN_RESULTS_PER_QUERY', 10, 1, 20), 1), 20)
   const maxQueries = parseIntEnv('LEAK_SCAN_MAX_QUERIES', 45, 1, 80)
@@ -127,17 +141,71 @@ export async function runLeakScan(
     .eq('user_id', userId)
     .eq('is_connected', true)
 
+  const { data: socialProfileRows } = await supabase
+    .from('social_profiles')
+    .select('username')
+    .eq('user_id', userId)
+
   const connectedUsernames = (connections || [])
     .filter((c) => typeof c.platform_username === 'string' && c.platform_username.length > 0)
-    .map((c) => c.platform_username as string)
+    .map((c) => normalizeScanHandle(c.platform_username as string))
+
+  const socialUsernames = (socialProfileRows || [])
+    .map((r: { username?: string }) => r.username)
+    .filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
+    .map((u) => normalizeScanHandle(u))
 
   const formerFromBody = Array.isArray(bodyFormer) ? bodyFormer.filter((s) => typeof s === 'string' && s.trim()) : []
-  const usernames = Array.from(
-    new Set([...connectedUsernames, ...(bodyAliases || []), ...profileFormer, ...formerFromBody].map((s) => s.trim()).filter(Boolean)),
+  let usernames = Array.from(
+    new Set(
+      [
+        ...connectedUsernames,
+        ...socialUsernames,
+        ...(bodyAliases || []).map((s) => normalizeScanHandle(s)),
+        ...profileFormer.map((s) => normalizeScanHandle(s)),
+        ...formerFromBody.map((s) => normalizeScanHandle(s)),
+      ].filter(Boolean),
+    ),
   )
 
+  const focusHandlesRaw = Array.isArray(params.focus_handles)
+    ? params.focus_handles.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+    : []
+  if (focusHandlesRaw.length > 0) {
+    const allowed = new Set(usernames.map((u) => u.toLowerCase()))
+    const narrowed = focusHandlesRaw
+      .map((h) => normalizeScanHandle(h))
+      .filter((h) => allowed.has(h.toLowerCase()))
+    if (narrowed.length === 0) {
+      return {
+        success: false,
+        inserted: 0,
+        skipped: 0,
+        filteredStrict: 0,
+        statusCode: 400,
+        message:
+          'Focus handles did not match your connected identities. Clear the selection or pick handles from your list.',
+        providerConfigured: Boolean(process.env.SERPER_API_KEY),
+        grokEnrichment: false,
+      }
+    }
+    usernames = Array.from(new Set(narrowed))
+  }
+
   let contentTitles: string[] = []
-  if (includeContentTitles && maxContentTitles > 0) {
+  if (contentIdsParam.length > 0) {
+    const { data: idRows } = await supabase
+      .from('content')
+      .select('title')
+      .eq('user_id', userId)
+      .in('id', contentIdsParam)
+
+    contentTitles = (idRows || [])
+      .map((r: { title?: string }) => r.title)
+      .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+  }
+
+  if (includeBulkContentTitles && maxContentTitles > 0) {
     const { data: contentRows } = await supabase
       .from('content')
       .select('title')
@@ -146,18 +214,43 @@ export async function runLeakScan(
       .order('created_at', { ascending: false })
       .limit(maxContentTitles)
 
-    contentTitles = (contentRows || [])
+    const bulk = (contentRows || [])
       .map((r: { title?: string }) => r.title)
       .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+    contentTitles = Array.from(new Set([...contentTitles, ...bulk]))
   }
 
   const hintsFromBody = Array.isArray(bodyTitleHints) ? bodyTitleHints.filter((s) => typeof s === 'string' && s.trim()) : []
-  const mergedTitles = Array.from(
+  let mergedTitles = Array.from(
     new Set([...contentTitles, ...profileTitleHints, ...hintsFromBody].map((t) => t.trim()).filter(Boolean)),
   )
 
+  const focusTitleRaw = Array.isArray(params.focus_title_hints)
+    ? params.focus_title_hints.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+    : []
+  if (focusTitleRaw.length > 0) {
+    const needles = focusTitleRaw.map((f) => f.toLowerCase().trim())
+    mergedTitles = mergedTitles.filter((t) => {
+      const tl = t.toLowerCase()
+      return needles.some((n) => tl.includes(n) || n.includes(tl))
+    })
+    if (mergedTitles.length === 0) {
+      return {
+        success: false,
+        inserted: 0,
+        skipped: 0,
+        filteredStrict: 0,
+        statusCode: 400,
+        message:
+          'No content titles matched your focus. Adjust title hints or include more saved titles / library content.',
+        providerConfigured: Boolean(process.env.SERPER_API_KEY),
+        grokEnrichment: false,
+      }
+    }
+  }
+
   const titleNeedles = titleNeedlesFromList(mergedTitles)
-  const primaryHandle = connectedUsernames[0] || usernames[0]
+  const primaryHandle = usernames[0] || connectedUsernames[0]
 
   const userUrls = (bodyUrls || []).map((u) => normalizeUrl(u)).filter(Boolean) as string[]
   const manualSet = new Set(userUrls)

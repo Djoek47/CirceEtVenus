@@ -7,11 +7,14 @@ type ScanBody = {
   aliases?: string[]
   former_usernames?: string[]
   title_hints?: string[]
-  /** Default true: include titles from content library */
+  /** Default true: include titles from content library (skipped when content_ids set unless explicitly true) */
   include_content_titles?: boolean
   limitPerQuery?: number
   /** Default true: filter search hits (Grok for Pro, keyword match otherwise). Manual URLs are always kept. */
   strict?: boolean
+  focus_handles?: string[]
+  content_ids?: string[]
+  focus_title_hints?: string[]
 }
 
 export async function POST(req: NextRequest) {
@@ -32,9 +35,13 @@ export async function POST(req: NextRequest) {
     include_content_titles: body.include_content_titles,
     limitPerQuery: body.limitPerQuery,
     strict: body.strict,
+    focus_handles: body.focus_handles,
+    content_ids: body.content_ids,
+    focus_title_hints: body.focus_title_hints,
   })
 
   if (!result.success) {
+    const status = result.statusCode ?? 500
     return NextResponse.json(
       {
         success: false,
@@ -43,7 +50,7 @@ export async function POST(req: NextRequest) {
         skipped: result.skipped,
         filteredStrict: result.filteredStrict,
       },
-      { status: 500 },
+      { status },
     )
   }
 

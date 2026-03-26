@@ -6,8 +6,9 @@ import { createOnlyFansAPI } from '@/lib/onlyfans-api'
  * POST: Upload media for OnlyFans DMs / mass messages.
  *
  * - multipart/form-data: field `file` (binary) — preferred for local images.
- * - application/json: `{ "file_url": "https://..." }` — URL must be fetchable by OnlyFansAPI
- *   (signed cdn2.onlyfans.com URLs usually fail with 403).
+ * - application/json: `{ "file_url": "https://..." }` — public HTTPS fetchable by OnlyFansAPI.
+ *   OnlyFans CDN URLs (cdn*.onlyfans.com) are downloaded server-side via OnlyFansAPI
+ *   `GET .../media/download/{cdnUrl}` then re-uploaded (IP-locked CDN; URLs expire ~20 min).
  *
  * Returns `{ id, url?, type? }` where `id` is the OFAPI media id (e.g. ofapi_media_*) for
  * `mediaFiles` / `mediaIds` when sending chat messages. Do not reuse the same id across sends

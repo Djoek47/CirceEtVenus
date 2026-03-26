@@ -9,8 +9,18 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useRouter } from 'next/navigation'
-import { useDivinePanel, applyDivineUiActions, type FocusedFan } from '@/components/divine/divine-panel-context'
+import { useDivinePanel, type FocusedFan } from '@/components/divine/divine-panel-context'
+import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
+import type { DivineVoiceDisconnectReason } from '@/lib/divine/voice-memory-types'
+
+function summarizeVoiceToolArgs(args: Record<string, unknown>): string {
+  try {
+    const s = JSON.stringify(args)
+    return s.length > 220 ? `${s.slice(0, 220)}…` : s
+  } catch {
+    return '(args)'
+  }
+}
 
 type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -46,7 +56,6 @@ export function useVoiceSession(): VoiceSessionContextValue | null {
 }
 
 export function VoiceSessionProvider({ children }: { children: ReactNode }) {
-  const router = useRouter()
   const divinePanel = useDivinePanel()
   const [status, setStatus] = useState<VoiceStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -68,10 +77,26 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const remoteAnalyserRef = useRef<AnalyserNode | null>(null)
   const localAnalyserRef = useRef<AnalyserNode | null>(null)
   const toolInFlightRef = useRef(false)
-  const resetIdleRef = useRef<(() => void) | null>(null)
+  /** True while assistant TTS/audio energy is above threshold (pauses idle disconnect). */
+  const assistantSpeakingRef = useRef(false)
+  const prevRemoteLoudRef = useRef(false)
+  const idleMsRef = useRef<number | null>(null)
+  const lastPendingConfirmationsRef = useRef<
+    Array<{ type: string; intent_id: string; summary?: string }>
+  >([])
+  const scheduleIdleDisconnectRef = useRef<() => void>(() => {})
+  const resumeBriefingSentRef = useRef(false)
   const [voiceSurfaceState, setVoiceSurfaceState] = useState<VoiceSurfaceState>('idle')
 
-  const IDLE_MS = 60_000
+  useEffect(() => {
+    const raw = process.env.NEXT_PUBLIC_DIVINE_VOICE_IDLE_MS
+    if (raw === undefined || raw === '') {
+      idleMsRef.current = null
+      return
+    }
+    const n = parseInt(raw, 10)
+    idleMsRef.current = Number.isNaN(n) || n <= 0 ? null : n
+  }, [])
 
   const playCue = useCallback((kind: 'done' | 'error') => {
     if (typeof window === 'undefined') return
@@ -102,40 +127,92 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const endVoiceCall = useCallback(() => {
+  const cancelIdleTimer = useCallback(() => {
     if (idleTimeoutRef.current) {
       clearTimeout(idleTimeoutRef.current)
       idleTimeoutRef.current = null
     }
-    if (endCallTimeoutRef.current) {
-      clearTimeout(endCallTimeoutRef.current)
-      endCallTimeoutRef.current = null
-    }
-    if (endCallRafRef.current != null) {
-      cancelAnimationFrame(endCallRafRef.current)
-      endCallRafRef.current = null
-    }
-    setClosingPending(false)
-    toolInFlightRef.current = false
-    setVoiceSurfaceState('idle')
-    resetIdleRef.current = null
-    const pc = pcRef.current
-    if (pc) {
-      pc.close()
-      pcRef.current = null
-    }
-    const stream = streamRef.current
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop())
-      streamRef.current = null
-    }
-    audioRef.current = null
-    setRemoteVoiceStream(null)
-    setLocalVoiceStream(null)
-    oaiDataChannelRef.current = null
-    setStatus('idle')
-    setError(null)
   }, [])
+
+  const endVoiceCall = useCallback(
+    (reason: DivineVoiceDisconnectReason = 'user_hangup') => {
+      const hadToolInFlight = toolInFlightRef.current
+      const pendingSnap = [...lastPendingConfirmationsRef.current]
+      cancelIdleTimer()
+      if (endCallTimeoutRef.current) {
+        clearTimeout(endCallTimeoutRef.current)
+        endCallTimeoutRef.current = null
+      }
+      if (endCallRafRef.current != null) {
+        cancelAnimationFrame(endCallRafRef.current)
+        endCallRafRef.current = null
+      }
+      setClosingPending(false)
+      toolInFlightRef.current = false
+      lastPendingConfirmationsRef.current = []
+      setVoiceSurfaceState('idle')
+      assistantSpeakingRef.current = false
+      prevRemoteLoudRef.current = false
+      const pc = pcRef.current
+      if (pc) {
+        pc.close()
+        pcRef.current = null
+      }
+      const stream = streamRef.current
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+      audioRef.current = null
+      setRemoteVoiceStream(null)
+      setLocalVoiceStream(null)
+      oaiDataChannelRef.current = null
+      setStatus('idle')
+      setError(null)
+
+      void fetch('/api/divine/voice-memory', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          reason === 'end_call'
+            ? { clear: true }
+            : {
+                disconnect_reason: reason,
+                status:
+                  hadToolInFlight || pendingSnap.length > 0
+                    ? 'in_progress'
+                    : 'completed',
+                resume_hint:
+                  hadToolInFlight || pendingSnap.length > 0
+                    ? `Session ended (${reason}). ${pendingSnap.length ? 'Confirmation pending in app.' : 'Task may have been incomplete.'}`
+                    : null,
+              },
+        ),
+      }).catch(() => undefined)
+    },
+    [cancelIdleTimer],
+  )
+
+  const scheduleIdleDisconnect = useCallback(() => {
+    const ms = idleMsRef.current
+    if (ms == null || ms <= 0) return
+    cancelIdleTimer()
+    if (toolInFlightRef.current || assistantSpeakingRef.current) return
+    idleTimeoutRef.current = setTimeout(() => {
+      idleTimeoutRef.current = null
+      endVoiceCall('idle_timeout')
+    }, ms)
+  }, [cancelIdleTimer, endVoiceCall])
+
+  useEffect(() => {
+    scheduleIdleDisconnectRef.current = scheduleIdleDisconnect
+  }, [scheduleIdleDisconnect])
+
+  const cancelIdleTimerRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    cancelIdleTimerRef.current = cancelIdleTimer
+  }, [cancelIdleTimer])
 
   const sendBriefingQuestion = useCallback(async (text: string) => {
     const dc = oaiDataChannelRef.current
@@ -162,7 +239,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         response: { modalities: ['audio'] },
       }),
     )
-    resetIdleRef.current?.()
+    scheduleIdleDisconnectRef.current()
   }, [])
 
   const startVoiceCall = useCallback(async () => {
@@ -231,7 +308,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           const quietAfterSpeech = Date.now() - lastLoudAt >= silenceMs
           if ((minDone && quietAfterSpeech) || elapsed >= maxMs) {
             setClosingPending(false)
-            endVoiceCall()
+            endVoiceCall('end_call')
             endCallRafRef.current = null
             return
           }
@@ -242,7 +319,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           endCallTimeoutRef.current = setTimeout(() => {
             endCallTimeoutRef.current = null
             setClosingPending(false)
-            endVoiceCall()
+            endVoiceCall('end_call')
           }, 2500)
           return
         }
@@ -289,24 +366,40 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 return data.error ? `Error: ${data.error}` : 'Tool failed.'
               }
               if (Array.isArray(data.ui_actions) && data.ui_actions.length) {
-                applyDivineUiActions(
-                  data.ui_actions as Parameters<typeof applyDivineUiActions>[0],
-                  router,
-                  divinePanel?.setFocusedFan ?? (() => undefined),
-                )
+                divinePanel?.applyUiActionsFromTools?.(data.ui_actions as DivineUiAction[])
               }
               let out = typeof data.content === 'string' ? data.content.trim() : ''
               if (Array.isArray(data.pending_confirmations) && data.pending_confirmations.length) {
+                lastPendingConfirmationsRef.current = data.pending_confirmations
                 const note = data.pending_confirmations
                   .map((p) => `${p.type}${p.summary ? `: ${p.summary}` : ''}`)
                   .join('; ')
                 out = out ? `${out}\n\n(Confirmation required in app: ${note})` : `Confirmation required in app: ${note}`
+              } else {
+                lastPendingConfirmationsRef.current = []
               }
+              void fetch('/api/divine/voice-memory', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: {
+                    tool: name,
+                    summary: `${name}: ${summarizeVoiceToolArgs(args)}`,
+                  },
+                  status: 'in_progress' as const,
+                  pending_confirmations:
+                    data.pending_confirmations && data.pending_confirmations.length > 0
+                      ? data.pending_confirmations
+                      : undefined,
+                }),
+              }).catch(() => undefined)
               return out || 'Done.'
             } catch {
               return 'Tool failed.'
             } finally {
               toolInFlightRef.current = false
+              scheduleIdleDisconnectRef.current()
             }
           }
           const toolCalls =
@@ -416,34 +509,48 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const answerSdp = await res.text()
       await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
       setStatus('connected')
+      resumeBriefingSentRef.current = false
+      scheduleIdleDisconnectRef.current()
+      void (async () => {
+        try {
+          const memRes = await fetch('/api/divine/voice-memory', { credentials: 'include' })
+          const memJson = (await memRes.json().catch(() => ({}))) as {
+            memory?: {
+              status?: string
+              resume_hint?: string
+              action_log?: Array<{ tool: string }>
+            }
+          }
+          const m = memJson.memory
+          const hasResumeContext =
+            m?.resume_hint ||
+            (Array.isArray(m?.action_log) && m.action_log.length > 0)
+          if (m?.status === 'in_progress' && hasResumeContext && !resumeBriefingSentRef.current) {
+            resumeBriefingSentRef.current = true
+            await sendBriefingQuestion(
+              `The last voice session ended before everything finished. Resume hint: ${m.resume_hint}. Ask briefly if they want to continue that or start fresh; if they decline, move on.`,
+            )
+          }
+        } catch {
+          // ignore resume prompt failures
+        }
+      })()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to start voice call'
-      endVoiceCall()
+      endVoiceCall('error')
       setError(msg)
       setStatus('error')
       playCue('error')
     }
-  }, [endVoiceCall, playCue, status, router, divinePanel])
+  }, [endVoiceCall, playCue, status, divinePanel, sendBriefingQuestion])
 
+  /** Arm optional idle disconnect when session becomes connected (no-op if NEXT_PUBLIC_DIVINE_VOICE_IDLE_MS unset). */
   useEffect(() => {
     if (status !== 'connected') return
-    const resetIdle = () => {
-      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current)
-      idleTimeoutRef.current = setTimeout(() => {
-        idleTimeoutRef.current = null
-        endVoiceCall()
-      }, IDLE_MS)
-    }
-    resetIdleRef.current = resetIdle
-    resetIdle()
-    return () => {
-      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current)
-      idleTimeoutRef.current = null
-      resetIdleRef.current = null
-    }
-  }, [status, endVoiceCall])
+    scheduleIdleDisconnectRef.current()
+  }, [status, scheduleIdleDisconnect])
 
-  /** User speech resets the 1-minute idle timer (not assistant traffic). */
+  /** User speech resets the idle timer (only if env enables idle disconnect). */
   useEffect(() => {
     if (status !== 'connected') return
     const id = setInterval(() => {
@@ -453,7 +560,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       a.getByteFrequencyData(buf)
       let sum = 0
       for (let i = 0; i < buf.length; i++) sum += buf[i]
-      if (sum / buf.length > 10) resetIdleRef.current?.()
+      if (sum / buf.length > 10) scheduleIdleDisconnectRef.current()
     }, 220)
     return () => clearInterval(id)
   }, [status])
@@ -474,6 +581,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         for (let i = 0; i < buf.length; i++) sum += buf[i]
         remoteLoud = sum / buf.length > 9
       }
+      assistantSpeakingRef.current = remoteLoud
+      const prev = prevRemoteLoudRef.current
+      prevRemoteLoudRef.current = remoteLoud
+      if (!prev && remoteLoud) {
+        cancelIdleTimerRef.current()
+      }
+      if (prev && !remoteLoud) {
+        scheduleIdleDisconnectRef.current()
+      }
       if (remoteLoud) setVoiceSurfaceState('speaking')
       else if (toolInFlightRef.current) setVoiceSurfaceState('working')
       else setVoiceSurfaceState('idle')
@@ -483,7 +599,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      endVoiceCall()
+      endVoiceCall('user_hangup')
     }
   }, [endVoiceCall])
 

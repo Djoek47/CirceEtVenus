@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -207,6 +207,8 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [activePanel, setActivePanel] = useState<'circe' | 'venus' | 'flirt' | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  /** After switching threads or initial load, jump to latest message (top-of-thread is wrong default). */
+  const pendingScrollToLatestRef = useRef(false)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const supabase = createClient()
   const [niches, setNiches] = useState<string[]>([])
@@ -220,6 +222,12 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const scrollContainerToLatest = () => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
   }
 
   const isNearBottom = () => {
@@ -310,6 +318,32 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     // Intentionally omit divinePanel/voiceSession from deps: their refs change when we call setFocusedFan, which would retrigger this effect and cause "Maximum update depth exceeded" (React #185).
   }, [focusedFanId, focusedFanUsername, focusedFanName])
 
+  const dmSuggestionBridge = divinePanel?.dmSuggestionBridge ?? null
+  const clearDmSuggestionBridge = divinePanel?.clearDmSuggestionBridge
+  useEffect(() => {
+    if (!dmSuggestionBridge || !conversation || !clearDmSuggestionBridge) return
+    if (String(conversation.user.id) !== String(dmSuggestionBridge.fanId)) return
+
+    setScanInsights(
+      dmSuggestionBridge.scan ?? {
+        insights: [],
+        riskFlags: [],
+        suggestedAngles: [],
+      },
+    )
+    setCirceSuggestions(
+      dmSuggestionBridge.circeSuggestions.length ? dmSuggestionBridge.circeSuggestions : null,
+    )
+    setVenusSuggestions(
+      dmSuggestionBridge.venusSuggestions.length ? dmSuggestionBridge.venusSuggestions : null,
+    )
+    setFlirtSuggestions(
+      dmSuggestionBridge.flirtSuggestions.length ? dmSuggestionBridge.flirtSuggestions : null,
+    )
+    setActivePanel(dmSuggestionBridge.highlightPanel)
+    clearDmSuggestionBridge()
+  }, [conversation?.user?.id, dmSuggestionBridge, clearDmSuggestionBridge])
+
   const callSuggestionApi = async (mode: 'scan' | 'circe' | 'venus' | 'flirt') => {
     if (!conversation) return
     setError(null)
@@ -386,21 +420,24 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   useEffect(() => {
     if (!conversation) {
       setMessages([])
+      pendingScrollToLatestRef.current = false
       return
     }
 
+    pendingScrollToLatestRef.current = true
+    setMessages([])
     const loadMessages = async () => {
       setLoading(true)
       setError(null)
-      
+
       try {
-        const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}`)
+        const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}?limit=50`)
         const data = await res.json()
-        
+
         if (!res.ok) {
           throw new Error(data.error || 'Failed to load messages')
         }
-        
+
         setMessages(normalizeAndSortMessages(data.messages || []))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load messages')
@@ -412,15 +449,31 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     loadMessages()
   }, [conversation])
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    // Only auto-scroll if the user is already near the bottom (prevents jumpiness while reading history)
-    if (isNearBottom()) scrollToBottom()
-  }, [messages])
+  // Opened a thread or finished loading: jump to latest before paint (avoids flash at top).
+  useLayoutEffect(() => {
+    if (loading) return
+    if (!pendingScrollToLatestRef.current) return
+    const run = () => {
+      scrollContainerToLatest()
+      pendingScrollToLatestRef.current = false
+    }
+    run()
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run)
+    })
+  }, [messages, loading])
 
-  // Poll for new messages when a conversation is open
+  // New messages while staying in the same thread: only follow if already near the bottom.
+  useEffect(() => {
+    if (loading) return
+    if (pendingScrollToLatestRef.current) return
+    if (isNearBottom()) scrollToBottom()
+  }, [messages, loading])
+
+  // Poll for new messages when a conversation is open (after initial load — avoids duplicate GET on open).
   useEffect(() => {
     if (!conversation) return
+    if (loading) return
 
     const poll = async () => {
       if (!conversation) return
@@ -438,13 +491,11 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       }
     }
 
-    // Immediate poll then interval
-    poll()
     pollIntervalRef.current = setInterval(poll, 6000)
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     }
-  }, [conversation?.user?.id])
+  }, [conversation?.user?.id, loading])
 
   const handleChatFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -498,6 +549,13 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       if (data.message) {
         setMessages(prev => normalizeAndSortMessages([...prev, data.message]))
         setTimeout(() => scrollToBottom(), 0)
+      }
+      if (conversation.platform === 'onlyfans') {
+        void fetch('/api/divine/refresh-thread-insight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fanId: String(conversation.user.id) }),
+        }).catch(() => undefined)
       }
       onMessageSent?.()
     } catch (err) {

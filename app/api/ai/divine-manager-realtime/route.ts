@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getArchetypeFlavor } from '@/lib/divine-manager-archetypes'
 import { getDivineVoice } from '@/lib/divine-manager'
+import type { DivineVoiceMemoryPayload } from '@/lib/divine/voice-memory-types'
 
 export const maxDuration = 30
 
@@ -77,6 +78,25 @@ export async function POST(req: NextRequest) {
       .order('date', { ascending: false })
       .limit(14)
 
+    const { data: profileRow, error: voiceMemErr } = await supabase
+      .from('profiles')
+      .select('divine_voice_memory')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (voiceMemErr) {
+      console.warn('[divine-manager-realtime] divine_voice_memory:', voiceMemErr.message)
+    }
+    const voiceMem = (voiceMemErr ? {} : (profileRow?.divine_voice_memory ?? {})) as DivineVoiceMemoryPayload
+    const voiceMemoryLine =
+      voiceMem.status === 'in_progress' &&
+      (voiceMem.resume_hint || (voiceMem.action_log && voiceMem.action_log.length > 0))
+        ? `\n\nPrevious voice session may be incomplete: ${voiceMem.resume_hint || 'Last flow was interrupted.'} Recent tools: ${(voiceMem.action_log ?? [])
+            .slice(-5)
+            .map((a) => a.tool)
+            .join(', ') || 'none'}. Offer briefly to continue that work or start fresh; if they decline, move on.`
+        : ''
+
     const persona = settings?.persona ?? {}
     const goals = settings?.goals ?? {}
     const rules = settings?.automation_rules ?? {}
@@ -134,11 +154,11 @@ You have access to the creator's analytics: fans, revenue, and platform breakdow
 
     You can see and act on OnlyFans fans, followings, message engagement, and queue: list_fans (filter: active, expired, latest, top) for who are my fans, top spenders, or expired subs; get_fan_subscription_history for a specific fan's renewals; list_followings for who the creator follows; get_top_message for the best-performing message and its buyers; get_message_engagement (type direct or mass) for how DMs or mass messages performed; publish_queue_item to publish a saved post or saved mass message. Prefer the smallest set of API calls that answers the question: e.g. "who spent the most this month" → list_fans with filter=top; "how did yesterday's mass message do" → get_message_engagement with type=mass; "publish my saved post about the new set" → look up queue then publish_queue_item with that queueId.
 
-You have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. If a DM thread is not found (for example, the fan or conversation was deleted), tell the creator that the thread is no longer available and suggest picking another fan instead of treating it as a generic error. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options (the creator will see three buttons to choose while you read). send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.${focusedFanLine}
+You have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. If a DM thread is not found (for example, the fan or conversation was deleted), tell the creator that the thread is no longer available and suggest picking another fan instead of treating it as a generic error. get_reply_suggestions and get_dm_thread_and_suggestions run Scan Thread plus Circe/Venus/Flirt reply lines; the app opens Messages for that fan and shows the same panels as the in-chat buttons while you read—pass openPanel (venus|circe|flirt|scan|all) when they only want one kind (e.g. "give me a Venus reply"). send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.${focusedFanLine}${voiceMemoryLine}
 
 Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation. Text chat has the full tool list; voice uses the same server-side tools—if something fails, suggest using Divine text chat for that action.
 
-    The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). For a Supabase storage image URL they paste, use analyze_image_from_url. When they say "write a caption", "caption this", or "what should I say", use generate_caption. Prefer get_dm_thread_and_suggestions when they need both thread context and reply ideas. draft_fan_reply drafts a fan-facing line from Mimic Test (review only). When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice or list_fans with filter=top. For "which fans spent the most", "top 10 fans", or "who are my biggest spenders" use list_fans with filter=top (and optional sort). For "how did my mass message perform" or "last mass DM stats" use get_message_engagement with type=mass. For "publish my saved post" or "send my saved mass DM" use publish_queue_item with the queue id (you may need to describe that they should confirm in the app if you do not have the queue id). You can create in-app reminders with send_notification. For leaks/DMCA review use list_leak_alerts or run_leak_scan only when they ask. Reputation identities: add_reputation_identity / remove_reputation_identity for manual mention handles; add_leak_search_identity / remove_leak_search_identity for former usernames and leak title hints used in Protection search. run_reputation_scan discovers new web/social mentions. trigger_reputation_briefing generates the aggregate briefing (Pro); get_reputation_briefing reads the latest saved briefing; list_reputation_briefings lists recent history. get_fan_thread_insights returns stored thread snapshot and fan AI summary for a fanId. run_ai_studio_tool runs a dashboard AI Studio tool by toolId plus args (same tools as AI Studio). The app may end the call automatically after about one minute without the creator speaking—ask "anything else?" before they go quiet too long, and use end_call only when they are clearly done. Do NOT call end_call until you have finished speaking after any tools (including slow ones like analyze_content, pricing, or publish). After completing their request—or if they interrupt—still ask out loud: "Is there anything else you want me to do?" and wait for their answer. Only after they clearly indicate they are done or say goodbye, say a brief goodbye and then call end_call. Never end_call in the same turn as a tool before you have verbally confirmed they need nothing else. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish, publish_queue_item) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
+    The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). For a Supabase storage image URL they paste, use analyze_image_from_url. When they say "write a caption", "caption this", or "what should I say", use generate_caption. Prefer get_dm_thread_and_suggestions when they need both thread context and reply ideas. draft_fan_reply drafts a fan-facing line from Mimic Test (review only). When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice or list_fans with filter=top. For "which fans spent the most", "top 10 fans", or "who are my biggest spenders" use list_fans with filter=top (and optional sort). For "how did my mass message perform" or "last mass DM stats" use get_message_engagement with type=mass. For "publish my saved post" or "send my saved mass DM" use publish_queue_item with the queue id (you may need to describe that they should confirm in the app if you do not have the queue id). You can create in-app reminders with send_notification. For leaks/DMCA review use list_leak_alerts or run_leak_scan only when they ask. Reputation identities: add_reputation_identity / remove_reputation_identity for manual mention handles; add_leak_search_identity / remove_leak_search_identity for former usernames and leak title hints used in Protection search. run_reputation_scan discovers new web/social mentions. trigger_reputation_briefing generates the aggregate briefing (Pro); get_reputation_briefing reads the latest saved briefing; list_reputation_briefings lists recent history. get_fan_thread_insights returns stored thread snapshot, merged personality profile_json, and fan AI summary for a fanId (background refresh keeps snapshots updated after new messages). refresh_fan_thread_scan forces a fresh fetch and profile merge for a fanId. To open Messages for a specific fan once you know their fanId, prefer ui_focus_fan; use ui_navigate to /dashboard/messages only for the inbox without a fan. get_dm_conversations resolves names to fanIds. run_ai_studio_tool runs a dashboard AI Studio tool by toolId plus args (same tools as AI Studio). The app does not auto-disconnect for short silence by default; an optional long idle timeout may be configured server-side and does not apply while tools run or while you (the assistant) are speaking. Ask "anything else?" before they go quiet too long, and use end_call only when they are clearly done. Do NOT call end_call until you have finished speaking after any tools (including slow ones like analyze_content, pricing, or publish). After completing their request—or if they interrupt—still ask out loud: "Is there anything else you want me to do?" and wait for their answer. Only after they clearly indicate they are done or say goodbye, say a brief goodbye and then call end_call. Never end_call in the same turn as a tool before you have verbally confirmed they need nothing else. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish, publish_queue_item) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
 
     const tools = [
       {
@@ -246,11 +266,17 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
         type: 'function' as const,
         name: 'get_reply_suggestions',
         description:
-          'Scan the thread and get Circe, Venus, and Flirt reply suggestions for a fan. Returns Scan insights, recommendation, and three reply options. The creator will see three buttons to pick one while you read. Use fanId from get_dm_conversations.',
+          'Scan the thread and get Circe, Venus, and Flirt reply suggestions for a fan. Opens Messages for that fan and shows the same suggestion UI as the in-chat buttons while you read. Use fanId from get_dm_conversations. Pass openPanel when they ask only for scan, or only Venus/Circe/Flirt lines.',
         parameters: {
           type: 'object',
           properties: {
             fanId: { type: 'string', description: 'Fan id from get_dm_conversations' },
+            openPanel: {
+              type: 'string',
+              enum: ['scan', 'circe', 'venus', 'flirt', 'all'],
+              description:
+                'Optional. scan = scan insights only; circe|venus|flirt = open that reply panel with multiple lines; all = load everything without forcing a reply tab (default).',
+            },
           },
           required: ['fanId'],
         },
@@ -259,10 +285,18 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
         type: 'function' as const,
         name: 'get_dm_thread_and_suggestions',
         description:
-          'Preferred: fetch DM thread and Circe/Venus/Flirt reply suggestions in one step (faster than separate calls). Use fanId from get_dm_conversations.',
+          'Preferred: fetch DM thread and Circe/Venus/Flirt reply suggestions in one step (faster than separate calls). Use fanId from get_dm_conversations. Pass openPanel when they ask only for Venus/Circe/Flirt replies so the app opens that panel.',
         parameters: {
           type: 'object',
-          properties: { fanId: { type: 'string', description: 'Fan id from get_dm_conversations' } },
+          properties: {
+            fanId: { type: 'string', description: 'Fan id from get_dm_conversations' },
+            openPanel: {
+              type: 'string',
+              enum: ['scan', 'circe', 'venus', 'flirt', 'all'],
+              description:
+                'Optional. scan = emphasize scan insights; circe|venus|flirt = open that reply panel; all = default (full thread + suggestions, no forced reply tab).',
+            },
+          },
           required: ['fanId'],
         },
       },
@@ -657,10 +691,25 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
       {
         type: 'function' as const,
         name: 'get_fan_thread_insights',
-        description: 'Latest stored DM thread snapshot and fan AI summary for a fan.',
+        description:
+          'Latest stored DM thread snapshot, merged personality profile (profile_json), iteration, and OnlyFans fan AI summary for a fan.',
         parameters: {
           type: 'object',
           properties: { fanId: { type: 'string' } },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'refresh_fan_thread_scan',
+        description:
+          'Re-fetch the DM thread from OnlyFans, update the stored snapshot, and merge/refine the structured fan personality profile. Use when the creator asks to refresh or rescan a fan’s thread.',
+        parameters: {
+          type: 'object',
+          properties: {
+            fanId: { type: 'string' },
+            force: { type: 'boolean', description: 'If true, bypass debounce and run profile merge' },
+          },
           required: ['fanId'],
         },
       },
@@ -721,7 +770,7 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
         type: 'function' as const,
         name: 'ui_navigate',
         description:
-          'Open a dashboard screen in the app. For Divine Manager sections use ?section=mimic (Mimic Test), voice (voice call), tasks (today plan), or alerts (urgent jobs).',
+          'Open a dashboard screen in the app. For Divine Manager sections use ?section=mimic (Mimic Test), voice (voice call), tasks (today plan), or alerts (urgent jobs). For Messages, use path /dashboard/messages for the inbox only; to open a specific fan’s chat use ui_focus_fan with fanId instead.',
         parameters: {
           type: 'object',
           properties: {

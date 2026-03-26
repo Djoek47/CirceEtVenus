@@ -134,7 +134,50 @@ const CHAT_TOOLS: Array<{
     type: 'function',
     function: {
       name: 'get_reply_suggestions',
-      description: 'Scan the thread and get Circe, Venus, and Flirt reply suggestions for a fan. Returns Scan insights, recommendation (Circe/Venus/Flirt), and three reply options. Use with fanId from get_dm_conversations after reading the thread if needed.',
+      description:
+        'Scan the thread and get Circe, Venus, and Flirt reply suggestions for a fan. Returns Scan insights, recommendation (Circe/Venus/Flirt), and three reply options. Opens Messages for that fan and shows the same suggestions UI as the in-chat buttons. Use openPanel when the creator asks only for scan, or only Venus/Circe/Flirt lines.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' },
+          openPanel: {
+            type: 'string',
+            enum: ['scan', 'circe', 'venus', 'flirt', 'all'],
+            description:
+              'Optional. scan = scan insights only; circe|venus|flirt = open that reply panel with multiple lines; all = load everything without forcing a reply tab (default).',
+          },
+        },
+        required: ['fanId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_dm_thread_and_suggestions',
+      description:
+        'Preferred: fetch DM thread and Circe/Venus/Flirt reply suggestions in one step (faster than calling get_dm_thread and get_reply_suggestions separately). Use fanId from get_dm_conversations. Use openPanel when the creator asks only for Venus/Circe/Flirt replies so the app opens that panel while you read.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' },
+          openPanel: {
+            type: 'string',
+            enum: ['scan', 'circe', 'venus', 'flirt', 'all'],
+            description:
+              'Optional. scan = emphasize scan insights; circe|venus|flirt = open that reply panel; all = default (full thread text + all suggestions, no forced reply tab).',
+          },
+        },
+        required: ['fanId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_fan_thread_insights',
+      description:
+        'Latest stored DM thread snapshot, merged personality profile_json, iteration, and OnlyFans fan AI summary for a fan. Background refresh updates snapshots after new messages; use refresh_fan_thread_scan for a forced rescan.',
       parameters: {
         type: 'object',
         properties: { fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' } },
@@ -145,12 +188,15 @@ const CHAT_TOOLS: Array<{
   {
     type: 'function',
     function: {
-      name: 'get_dm_thread_and_suggestions',
+      name: 'refresh_fan_thread_scan',
       description:
-        'Preferred: fetch DM thread and Circe/Venus/Flirt reply suggestions in one step (faster than calling get_dm_thread and get_reply_suggestions separately). Use fanId from get_dm_conversations.',
+        'Re-fetch the DM thread from OnlyFans, update the stored snapshot, and merge/refine the structured fan personality profile. Use when the creator asks to refresh or rescan a fan’s thread.',
       parameters: {
         type: 'object',
-        properties: { fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' } },
+        properties: {
+          fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' },
+          force: { type: 'boolean', description: 'If true, bypass debounce and run profile merge' },
+        },
         required: ['fanId'],
       },
     },
@@ -271,7 +317,7 @@ const CHAT_TOOLS: Array<{
     function: {
       name: 'ui_navigate',
       description:
-        'Open a main dashboard screen inside the app (Divine full). Use when the creator asks to go to Messages, Protection, Mentions, etc.',
+        'Open a main dashboard screen inside the app (Divine full). For Messages, use /dashboard/messages for the inbox only; to open a specific fan’s chat use ui_focus_fan with fanId.',
       parameters: {
         type: 'object',
         properties: {
@@ -704,9 +750,9 @@ You know their tasks, rules, and analytics. Speak as a manager, not as the creat
 Never claim you have already sent messages, changed prices, or executed actions. You may only recommend or suggest actions or rule changes.
 Respect the creator's boundaries, niches, and all platform safety rules.
 Avoid explicit or illegal content entirely. Use clear, practical language.
-You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, get_dm_thread_and_suggestions (preferred for thread + replies), draft_fan_reply (fan-facing draft from Mimic Test—review only, never auto-sent), analyze_image_from_url (Supabase/storage image URLs only; Divine full), list_cosmic_calendar, get_scheduled_content_summary, list_leak_alerts, update_leak_alert_case, trigger_reputation_briefing, list_reputation_mentions, get_integrations_summary, ui_navigate, ui_focus_fan (subscriber: open app screens / focus a fan), send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item, run_leak_scan. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm. For run_leak_scan, only use when they want to find leaked content or prepare DMCA review; it uses search API quota.
+You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, get_dm_thread_and_suggestions (preferred for thread + replies), get_fan_thread_insights (stored snapshot + personality profile), refresh_fan_thread_scan (force rescan thread + profile), draft_fan_reply (fan-facing draft from Mimic Test—review only, never auto-sent), analyze_image_from_url (Supabase/storage image URLs only; Divine full), list_cosmic_calendar, get_scheduled_content_summary, list_leak_alerts, update_leak_alert_case, trigger_reputation_briefing, list_reputation_mentions, get_integrations_summary, ui_navigate, ui_focus_fan (subscriber: open app screens / focus a fan), send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item, run_leak_scan. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm. For run_leak_scan, only use when they want to find leaked content or prepare DMCA review; it uses search API quota.
 Fans and engagement: list_fans (filter: active, expired, latest, top) for "who are my fans", "top spenders", "expired subs"; get_fan_subscription_history for a fan's renewals; list_followings for who they follow; get_top_message for best-performing message and buyers; get_message_engagement (type direct or mass) for "how did my messages perform"; publish_queue_item to publish a saved post or saved mass message. Route: "who spent the most" → list_fans filter=top; "how did my mass message do" → get_message_engagement type=mass; "publish my saved post" → publish_queue_item.
-You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. Prefer get_dm_thread_and_suggestions when they need both thread and reply ideas. draft_fan_reply drafts a message in the creator's voice (Mimic Test); it does not send—creator reviews first. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options for that chat. send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.
+You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. Prefer get_dm_thread_and_suggestions when they need both thread and reply ideas. get_fan_thread_insights returns the stored thread snapshot and merged personality profile (updated in the background after messages). refresh_fan_thread_scan forces a fresh fetch from OnlyFans. draft_fan_reply drafts a message in the creator's voice (Mimic Test); it does not send—creator reviews first. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options; the app opens Messages for that fan and shows the same panels as the in-chat buttons—use openPanel (venus|circe|flirt|scan|all) when they only want one panel (e.g. "Venus reply"). send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.
 
 Chat behavior (match voice Divine Manager): After any tool runs—including slow or heavy ones (analyze, pricing, publish, fan lists, notifications)—write a clear summary of what came back and what the creator should do next. Do not stop after a bare tool result or a single sentence if the user still needs context. When you have addressed their request, end with a short offer to help further, e.g. "Is there anything else you want me to look at?" Do not imply the conversation is "closed" or that you are hanging up; this is text chat and stays open until they send another message.`
 

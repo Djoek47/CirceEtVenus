@@ -35,9 +35,14 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
     setError(null)
 
     try {
-      // Fetch from OnlyFans
-      const onlyfansRes = await fetch('/api/onlyfans/conversations')
-      const onlyfansData = await onlyfansRes.json()
+      const [onlyfansRes, fanslyRes] = await Promise.all([
+        fetch('/api/onlyfans/conversations'),
+        fetch('/api/fansly/conversations'),
+      ])
+      const [onlyfansData, fanslyData] = await Promise.all([
+        onlyfansRes.json(),
+        fanslyRes.json(),
+      ])
 
       const allConversations: Conversation[] = []
 
@@ -50,8 +55,6 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
         allConversations.push(...ofConversations)
       }
 
-      const fanslyRes = await fetch('/api/fansly/conversations')
-      const fanslyData = await fanslyRes.json()
       if (fanslyRes.ok && fanslyData.conversations?.length) {
         const fanslyConversations = fanslyData.conversations.map((conv: any) => ({
           ...conv,
@@ -69,16 +72,19 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
       })
 
       setConversations(allConversations)
-      if (allConversations.length > 0 && !selectedConversation) {
-        setSelectedConversation(allConversations[0])
-      }
+      setSelectedConversation((prev) => {
+        if (allConversations.length === 0) return null
+        if (!prev) return allConversations[0]
+        const stillThere = allConversations.find((c) => String(c.user.id) === String(prev.user.id))
+        return stillThere ?? allConversations[0]
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversations')
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [selectedConversation])
+  }, [])
 
   useEffect(() => {
     loadConversations()

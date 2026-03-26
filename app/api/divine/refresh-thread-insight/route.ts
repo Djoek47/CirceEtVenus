@@ -1,0 +1,39 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
+
+/**
+ * POST { fanId, force?: boolean } — refresh stored thread snapshot + optional profile (creator session).
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const body = (await req.json().catch(() => ({}))) as { fanId?: string; force?: boolean }
+    const fanId = typeof body.fanId === 'string' ? body.fanId.trim() : ''
+    if (!fanId) return NextResponse.json({ error: 'fanId required' }, { status: 400 })
+
+    const result = await refreshFanThreadInsight(supabase, user.id, fanId, {
+      force: body.force === true,
+      skipDebounce: true,
+    })
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 })
+    }
+
+    return NextResponse.json({
+      ok: true,
+      skipped: result.skipped,
+      iteration: result.iteration,
+      profileUpdated: result.profileUpdated,
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Refresh failed'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}

@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/server'
  * Uses OnlyFansAPI download pattern:
  *   GET https://app.onlyfansapi.com/api/{account}/media/download/{ONLYFANS_CDN_URL}
  *
+ * CDN URLs are IP-locked and expire in ~20 minutes; always fetch via this API, not the browser.
+ *
  * We stream the binary back to the client.
  */
 export async function GET(req: NextRequest) {
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'OnlyFans API key not configured' }, { status: 500 })
     }
 
-    const downloadUrl = `https://app.onlyfansapi.com/api/${accountId}/media/download/${cdnUrl}`
+    const downloadUrl = `https://app.onlyfansapi.com/api/${accountId}/media/download/${encodeURIComponent(cdnUrl)}`
     const res = await fetch(downloadUrl, {
       method: 'GET',
       headers: {

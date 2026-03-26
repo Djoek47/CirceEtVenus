@@ -1001,8 +1001,57 @@ class OnlyFansAPI {
   }
 
   /**
+   * Download bytes for an OnlyFans CDN URL via the official API path (IP-locked; expires ~20 min).
+   * GET /api/{account}/media/download/{cdnUrl} — path segment must be percent-encoded.
+   * @see https://docs.onlyfansapi.com — do not fetch CDN URLs directly from the browser.
+   */
+  async fetchMediaBlobFromCdnUrl(cdnUrl: string): Promise<Blob> {
+    if (!this.accountId) {
+      throw new Error('Account id required for OnlyFans CDN download')
+    }
+    const trimmed = cdnUrl.trim()
+    if (!/^https:\/\//i.test(trimmed)) {
+      throw new Error('CDN URL must be https')
+    }
+    const segment = encodeURIComponent(trimmed)
+    const url = `${ONLYFANS_API_BASE}/${this.accountId}/media/download/${segment}`
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => '')
+      throw new Error(
+        t ? `OnlyFans CDN download failed: ${t.slice(0, 200)}` : `OnlyFans CDN download failed (${res.status})`,
+      )
+    }
+    return res.blob()
+  }
+
+  /**
+   * Re-upload flow for OnlyFans CDN URLs: download via {@link fetchMediaBlobFromCdnUrl}, then multipart upload.
+   * Produces an `ofapi_media_*` id for chat sends (same as a normal file upload).
+   */
+  async uploadMediaFromOnlyFansCdnUrl(cdnUrl: string): Promise<{ id: string; url?: string; type?: string }> {
+    const blob = await this.fetchMediaBlobFromCdnUrl(cdnUrl)
+    const type = blob.type || 'image/jpeg'
+    const ext =
+      type.includes('png') ? 'png'
+      : type.includes('webp') ? 'webp'
+      : type.includes('gif') ? 'gif'
+      : type.includes('webm') ? 'webm'
+      : type.includes('mp4') ? 'mp4'
+      : 'jpg'
+    const file = new File([blob], `of-cdn.${ext}`, { type })
+    return this.uploadMedia(file)
+  }
+
+  /**
    * POST .../media/upload with JSON { file_url }.
-   * URL must be fetchable by OnlyFansAPI (public HTTPS). Signed cdn2.onlyfans.com links often 403.
+   * URL must be fetchable by OnlyFansAPI (public HTTPS). OnlyFans CDN hosts use
+   * {@link uploadMediaFromOnlyFansCdnUrl} automatically (signed CDN URLs are not fetchable as plain file_url).
    */
   async uploadMediaFromUrl(fileUrl: string): Promise<{ id: string; url?: string; type?: string }> {
     const trimmed = fileUrl.trim()
@@ -1010,9 +1059,7 @@ class OnlyFansAPI {
       throw new Error('file_url must be a valid https URL')
     }
     if (/cdn\d*\.onlyfans\.com/i.test(trimmed)) {
-      throw new Error(
-        'OnlyFans CDN URLs cannot be used as file_url (often 403). Use a public image URL, multipart file upload, or Vault media id flow.',
-      )
+      return this.uploadMediaFromOnlyFansCdnUrl(trimmed)
     }
 
     let url = `${ONLYFANS_API_BASE}`

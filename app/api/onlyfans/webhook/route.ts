@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { getPrefsForWebhook } from '@/lib/notification-preferences'
 import { maybeCreateWhaleTipUrgentTask } from '@/lib/divine/urgent-alerts'
+import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
 
 // Configure OnlyFans API webhook URL to: https://<your-domain>/api/onlyfans/webhook (POST only; do not use site root).
 
@@ -319,6 +320,16 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
       avatar_url: avatarUrl || undefined,
     })
   }
+
+  const uid = connection.user_id
+  const fanId = String(data.message.fromUser.id)
+  after(async () => {
+    try {
+      await refreshFanThreadInsight(supabase, uid, fanId)
+    } catch (e) {
+      console.warn('[fan_thread_insights webhook]', e)
+    }
+  })
 }
 
 // Handle tip

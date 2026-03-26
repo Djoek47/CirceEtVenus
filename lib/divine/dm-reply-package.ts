@@ -2,7 +2,6 @@
  * Shared DM thread + Circe/Venus/Flirt reply package (OnlyFans).
  * Used by /api/divine/dm-reply-suggestions and divine-manager-chat (no extra HTTP hop).
  */
-import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 import {
@@ -14,6 +13,7 @@ import {
   formatThreadTextForAi,
   normalizeSortedRawOfMessages,
 } from '@/lib/divine/of-thread-text'
+import { upsertFanThreadInsightSnapshot } from '@/lib/divine/fan-thread-insight'
 
 type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
 
@@ -254,21 +254,8 @@ Flirt reply sample: ${flirtSample || 'none'}`,
 
   const snapshotText = threadPreview.trim()
   if (snapshotText.length > 0) {
-    const reply_package_hash = createHash('sha256').update(snapshotText).digest('hex').slice(0, 48)
-    const { error: upErr } = await supabase.from('fan_thread_insights').upsert(
-      {
-        user_id: userId,
-        platform_fan_id: String(fanId),
-        thread_snapshot_text: snapshotText.slice(0, 50000),
-        reply_package_hash,
-        summary_excerpt: snapshotText.slice(0, 500),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,platform_fan_id' },
-    )
-    if (upErr) {
-      console.warn('[fan_thread_insights]', upErr.message)
-    }
+    const err = await upsertFanThreadInsightSnapshot(supabase, userId, String(fanId), snapshotText)
+    if (err.error) console.warn('[fan_thread_insights]', err.error)
   }
 
   return {

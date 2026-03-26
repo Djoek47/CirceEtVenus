@@ -9,25 +9,13 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
+import {
+  applyDivineUiActions as applyDivineUiActionsBase,
+  type DivineUiAction,
+  type DmSuggestionBridgePayload,
+} from '@/lib/divine/divine-ui-actions'
 
-export type DivineUiAction = { type: 'navigate'; path: string } | { type: 'focus_fan'; fanId: string }
-
-export function applyDivineUiActions(
-  actions: DivineUiAction[] | undefined,
-  router: ReturnType<typeof useRouter>,
-  setFocusedFan: (fan: FocusedFan | null) => void,
-) {
-  if (!actions?.length) return
-  for (const a of actions) {
-    if (a.type === 'navigate' && a.path.startsWith('/dashboard')) {
-      router.push(a.path)
-    }
-    if (a.type === 'focus_fan' && a.fanId) {
-      setFocusedFan({ id: a.fanId })
-      router.push(`/dashboard/messages?fanId=${encodeURIComponent(a.fanId)}`)
-    }
-  }
-}
+export type { DivineUiAction, DmSuggestionBridgePayload } from '@/lib/divine/divine-ui-actions'
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
@@ -58,6 +46,10 @@ type DivinePanelContextValue = {
   generateLoading: boolean
   requestGenerate: () => Promise<void>
   copyGenerated: () => void
+  dmSuggestionBridge: DmSuggestionBridgePayload | null
+  clearDmSuggestionBridge: () => void
+  /** Voice + tool responses: navigate, focus fan, and hydrate Messages suggestion UI when present. */
+  applyUiActionsFromTools: (actions: DivineUiAction[] | undefined) => void
 }
 
 const DivinePanelContext = createContext<DivinePanelContextValue | null>(null)
@@ -84,6 +76,20 @@ export function DivinePanelProvider({
   const [generatedText, setGeneratedText] = useState<string | null>(null)
   const [generatePrompt, setGeneratePrompt] = useState('')
   const [generateLoading, setGenerateLoading] = useState(false)
+  const [dmSuggestionBridge, setDmSuggestionBridge] = useState<DmSuggestionBridgePayload | null>(null)
+
+  const clearDmSuggestionBridge = useCallback(() => {
+    setDmSuggestionBridge(null)
+  }, [])
+
+  const applyDivineUiActionsWithBridge = useCallback(
+    (actions: DivineUiAction[] | undefined) => {
+      applyDivineUiActionsBase(actions, router, setFocusedFan, {
+        onShowDmReplySuggestions: (payload) => setDmSuggestionBridge(payload),
+      })
+    },
+    [router],
+  )
 
   const sendChat = useCallback(async () => {
     const trimmed = chatInput.trim()
@@ -144,7 +150,7 @@ export function DivinePanelProvider({
               })
             }
             if (payload.type === 'done') {
-              applyDivineUiActions(payload.ui_actions, router, setFocusedFan)
+              applyDivineUiActionsWithBridge(payload.ui_actions)
             }
             if (payload.type === 'error') {
               throw new Error(payload.message || 'Stream error')
@@ -171,7 +177,7 @@ export function DivinePanelProvider({
         if (data.reply) {
           setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
         }
-        applyDivineUiActions(data.ui_actions, router, setFocusedFan)
+        applyDivineUiActionsWithBridge(data.ui_actions)
       }
     } catch (e) {
       console.error(e)
@@ -179,7 +185,7 @@ export function DivinePanelProvider({
       setChatLoading(false)
       setChatWorkingHint(null)
     }
-  }, [chatInput, chatMessages, chatLoading, focusedFan, router])
+  }, [chatInput, chatMessages, chatLoading, focusedFan, router, applyDivineUiActionsWithBridge])
 
   const requestGenerate = useCallback(async () => {
     const prompt = generatePrompt.trim()
@@ -238,6 +244,9 @@ export function DivinePanelProvider({
     generateLoading,
     requestGenerate,
     copyGenerated,
+    dmSuggestionBridge,
+    clearDmSuggestionBridge,
+    applyUiActionsFromTools: applyDivineUiActionsWithBridge,
   }
 
   return (

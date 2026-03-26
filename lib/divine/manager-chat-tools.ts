@@ -18,6 +18,10 @@ import { loadDivineDmConversations } from '@/lib/divine/divine-dm-conversations'
 import { loadDivineDmThread } from '@/lib/divine/divine-dm-thread'
 import { isDivineFullAccess, DIVINE_FULL_UPGRADE_MESSAGE } from '@/lib/divine/divine-full-access'
 import { draftFanReplyWithMimic } from '@/lib/divine/draft-fan-reply'
+import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
+import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
+import { normalizeScanForUi } from '@/lib/divine/divine-ui-actions'
+import type { DmReplyPackageResult } from '@/lib/divine/dm-reply-package'
 
 export const AI_TOOL_NAME_TO_ID: Record<string, string> = {
   analyze_content: 'standard-of-attraction',
@@ -50,11 +54,12 @@ export const CONTEXT_TOOL_NAMES = new Set<string>([
   'add_leak_search_identity',
   'remove_leak_search_identity',
   'get_fan_thread_insights',
+  'refresh_fan_thread_scan',
   'get_reputation_briefing',
   'list_reputation_briefings',
 ])
 
-export type DivineUiAction = { type: 'navigate'; path: string } | { type: 'focus_fan'; fanId: string }
+export type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
 
 export const ALLOWED_UI_PATHS = new Set<string>([
   '/dashboard',
@@ -104,6 +109,12 @@ export function isAllowedUiNavigatePath(path: string): boolean {
       if (ai && !['circe', 'venus'].includes(ai)) return false
       return true
     }
+    if (base === '/dashboard/messages') {
+      if (keys.length === 0) return true
+      if (keys.length !== 1 || keys[0] !== 'fanId') return false
+      const fanId = params.get('fanId') ?? ''
+      return /^[a-z0-9_-]{1,64}$/i.test(fanId)
+    }
     return false
   } catch {
     return false
@@ -151,6 +162,67 @@ export async function runAITool(
 export type DivineContext = {
   supabase: SupabaseClient
   userId: string
+}
+
+export function parseOpenPanelArg(raw: unknown): 'scan' | 'circe' | 'venus' | 'flirt' | 'all' | undefined {
+  if (typeof raw !== 'string') return undefined
+  const s = raw.toLowerCase().trim()
+  if (s === 'scan' || s === 'circe' || s === 'venus' || s === 'flirt' || s === 'all') return s
+  return undefined
+}
+
+export function openPanelToHighlightPanel(
+  openPanel: ReturnType<typeof parseOpenPanelArg>,
+): 'circe' | 'venus' | 'flirt' | null {
+  if (openPanel === 'circe' || openPanel === 'venus' || openPanel === 'flirt') return openPanel
+  return null
+}
+
+function formatDmReplyToolText(
+  name: 'get_reply_suggestions' | 'get_dm_thread_and_suggestions',
+  pkg: DmReplyPackageResult,
+): string {
+  if ('error' in pkg && pkg.error) return pkg.error
+  if (name === 'get_dm_thread_and_suggestions' && 'message' in pkg && pkg.message === 'No messages in thread.') {
+    return 'No messages in thread.'
+  }
+  const data = pkg as Extract<DmReplyPackageResult, { circeSuggestions: string[] }>
+  const rec = data.recommendation
+    ? `Recommendation: ${data.recommendation.toUpperCase()}. ${data.recommendationReason ?? ''}`
+    : ''
+  const circe = (data.circeSuggestions ?? [])[0] ? `Circe: ${data.circeSuggestions![0].slice(0, 150)}...` : ''
+  const venus = (data.venusSuggestions ?? [])[0] ? `Venus: ${data.venusSuggestions![0].slice(0, 150)}...` : ''
+  const flirt = (data.flirtSuggestions ?? [])[0] ? `Flirt: ${data.flirtSuggestions![0].slice(0, 150)}...` : ''
+  const scanObj =
+    data.scan && typeof data.scan === 'object' && data.scan !== null && 'insights' in data.scan
+      ? (data.scan as { insights?: string[] })
+      : null
+  const scanLine = scanObj?.insights?.length ? `Scan: ${scanObj.insights.slice(0, 2).join('; ')}` : ''
+  if (name === 'get_reply_suggestions') {
+    return [scanLine, rec, circe, venus, flirt].filter(Boolean).join('\n') || 'No suggestions generated.'
+  }
+  const threadBlock = data.threadPreview ? `Thread:\n${data.threadPreview}` : ''
+  return [threadBlock, scanLine, rec, circe, venus, flirt].filter(Boolean).join('\n\n') || 'No suggestions.'
+}
+
+function buildShowDmReplySuggestionsAction(
+  fanId: string,
+  pkg: DmReplyPackageResult,
+  highlightPanel: 'circe' | 'venus' | 'flirt' | null,
+): Extract<DivineUiAction, { type: 'show_dm_reply_suggestions' }> | null {
+  if ('error' in pkg && pkg.error) return null
+  const p = pkg as Extract<DmReplyPackageResult, { circeSuggestions: string[] }>
+  return {
+    type: 'show_dm_reply_suggestions',
+    fanId,
+    scan: normalizeScanForUi(p.scan),
+    circeSuggestions: p.circeSuggestions ?? [],
+    venusSuggestions: p.venusSuggestions ?? [],
+    flirtSuggestions: p.flirtSuggestions ?? [],
+    highlightPanel,
+    recommendation: p.recommendation ?? undefined,
+    recommendationReason: p.recommendationReason ?? undefined,
+  }
 }
 
 export async function runContextTool(
@@ -291,19 +363,7 @@ export async function runContextTool(
       const fanId = args.fanId
       if (!fanId) return 'fanId is required.'
       const data = await fetchDmReplySuggestionsPackage(ctx.supabase, ctx.userId, { fanId: String(fanId) })
-      if ('error' in data && data.error) return data.error
-      const rec = data.recommendation
-        ? `Recommendation: ${data.recommendation.toUpperCase()}. ${data.recommendationReason ?? ''}`
-        : ''
-      const circe = (data.circeSuggestions ?? [])[0] ? `Circe: ${data.circeSuggestions![0].slice(0, 150)}...` : ''
-      const venus = (data.venusSuggestions ?? [])[0] ? `Venus: ${data.venusSuggestions![0].slice(0, 150)}...` : ''
-      const flirt = (data.flirtSuggestions ?? [])[0] ? `Flirt: ${data.flirtSuggestions![0].slice(0, 150)}...` : ''
-      const ins =
-        data.scan && typeof data.scan === 'object' && data.scan !== null && 'insights' in data.scan
-          ? (data.scan as { insights?: string[] }).insights
-          : undefined
-      const scanLine = ins?.length ? `Scan: ${ins.slice(0, 2).join('; ')}` : ''
-      return [scanLine, rec, circe, venus, flirt].filter(Boolean).join('\n') || 'No suggestions generated.'
+      return formatDmReplyToolText('get_reply_suggestions', data)
     }
     if (name === 'draft_fan_reply') {
       if (!ctx) return 'Context unavailable.'
@@ -328,20 +388,7 @@ export async function runContextTool(
       const fanId = args.fanId
       if (!fanId) return 'fanId is required.'
       const pkg = await fetchDmReplySuggestionsPackage(ctx.supabase, ctx.userId, { fanId: String(fanId) })
-      if ('error' in pkg && pkg.error) return pkg.error
-      if ('message' in pkg && pkg.message === 'No messages in thread.') {
-        return 'No messages in thread.'
-      }
-      const threadBlock = pkg.threadPreview ? `Thread:\n${pkg.threadPreview}` : ''
-      const rec = pkg.recommendation
-        ? `Recommendation: ${pkg.recommendation.toUpperCase()}. ${pkg.recommendationReason ?? ''}`
-        : ''
-      const circe = (pkg.circeSuggestions ?? [])[0] ? `Circe: ${pkg.circeSuggestions![0].slice(0, 150)}...` : ''
-      const venus = (pkg.venusSuggestions ?? [])[0] ? `Venus: ${pkg.venusSuggestions![0].slice(0, 150)}...` : ''
-      const flirt = (pkg.flirtSuggestions ?? [])[0] ? `Flirt: ${pkg.flirtSuggestions![0].slice(0, 150)}...` : ''
-      const scan = pkg.scan as { insights?: string[]; riskFlags?: string[] } | null
-      const scanLine = scan?.insights?.length ? `Scan: ${scan.insights.slice(0, 2).join('; ')}` : ''
-      return [threadBlock, scanLine, rec, circe, venus, flirt].filter(Boolean).join('\n\n') || 'No suggestions.'
+      return formatDmReplyToolText('get_dm_thread_and_suggestions', pkg)
     }
     if (name === 'list_leak_alerts') {
       if (!ctx) return 'Context unavailable.'
@@ -445,7 +492,9 @@ export async function runContextTool(
       const [{ data: ins }, { data: sum }] = await Promise.all([
         ctx.supabase
           .from('fan_thread_insights')
-          .select('thread_snapshot_text, reply_package_hash, updated_at')
+          .select(
+            'thread_snapshot_text, reply_package_hash, updated_at, profile_json, iteration, last_thread_refresh_at, profile_history',
+          )
           .eq('user_id', ctx.userId)
           .eq('platform_fan_id', fanId)
           .maybeSingle(),
@@ -457,15 +506,40 @@ export async function runContextTool(
           .maybeSingle(),
       ])
       const lines: string[] = []
-      if (ins?.thread_snapshot_text) {
-        lines.push(`Thread snapshot (updated ${ins.updated_at ?? 'unknown'}): ${String(ins.thread_snapshot_text).slice(0, 3500)}`)
+      const row = ins as {
+        thread_snapshot_text?: string | null
+        updated_at?: string | null
+        profile_json?: unknown
+        iteration?: number | null
+        last_thread_refresh_at?: string | null
+        profile_history?: unknown
+      } | null
+      if (row?.thread_snapshot_text) {
+        lines.push(`Thread snapshot (iteration ${row.iteration ?? 0}, updated ${row.updated_at ?? row.last_thread_refresh_at ?? 'unknown'}): ${String(row.thread_snapshot_text).slice(0, 3500)}`)
       } else {
-        lines.push('No stored thread snapshot yet (run get_reply_suggestions for this fan).')
+        lines.push('No stored thread snapshot yet (run refresh_fan_thread_scan or get_reply_suggestions).')
+      }
+      if (row?.profile_json && typeof row.profile_json === 'object') {
+        lines.push(`Fan personality profile (merged): ${JSON.stringify(row.profile_json).slice(0, 2500)}`)
       }
       if (sum?.summary_json) {
-        lines.push(`Fan AI summary: ${JSON.stringify(sum.summary_json).slice(0, 2000)}`)
+        lines.push(`Fan AI summary (OnlyFans): ${JSON.stringify(sum.summary_json).slice(0, 2000)}`)
       }
       return lines.join('\n\n')
+    }
+    if (name === 'refresh_fan_thread_scan') {
+      if (!ctx) return 'Context unavailable.'
+      const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
+      if (!fanId) return 'fanId is required.'
+      const force = args.force === true
+      const r = await refreshFanThreadInsight(ctx.supabase, ctx.userId, fanId, {
+        force,
+        skipDebounce: true,
+      })
+      if (!r.ok) return r.error
+      return r.skipped
+        ? 'Thread refresh skipped (debounced—try again shortly or use force in app).'
+        : `Thread snapshot updated (iteration ${r.iteration ?? 0}). ${r.profileUpdated ? 'Personality profile refreshed.' : ''}`
     }
     if (name === 'get_reputation_briefing') {
       if (!ctx) return 'Context unavailable.'
@@ -689,6 +763,33 @@ export async function runToolCall(
         : JSON.stringify(out.result).slice(0, 500)
       : (out.error ?? 'Tool failed')
     return { tool_call_id: tc.id, content: summary, pendingConfirmations: emptyPending, uiActions }
+  }
+
+  if (name === 'get_reply_suggestions' || name === 'get_dm_thread_and_suggestions') {
+    const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
+    if (!fanId) {
+      return { tool_call_id: tc.id, content: 'fanId is required.', pendingConfirmations: emptyPending, uiActions }
+    }
+    const openPanel = parseOpenPanelArg(args.openPanel)
+    const highlightPanel = openPanelToHighlightPanel(openPanel)
+    const pkg = await fetchDmReplySuggestionsPackage(supabase, userId, { fanId })
+    const toolKey =
+      name === 'get_reply_suggestions'
+        ? ('get_reply_suggestions' as const)
+        : ('get_dm_thread_and_suggestions' as const)
+    const text = formatDmReplyToolText(toolKey, pkg)
+    if ('error' in pkg && pkg.error) {
+      return { tool_call_id: tc.id, content: text, pendingConfirmations: emptyPending, uiActions }
+    }
+    const show = buildShowDmReplySuggestionsAction(fanId, pkg, highlightPanel)
+    const outActions: DivineUiAction[] = [{ type: 'focus_fan', fanId }]
+    if (show) outActions.push(show)
+    return {
+      tool_call_id: tc.id,
+      content: text.slice(0, 4000),
+      pendingConfirmations: emptyPending,
+      uiActions: outActions,
+    }
   }
 
   if (isContextTool) {

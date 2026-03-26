@@ -14,8 +14,13 @@ import { useDivinePanel, applyDivineUiActions, type FocusedFan } from '@/compone
 
 type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
+/** Purple = tool/model work; gold = assistant speaking; idle = neither. */
+export type VoiceSurfaceState = 'idle' | 'working' | 'speaking'
+
 type VoiceSessionContextValue = {
   status: VoiceStatus
+  /** Derived from remote audio (speaking) vs in-flight tools (working). */
+  voiceSurfaceState: VoiceSurfaceState
   /** True while waiting to hang up after `end_call` (assistant audio + silence gate). */
   closingPending: boolean
   error: string | null
@@ -61,9 +66,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const endCallRafRef = useRef<number | null>(null)
   /** Shared with the remote waveform analyser for silence detection after `end_call`. */
   const remoteAnalyserRef = useRef<AnalyserNode | null>(null)
+  const localAnalyserRef = useRef<AnalyserNode | null>(null)
+  const toolInFlightRef = useRef(false)
   const resetIdleRef = useRef<(() => void) | null>(null)
+  const [voiceSurfaceState, setVoiceSurfaceState] = useState<VoiceSurfaceState>('idle')
 
-  const IDLE_MS = 2.5 * 60 * 1000
+  const IDLE_MS = 60_000
 
   const playCue = useCallback((kind: 'done' | 'error') => {
     if (typeof window === 'undefined') return
@@ -108,6 +116,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       endCallRafRef.current = null
     }
     setClosingPending(false)
+    toolInFlightRef.current = false
+    setVoiceSurfaceState('idle')
     resetIdleRef.current = null
     const pc = pcRef.current
     if (pc) {
@@ -152,6 +162,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         response: { modalities: ['audio'] },
       }),
     )
+    resetIdleRef.current?.()
   }, [])
 
   const startVoiceCall = useCallback(async () => {
@@ -243,7 +254,6 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
 
       dc.onmessage = async (event) => {
-        resetIdleRef.current?.()
         try {
           const payload = JSON.parse(event.data as string) as {
             type?: string
@@ -261,6 +271,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
               scheduleGracefulEndCall()
               return 'Call ended.'
             }
+            toolInFlightRef.current = true
             try {
               const res = await fetch('/api/divine/voice-tool', {
                 method: 'POST',
@@ -294,6 +305,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
               return out || 'Done.'
             } catch {
               return 'Tool failed.'
+            } finally {
+              toolInFlightRef.current = false
             }
           }
           const toolCalls =
@@ -430,6 +443,44 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [status, endVoiceCall])
 
+  /** User speech resets the 1-minute idle timer (not assistant traffic). */
+  useEffect(() => {
+    if (status !== 'connected') return
+    const id = setInterval(() => {
+      const a = localAnalyserRef.current
+      if (!a) return
+      const buf = new Uint8Array(a.frequencyBinCount)
+      a.getByteFrequencyData(buf)
+      let sum = 0
+      for (let i = 0; i < buf.length; i++) sum += buf[i]
+      if (sum / buf.length > 10) resetIdleRef.current?.()
+    }, 220)
+    return () => clearInterval(id)
+  }, [status])
+
+  /** Purple (working) vs gold (speaking) vs idle. */
+  useEffect(() => {
+    if (status !== 'connected') {
+      setVoiceSurfaceState('idle')
+      return
+    }
+    const id = setInterval(() => {
+      const remote = remoteAnalyserRef.current
+      let remoteLoud = false
+      if (remote) {
+        const buf = new Uint8Array(remote.frequencyBinCount)
+        remote.getByteFrequencyData(buf)
+        let sum = 0
+        for (let i = 0; i < buf.length; i++) sum += buf[i]
+        remoteLoud = sum / buf.length > 9
+      }
+      if (remoteLoud) setVoiceSurfaceState('speaking')
+      else if (toolInFlightRef.current) setVoiceSurfaceState('working')
+      else setVoiceSurfaceState('idle')
+    }, 140)
+    return () => clearInterval(id)
+  }, [status])
+
   useEffect(() => {
     return () => {
       endVoiceCall()
@@ -500,6 +551,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       analyser.fftSize = 128
       analyser.smoothingTimeConstant = 0.35
       source.connect(analyser)
+      localAnalyserRef.current = analyser
       const dataArray = new Uint8Array(analyser.frequencyBinCount)
       let rafId: number
       const draw = () => {
@@ -529,6 +581,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       draw()
       return () => {
         cancelAnimationFrame(rafId)
+        localAnalyserRef.current = null
         audioContext.close()
       }
     } catch {
@@ -538,6 +591,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const value: VoiceSessionContextValue = {
     status,
+    voiceSurfaceState,
     closingPending,
     error,
     startVoiceCall,

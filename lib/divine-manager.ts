@@ -67,11 +67,35 @@ export interface DivineManagerAutomationRules {
   [key: string]: AutomationRule | DivineManagerVoiceAuto | DivineManagerAutomationAlerts | DivineManagerAutomationJobs | undefined
 }
 
+/** OF user-list housekeeping: optional auto-create + per-segment list overrides. */
+export type HousekeepingSegmentKey = 'whale_spend' | 'active_chatter' | 'cold'
+
+export interface HousekeepingSegmentRule {
+  segment: HousekeepingSegmentKey
+  /** OnlyFans user list id (skips name lookup when set). */
+  listId?: string
+  /** Display name for auto-create or matching existing list. */
+  listName?: string
+  spendMin?: number
+  chatDays?: number
+  /** For cold segment: max total spend to qualify. */
+  coldSpendMax?: number
+}
+
+export interface HousekeepingListsConfig {
+  enabled?: boolean
+  auto_create_lists?: boolean
+  segments?: HousekeepingSegmentRule[]
+  last_sync_at?: string
+}
+
 export interface DivineManagerSettingsRow {
   user_id: string
   persona: DivineManagerPersona
   goals: DivineManagerGoals
   automation_rules: DivineManagerAutomationRules
+  /** OnlyFans list sync (cron + settings). See lib/housekeeping-fan-lists.ts */
+  housekeeping_lists?: HousekeepingListsConfig
   /** Mimic Test profile (fan-facing draft style). See lib/divine/mimic-types.ts */
   mimic_profile?: unknown
   manager_archetype: string
@@ -114,6 +138,7 @@ export interface DivineManagerSettingsInsert {
   persona?: DivineManagerPersona
   goals?: DivineManagerGoals
   automation_rules?: DivineManagerAutomationRules
+  housekeeping_lists?: HousekeepingListsConfig
   manager_archetype?: string
   notification_settings?: DivineManagerSettingsRow['notification_settings']
   beta_acknowledged?: boolean

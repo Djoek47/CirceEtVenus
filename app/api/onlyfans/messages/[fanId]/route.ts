@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 // GET - Fetch messages with a specific fan
@@ -99,6 +100,11 @@ export async function POST(
         { error: 'Paid messages must include at least one media file.' },
         { status: 400 },
       )
+    }
+
+    const mediaErr = validateChatMediaIdsForSend(mediaIds)
+    if (mediaErr) {
+      return NextResponse.json({ error: mediaErr }, { status: 400 })
     }
 
     // previews must be subset of mediaIds if provided

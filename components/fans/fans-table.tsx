@@ -37,10 +37,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { MoreHorizontal, MessageSquare, Star, Ban, Eye, Loader2 } from 'lucide-react'
+import { MoreHorizontal, MessageSquare, Star, Ban, Eye, Loader2, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Fan } from '@/lib/types'
 import Link from 'next/link'
+import { FanAiSummaryDialog } from '@/components/fans/fan-ai-summary-dialog'
 
 interface FansTableProps {
   fans: Fan[]
@@ -69,6 +70,9 @@ export function FansTable({
   liveFilter,
 }: FansTableProps) {
   const [selectedFans, setSelectedFans] = useState<string[]>([])
+  const [summaryOpen, setSummaryOpen] = useState(false)
+  const [summaryFanId, setSummaryFanId] = useState<string | null>(null)
+  const [summaryLabel, setSummaryLabel] = useState('')
 
   const toggleFan = (fanId: string) => {
     setSelectedFans(prev =>
@@ -120,8 +124,23 @@ export function FansTable({
     )
   }
 
+  const openSummary = (fan: Fan) => {
+    if (fan.platform !== 'onlyfans') return
+    const id = fan.platform_fan_id || fan.id
+    if (!id) return
+    setSummaryFanId(id)
+    setSummaryLabel(fan.display_name || fan.platform_username || id)
+    setSummaryOpen(true)
+  }
+
   return (
     <Card className="border-border bg-card">
+      <FanAiSummaryDialog
+        open={summaryOpen}
+        onOpenChange={setSummaryOpen}
+        platformFanId={summaryFanId}
+        fanLabel={summaryLabel}
+      />
       <CardContent className="p-0">
         <Table>
           <TableHeader>
@@ -204,6 +223,12 @@ export function FansTable({
                           View Profile
                         </Link>
                       </DropdownMenuItem>
+                      {fan.platform === 'onlyfans' && (fan.platform_fan_id || liveFilter) && (
+                        <DropdownMenuItem onClick={() => openSummary(fan)}>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          AI fan summary
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem>
                         <MessageSquare className="mr-2 h-4 w-4" />
                         Send Message

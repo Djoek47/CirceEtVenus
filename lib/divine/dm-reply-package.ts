@@ -2,6 +2,7 @@
  * Shared DM thread + Circe/Venus/Flirt reply package (OnlyFans).
  * Used by /api/divine/dm-reply-suggestions and divine-manager-chat (no extra HTTP hop).
  */
+import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 import {
@@ -120,12 +121,40 @@ export async function fetchDmReplySuggestionsPackage(
   const niches = (persona.niches as string[]) ?? []
   const boundaries = (persona.boundaries as string[]) ?? []
 
+  const [{ data: insightRow }, { data: fanSumRow }] = await Promise.all([
+    supabase
+      .from('fan_thread_insights')
+      .select('thread_snapshot_text, updated_at')
+      .eq('user_id', userId)
+      .eq('platform_fan_id', String(fanId))
+      .maybeSingle(),
+    supabase
+      .from('fan_ai_summaries')
+      .select('summary_json, updated_at')
+      .eq('user_id', userId)
+      .eq('platform_fan_id', String(fanId))
+      .maybeSingle(),
+  ])
+
+  const supplementParts: string[] = []
+  if (fanSumRow && (fanSumRow as { summary_json?: unknown }).summary_json != null) {
+    const j = (fanSumRow as { summary_json: unknown }).summary_json
+    supplementParts.push(
+      `Fan AI summary (from profile):\n${typeof j === 'string' ? j : JSON.stringify(j).slice(0, 1800)}`,
+    )
+  }
+  if (threadPreview.length < 400 && insightRow?.thread_snapshot_text?.trim()) {
+    supplementParts.push(`Stored thread snapshot (last Divine scan):\n${insightRow.thread_snapshot_text.slice(0, 2500)}`)
+  }
+  const threadSupplement = supplementParts.length ? supplementParts.join('\n\n') : undefined
+
   const ctxBase = {
     platform: 'onlyfans' as const,
     fan,
     messages,
     niches,
     boundaries,
+    ...(threadSupplement ? { threadSupplement } : {}),
   }
 
   const { data: subscription } = await supabase
@@ -220,6 +249,25 @@ Flirt reply sample: ${flirtSample || 'none'}`,
       if (secondLine) recommendationReason = secondLine.slice(0, 200)
     } catch {
       // ignore recommendation failure
+    }
+  }
+
+  const snapshotText = threadPreview.trim()
+  if (snapshotText.length > 0) {
+    const reply_package_hash = createHash('sha256').update(snapshotText).digest('hex').slice(0, 48)
+    const { error: upErr } = await supabase.from('fan_thread_insights').upsert(
+      {
+        user_id: userId,
+        platform_fan_id: String(fanId),
+        thread_snapshot_text: snapshotText.slice(0, 50000),
+        reply_package_hash,
+        summary_excerpt: snapshotText.slice(0, 500),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,platform_fan_id' },
+    )
+    if (upErr) {
+      console.warn('[fan_thread_insights]', upErr.message)
     }
   }
 

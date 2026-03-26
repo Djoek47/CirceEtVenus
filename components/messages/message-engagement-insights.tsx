@@ -27,25 +27,40 @@ export function MessageEngagementInsights() {
   const [data, setData] = useState<EngagementData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [errorCode, setErrorCode] = useState<string | null>(null)
+  const [errorHint, setErrorHint] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
+    setErrorCode(null)
+    setErrorHint(null)
     fetch(`/api/onlyfans/engagement?type=${type}&limit=10`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.error) {
-          setError(json.error)
-          setData(null)
-        } else {
-          setData({
-            type: json.type ?? type,
-            messages: json.messages ?? [],
-            chart: json.chart ?? [],
-            topMessage: json.topMessage ?? null,
-            buyers: json.buyers ?? [],
-          })
+      .then(async (res) => {
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string
+          code?: string
+          hint?: string
+          type?: string
+          messages?: unknown[]
+          chart?: ChartPoint[]
+          topMessage?: Record<string, unknown> | null
+          buyers?: unknown[]
         }
+        if (!res.ok || json.error) {
+          setError(json.error ?? 'Failed to load engagement data')
+          setErrorCode(json.code ?? null)
+          setErrorHint(json.hint ?? null)
+          setData(null)
+          return
+        }
+        setData({
+          type: (json.type as EngagementData['type']) ?? type,
+          messages: json.messages ?? [],
+          chart: json.chart ?? [],
+          topMessage: json.topMessage ?? null,
+          buyers: json.buyers ?? [],
+        })
       })
       .catch(() => {
         setError('Failed to load engagement data')
@@ -66,11 +81,15 @@ export function MessageEngagementInsights() {
   }
 
   if (error) {
+    const isForbidden = errorCode === 'ENGAGEMENT_FORBIDDEN'
     return (
       <Card className="border-border bg-card">
-        <CardContent className="py-8 text-center">
+        <CardContent className="py-8 text-center space-y-2">
           <p className="text-sm text-muted-foreground">{error}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Connect OnlyFans to see message engagement.</p>
+          {errorHint && <p className="text-xs text-muted-foreground">{errorHint}</p>}
+          {!isForbidden && (
+            <p className="mt-1 text-xs text-muted-foreground">Connect OnlyFans to see message engagement.</p>
+          )}
         </CardContent>
       </Card>
     )

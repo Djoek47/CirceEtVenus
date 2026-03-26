@@ -46,6 +46,8 @@ export type SuggestionRequestContext = {
   platform: 'onlyfans' | 'fansly'
   fan: { id: string | number; username?: string; name?: string }
   messages: NormalizedChatMessage[]
+  /** Prepended to the thread preview for the model (e.g. fan AI summary + stored snapshot). */
+  threadSupplement?: string
   tonePreferences?: string[]
   niches?: string[]
   boundaries?: string[]
@@ -63,7 +65,12 @@ function buildConversationPreview(ctx: SuggestionRequestContext): string {
     const who = m.from === 'creator' ? 'Creator' : 'Fan'
     return `${who}: ${m.text.replace(/\s+/g, ' ').trim()}`
   })
-  return lines.join('\n').slice(0, 4000)
+  const base = lines.join('\n')
+  const sup = ctx.threadSupplement?.trim()
+  if (sup) {
+    return `${sup.slice(0, 1800)}\n---\n${base}`.slice(0, 4000)
+  }
+  return base.slice(0, 4000)
 }
 
 function buildBaseSafetyBlock() {

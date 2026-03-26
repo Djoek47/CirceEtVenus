@@ -3,9 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 /**
- * POST: Upload a file to OnlyFans for use in messages (DM or mass).
- * Accepts multipart/form-data with a single "file" field.
- * Returns { id, url, type } so the client can pass id(s) as mediaIds when sending messages.
+ * POST: Upload media for OnlyFans DMs / mass messages.
+ *
+ * - multipart/form-data: field `file` (binary) — preferred for local images.
+ * - application/json: `{ "file_url": "https://..." }` — URL must be fetchable by OnlyFansAPI
+ *   (signed cdn2.onlyfans.com URLs usually fail with 403).
+ *
+ * Returns `{ id, url?, type? }` where `id` is the OFAPI media id (e.g. ofapi_media_*) for
+ * `mediaFiles` / `mediaIds` when sending chat messages. Do not reuse the same id across sends
+ * if the API requires fresh uploads per message.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -29,13 +35,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'OnlyFans not connected' }, { status: 400 })
     }
 
+    const api = createOnlyFansAPI(connection.access_token)
+    const contentType = req.headers.get('content-type') || ''
+
+    if (contentType.includes('application/json')) {
+      const body = (await req.json().catch(() => ({}))) as { file_url?: string }
+      const fileUrl = typeof body.file_url === 'string' ? body.file_url.trim() : ''
+      if (!fileUrl) {
+        return NextResponse.json(
+          { error: 'JSON body must include file_url (https URL), or use multipart form with file field.' },
+          { status: 400 },
+        )
+      }
+      const result = await api.uploadMediaFromUrl(fileUrl)
+      return NextResponse.json(result)
+    }
+
     const formData = await req.formData()
     const file = formData.get('file')
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: 'Missing file in form (field: file)' }, { status: 400 })
     }
 
-    const api = createOnlyFansAPI(connection.access_token)
     const result = await api.uploadMedia(file)
     return NextResponse.json(result)
   } catch (err) {

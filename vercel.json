@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/divine-manager",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/housekeeping-fan-lists",
+      "schedule": "30 3 * * *"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 import { createTask } from '@/lib/divine-manager'
 import type { DivineManagerSettingsRow } from '@/lib/divine-manager'
 import { formatOnlyFansText } from '@/lib/onlyfans-text'
+import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 
 export type MassDmParams = {
   message: string
@@ -239,6 +240,9 @@ export async function executeSendMessage(
   }
   try {
     if (platform === 'onlyfans') {
+      const bad = validateChatMediaIdsForSend(mediaIds)
+      if (bad) return { success: false, summary: bad }
+
       const api = createOnlyFansAPI(connection.access_token)
       await api.sendMessage(String(fanId), {
         text: formatOnlyFansText(trimmed || '', { size: 'default' }),

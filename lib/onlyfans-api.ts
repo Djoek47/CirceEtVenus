@@ -428,6 +428,32 @@ class OnlyFansAPI {
     return json as T
   }
 
+  /**
+   * Team-scoped analytics routes: POST /api/analytics/... (no {account} in path).
+   */
+  private async requestGlobal<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> | undefined),
+    }
+    const url = `${ONLYFANS_API_BASE}${path.startsWith('/') ? path : `/${path}`}`
+    const response = await fetch(url, { ...options, headers })
+    const json = await response.json().catch(() => null)
+    if (!response.ok || (json && typeof json === 'object' && (json as { error?: unknown }).error)) {
+      const errorCode = (json as { error?: string })?.error
+      const message =
+        (json as { message?: string })?.message ||
+        (json as { description?: string })?.description ||
+        errorCode
+      if (errorCode === 'SESSION_EXPIRED:NEEDS_REAUTHENTICATION') {
+        throw new Error('ONLYFANS_SESSION_EXPIRED:NEEDS_REAUTHENTICATION')
+      }
+      throw new Error(typeof message === 'string' ? message : `API error: ${response.status}`)
+    }
+    return json as T
+  }
+
   setAccountId(accountId: string) {
     this.accountId = accountId
   }
@@ -769,6 +795,9 @@ class OnlyFansAPI {
   /**
    * Send a message to a specific chat
    * Endpoint: POST /api/{account}/chats/{chat_id}/messages
+   *
+   * Images: pass `mediaFiles` with IDs from {@link uploadMedia} / {@link uploadMediaFromUrl}
+   * (e.g. `ofapi_media_*`). Do not pass OnlyFans CDN URLs; upload first, then reference the id.
    */
   async sendMessage(chatId: string, data: {
     text: string
@@ -960,20 +989,95 @@ class OnlyFansAPI {
 
   // ============ MEDIA ============
 
+  /**
+   * POST .../media/upload with multipart `file`.
+   * Response may use `id` or `prefixed_id` (ofapi_media_*). IDs are for mediaFiles on send message.
+   */
   async uploadMedia(file: File): Promise<{ id: string; url?: string; type?: string }> {
     const formData = new FormData()
     formData.append('file', file)
-    
+
+    return this.uploadMediaRequest(formData)
+  }
+
+  /**
+   * POST .../media/upload with JSON { file_url }.
+   * URL must be fetchable by OnlyFansAPI (public HTTPS). Signed cdn2.onlyfans.com links often 403.
+   */
+  async uploadMediaFromUrl(fileUrl: string): Promise<{ id: string; url?: string; type?: string }> {
+    const trimmed = fileUrl.trim()
+    if (!/^https:\/\//i.test(trimmed)) {
+      throw new Error('file_url must be a valid https URL')
+    }
+    if (/cdn\d*\.onlyfans\.com/i.test(trimmed)) {
+      throw new Error(
+        'OnlyFans CDN URLs cannot be used as file_url (often 403). Use a public image URL, multipart file upload, or Vault media id flow.',
+      )
+    }
+
     let url = `${ONLYFANS_API_BASE}`
     if (this.accountId) {
       url += `/${this.accountId}`
     }
     url += '/media/upload'
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file_url: trimmed }),
+    })
+
+    if (!response.ok) {
+      const t = await response.text().catch(() => '')
+      throw new Error(t ? `Upload from URL failed: ${t.slice(0, 200)}` : 'Upload from URL failed')
+    }
+
+    const json = await response.json().catch(() => null)
+    return this.normalizeUploadResponse(json)
+  }
+
+  private normalizeUploadResponse(json: unknown): { id: string; url?: string; type?: string } {
+    if (json && typeof json === 'object') {
+      const root = json as { prefixed_id?: string; data?: unknown }
+      if (typeof root.prefixed_id === 'string' && root.prefixed_id.length > 0) {
+        return { id: root.prefixed_id }
+      }
+      const data = (json as any).data ?? json
+      if (data && typeof data === 'object') {
+        const rawId =
+          typeof data.id === 'string'
+            ? data.id
+            : typeof data.prefixed_id === 'string'
+              ? data.prefixed_id
+              : typeof (data as { prefixedId?: string }).prefixedId === 'string'
+                ? (data as { prefixedId: string }).prefixedId
+                : null
+        if (rawId) {
+          return {
+            id: rawId,
+            url: typeof data.url === 'string' ? data.url : undefined,
+            type: typeof data.type === 'string' ? data.type : undefined,
+          }
+        }
+      }
+    }
+    throw new Error('Unexpected upload response from OnlyFans API')
+  }
+
+  private async uploadMediaRequest(formData: FormData): Promise<{ id: string; url?: string; type?: string }> {
+    let url = `${ONLYFANS_API_BASE}`
+    if (this.accountId) {
+      url += `/${this.accountId}`
+    }
+    url += '/media/upload'
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
       },
       body: formData,
     })
@@ -983,22 +1087,7 @@ class OnlyFansAPI {
     }
 
     const json = await response.json().catch(() => null)
-
-    // Align with OnlyFans API docs: upload-media-to-the-only-fans-cdn returns
-    // { data: { id: 'ofapi_media_*', url, type, ... }, ... }. The rest of the app
-    // expects a flat { id } (and optionally url/type) object.
-    if (json && typeof json === 'object') {
-      const data = (json as any).data ?? json
-      if (data && typeof data.id === 'string') {
-        return {
-          id: data.id,
-          url: typeof data.url === 'string' ? data.url : undefined,
-          type: typeof data.type === 'string' ? data.type : undefined,
-        }
-      }
-    }
-
-    throw new Error('Unexpected upload response from OnlyFans API')
+    return this.normalizeUploadResponse(json)
   }
 
   // ============ NOTIFICATIONS ============
@@ -1089,6 +1178,148 @@ class OnlyFansAPI {
       method: 'PUT',
       body: JSON.stringify({ order }),
     })
+  }
+
+  // ============ FANS — AI SUMMARY ============
+
+  async getFanAiSummary(fanId: string): Promise<unknown> {
+    return this.request(`/fans/${encodeURIComponent(fanId)}/summary`)
+  }
+
+  async generateFanAiSummary(fanId: string, body?: { regenerate?: boolean }): Promise<unknown> {
+    return this.request(`/fans/${encodeURIComponent(fanId)}/summary`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    })
+  }
+
+  // ============ ANALYTICS (team / global paths) ============
+
+  async analyticsEarningsOverview(payload: {
+    account_ids: string[]
+    start_date: string
+    end_date: string
+  }): Promise<unknown> {
+    return this.requestGlobal('/analytics/summary/earnings', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async analyticsHistoricalPerformance(payload: { time_range?: '3m' | '6m' | '12m' | 'ytd' | 'last-year' }): Promise<unknown> {
+    return this.requestGlobal('/analytics/summary/historical', {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    })
+  }
+
+  async analyticsPeriodComparison(payload: Record<string, unknown>): Promise<unknown> {
+    return this.requestGlobal('/analytics/summary/comparison', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async analyticsTransactionSummary(payload: {
+    account_ids: string[]
+    start_date: string
+    end_date: string
+  }): Promise<unknown> {
+    return this.requestGlobal('/analytics/financial/transactions/summary', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async analyticsTransactionsByType(payload: {
+    account_ids: string[]
+    start_date: string
+    end_date: string
+  }): Promise<unknown> {
+    return this.requestGlobal('/analytics/financial/transactions/by-type', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async analyticsRevenueForecast(payload: Record<string, unknown>): Promise<unknown> {
+    return this.requestGlobal('/analytics/financial/forecast', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async analyticsProfitability(payload: { account_ids: string[]; year: number; month: number }): Promise<unknown> {
+    return this.requestGlobal('/analytics/financial/profitability', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async analyticsProfitabilityHistory(accountPrefixedId: string, months?: number): Promise<unknown> {
+    const q = new URLSearchParams()
+    if (months != null) q.set('months', String(months))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.requestGlobal(
+      `/analytics/financial/profitability/${encodeURIComponent(accountPrefixedId)}/history${suffix}`,
+      { method: 'GET' },
+    )
+  }
+
+  // ============ USER LIST COLLECTIONS ============
+
+  async listUserLists(params?: { limit?: number; offset?: number }): Promise<unknown> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/user-lists${suffix}`)
+  }
+
+  async createUserList(name: string): Promise<unknown> {
+    return this.request('/user-lists', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async listUserListUsers(userListId: string, params?: { limit?: number; offset?: number }): Promise<unknown> {
+    const q = new URLSearchParams()
+    if (params?.limit != null) q.set('limit', String(params.limit))
+    if (params?.offset != null) q.set('offset', String(params.offset))
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return this.request(`/user-lists/${encodeURIComponent(userListId)}/users${suffix}`)
+  }
+
+  async addUsersToUserList(userListId: string, ids: Array<string | number>): Promise<unknown> {
+    return this.request(`/user-lists/${encodeURIComponent(userListId)}/users`, {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    })
+  }
+
+  async removeUserFromUserList(userListId: string, userId: string | number): Promise<unknown> {
+    return this.request(`/user-lists/${encodeURIComponent(userListId)}/users/${encodeURIComponent(String(userId))}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // ============ CHAT HELPERS ============
+
+  async markAllChatsAsRead(): Promise<unknown> {
+    return this.request('/chats/mark-as-read', { method: 'POST', body: '{}' })
+  }
+
+  async markChatAsRead(chatId: string): Promise<unknown> {
+    return this.request(`/chats/${encodeURIComponent(chatId)}/mark-as-read`, { method: 'POST', body: '{}' })
+  }
+
+  async markChatAsUnread(chatId: string): Promise<unknown> {
+    return this.request(`/chats/${encodeURIComponent(chatId)}/mark-as-unread`, { method: 'POST', body: '{}' })
+  }
+
+  async deleteChat(chatId: string): Promise<unknown> {
+    return this.request(`/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' })
   }
 
   // ============ CLIENT SESSIONS (SDK flow) ============

@@ -138,7 +138,7 @@ You have full access to DMs and content: get_dm_conversations returns fan names,
 
 Speak in second person ("you"). Keep replies actionable but advisory. Be concise; this is a live conversation. Text chat has the full tool list; voice uses the same server-side tools—if something fails, suggest using Divine text chat for that action.
 
-    The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). For a Supabase storage image URL they paste, use analyze_image_from_url. When they say "write a caption", "caption this", or "what should I say", use generate_caption. Prefer get_dm_thread_and_suggestions when they need both thread context and reply ideas. draft_fan_reply drafts a fan-facing line from Mimic Test (review only). When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice or list_fans with filter=top. For "which fans spent the most", "top 10 fans", or "who are my biggest spenders" use list_fans with filter=top (and optional sort). For "how did my mass message perform" or "last mass DM stats" use get_message_engagement with type=mass. For "publish my saved post" or "send my saved mass DM" use publish_queue_item with the queue id (you may need to describe that they should confirm in the app if you do not have the queue id). You can create in-app reminders with send_notification. For leaks/DMCA review use list_leak_alerts or run_leak_scan only when they ask. Do NOT call end_call until you have finished speaking after any tools (including slow ones like analyze_content, pricing, or publish). After completing their request—or if they interrupt—still ask out loud: "Is there anything else you want me to do?" and wait for their answer. Only after they clearly indicate they are done or say goodbye, say a brief goodbye and then call end_call. Never end_call in the same turn as a tool before you have verbally confirmed they need nothing else. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish, publish_queue_item) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
+    The creator only uploads one photo and talks to you—no typing. You manage everything by voice. When they say "how does this look", "rate this", or "analyze my photo", use analyze_content (their uploaded photo is analyzed automatically). For a Supabase storage image URL they paste, use analyze_image_from_url. When they say "write a caption", "caption this", or "what should I say", use generate_caption. Prefer get_dm_thread_and_suggestions when they need both thread context and reply ideas. draft_fan_reply drafts a fan-facing line from Mimic Test (review only). When they say "will this do well" or "viral potential", use predict_viral. When they say "post this and send to my fans" or "share with my subs", chain: generate_caption first, then content_publish with the caption, then mass_dm with a teaser to active subs—the app may ask them to confirm before sending. For "who might leave" or "retention" use get_retention_insights. For "whales", "top fans", or "high-value fans" use get_whale_advice or list_fans with filter=top. For "which fans spent the most", "top 10 fans", or "who are my biggest spenders" use list_fans with filter=top (and optional sort). For "how did my mass message perform" or "last mass DM stats" use get_message_engagement with type=mass. For "publish my saved post" or "send my saved mass DM" use publish_queue_item with the queue id (you may need to describe that they should confirm in the app if you do not have the queue id). You can create in-app reminders with send_notification. For leaks/DMCA review use list_leak_alerts or run_leak_scan only when they ask. Reputation identities: add_reputation_identity / remove_reputation_identity for manual mention handles; add_leak_search_identity / remove_leak_search_identity for former usernames and leak title hints used in Protection search. run_reputation_scan discovers new web/social mentions. trigger_reputation_briefing generates the aggregate briefing (Pro); get_reputation_briefing reads the latest saved briefing; list_reputation_briefings lists recent history. get_fan_thread_insights returns stored thread snapshot and fan AI summary for a fanId. run_ai_studio_tool runs a dashboard AI Studio tool by toolId plus args (same tools as AI Studio). The app may end the call automatically after about one minute without the creator speaking—ask "anything else?" before they go quiet too long, and use end_call only when they are clearly done. Do NOT call end_call until you have finished speaking after any tools (including slow ones like analyze_content, pricing, or publish). After completing their request—or if they interrupt—still ask out loud: "Is there anything else you want me to do?" and wait for their answer. Only after they clearly indicate they are done or say goodbye, say a brief goodbye and then call end_call. Never end_call in the same turn as a tool before you have verbally confirmed they need nothing else. For any other action (send a mass DM, get stats, publish content, create a task), briefly say what you are about to do, then call the appropriate tool. For risky actions (mass DM, pricing, publish, publish_queue_item) the app may ask the creator to confirm; if so, tell them to say "yes" or confirm in the app. Always describe the action before calling a tool. The creator's connected platforms are OnlyFans and Fansly; use these names when referring to platforms or subscribers.`
 
     const tools = [
       {
@@ -570,8 +570,13 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
       {
         type: 'function' as const,
         name: 'trigger_reputation_briefing',
-        description: 'Generate or refresh the AI reputation briefing (Mentions).',
-        parameters: { type: 'object', properties: {} },
+        description: 'Generate or refresh the AI reputation briefing (Mentions, Pro). Optional handles to scope identities.',
+        parameters: {
+          type: 'object',
+          properties: {
+            handles: { type: 'array', items: { type: 'string' }, description: 'Optional subset of identities' },
+          },
+        },
       },
       {
         type: 'function' as const,
@@ -580,6 +585,112 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
         parameters: {
           type: 'object',
           properties: { limit: { type: 'number' } },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'add_reputation_identity',
+        description: 'Add one or more manual reputation search handles (mentions / identity list).',
+        parameters: {
+          type: 'object',
+          properties: {
+            handles: {
+              oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+              description: 'Handle(s) to add (with or without @)',
+            },
+          },
+          required: ['handles'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'remove_reputation_identity',
+        description: 'Remove manual reputation search handle(s).',
+        parameters: {
+          type: 'object',
+          properties: {
+            handles: {
+              oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+            },
+          },
+          required: ['handles'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'add_leak_search_identity',
+        description:
+          'Add former usernames and/or leak_search_title_hints for DMCA / Protection leak search (rebrand handles, content titles).',
+        parameters: {
+          type: 'object',
+          properties: {
+            former_usernames: { type: 'array', items: { type: 'string' } },
+            leak_search_title_hints: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'remove_leak_search_identity',
+        description: 'Remove former usernames and/or leak title hints from leak search.',
+        parameters: {
+          type: 'object',
+          properties: {
+            former_usernames: { type: 'array', items: { type: 'string' } },
+            leak_search_title_hints: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'run_reputation_scan',
+        description: 'Run web/social reputation discovery for the creator’s identities (Serper pipeline).',
+        parameters: {
+          type: 'object',
+          properties: {
+            mode: { type: 'string', enum: ['wide', 'social', 'both'] },
+            handles: { type: 'array', items: { type: 'string' } },
+            limitPerQuery: { type: 'number' },
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_fan_thread_insights',
+        description: 'Latest stored DM thread snapshot and fan AI summary for a fan.',
+        parameters: {
+          type: 'object',
+          properties: { fanId: { type: 'string' } },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_reputation_briefing',
+        description: 'Read the latest saved AI reputation briefing JSON from Mentions.',
+        parameters: { type: 'object', properties: {} },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_reputation_briefings',
+        description: 'List recent saved reputation briefing history (newest first).',
+        parameters: {
+          type: 'object',
+          properties: { limit: { type: 'number' } },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'run_ai_studio_tool',
+        description:
+          'Run an AI Studio tool by id (e.g. caption-generator, viral-predictor) with a JSON args object matching that tool’s form fields.',
+        parameters: {
+          type: 'object',
+          properties: {
+            toolId: { type: 'string', description: 'Tool id from AI Studio / lib/ai-tools-data' },
+            args: { type: 'object', description: 'Arguments for that tool (e.g. contentDescription, platform)' },
+          },
+          required: ['toolId', 'args'],
         },
       },
       {
@@ -630,6 +741,14 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
                 '/dashboard/divine-manager?section=tasks',
                 '/dashboard/divine-manager?section=alerts',
                 '/dashboard/ai-studio',
+                '/dashboard/ai-studio?tab=overview',
+                '/dashboard/ai-studio?tab=tools',
+                '/dashboard/ai-studio?tab=chatter',
+                '/dashboard/ai-studio?tab=cosmic',
+                '/dashboard/ai-studio?ai=circe',
+                '/dashboard/ai-studio?ai=venus',
+                '/dashboard/ai-studio?tab=tools&ai=circe',
+                '/dashboard/ai-studio/tools/caption-generator',
                 '/dashboard/social',
                 '/dashboard/settings',
                 '/dashboard/guide',

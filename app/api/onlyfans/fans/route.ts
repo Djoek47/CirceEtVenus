@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
     const raw = Array.isArray(data?.data) ? data.data : []
     const fans = raw.map((row: Record<string, unknown>) => ({
       id: String(row.id ?? ''),
+      platform_fan_id: String(row.id ?? ''),
       user_id: String(row.id ?? ''),
       platform: 'onlyfans' as const,
       platform_username: String(row.username ?? ''),

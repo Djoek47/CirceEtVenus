@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -25,6 +26,9 @@ import {
   Moon,
   Sun,
   Heart,
+  CheckCheck,
+  Mail,
+  Trash2,
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
@@ -606,6 +610,42 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh Messages
             </DropdownMenuItem>
+            {conversation.platform === 'onlyfans' && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const cid = String(conversation.chatId || conversation.user.id)
+                    await fetch(`/api/onlyfans/chats/${encodeURIComponent(cid)}/read`, { method: 'POST' })
+                  }}
+                >
+                  <CheckCheck className="mr-2 h-4 w-4" />
+                  Mark as read
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const cid = String(conversation.chatId || conversation.user.id)
+                    await fetch(`/api/onlyfans/chats/${encodeURIComponent(cid)}/unread`, { method: 'POST' })
+                  }}
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Mark as unread
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={async () => {
+                    const cid = String(conversation.chatId || conversation.user.id)
+                    const ok = window.confirm('Delete this chat on OnlyFans? This cannot be undone.')
+                    if (!ok) return
+                    const res = await fetch(`/api/onlyfans/chats/${encodeURIComponent(cid)}`, { method: 'DELETE' })
+                    if (res.ok) onMessageSent?.()
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete chat
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </CardHeader>

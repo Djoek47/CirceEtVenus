@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { AnalyticsCharts } from '@/components/analytics/analytics-charts'
 import { PlatformBreakdown } from '@/components/analytics/platform-breakdown'
 import { TopContent } from '@/components/analytics/top-content'
+import { OnlyFansApiAnalytics } from '@/components/analytics/onlyfans-api-analytics'
 
 type Connection = {
   platform: string
@@ -207,6 +208,10 @@ export function AnalyticsDashboard({
           </CardHeader>
         </Card>
       </div>
+
+      {connectedPlatforms.includes('onlyfans') && (
+        <OnlyFansApiAnalytics />
+      )}
 
       {/* Charts */}
       <AnalyticsCharts analytics={filtered} hasConnections={hasConnections} />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createFanslyAPI } from '@/lib/fansly-api'
+import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 interface MassMessageRequest {
@@ -10,6 +11,8 @@ interface MassMessageRequest {
   previews?: (string | number)[]
   price?: number
   filter?: 'all' | 'active' | 'expired' | 'renewing'
+  /** OnlyFans user list ids (OnlyFansAPI mass messaging). */
+  userLists?: string[]
 }
 
 // POST: Send mass message to all subscribers across platforms
@@ -23,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: MassMessageRequest = await request.json()
-    const { message, platforms, mediaIds, previews, price, filter = 'all' } = body
+    const { message, platforms, mediaIds, previews, price, filter = 'all', userLists } = body
 
     const trimmed = message?.trim()
     const hasText = typeof trimmed === 'string' && trimmed.length > 0
@@ -91,6 +94,12 @@ export async function POST(request: NextRequest) {
           totalFailed += result.failed || 0
 
         } else if (platform === 'onlyfans') {
+          const ofMediaErr = validateChatMediaIdsForSend(mediaIds)
+          if (ofMediaErr) {
+            results.onlyfans = { success: false, sent: 0, failed: 0, error: ofMediaErr }
+            continue
+          }
+
           // OnlyFans rule: all paid messages must contain at least one media file
           if (typeof price === 'number' && price > 0 && !hasMedia) {
             results.onlyfans = {
@@ -117,12 +126,16 @@ export async function POST(request: NextRequest) {
             }
           }
           const api = createOnlyFansAPI(connection.access_token)
-          
+
           const result = await api.sendMassMessage({
             text: trimmed || '',
             mediaFiles: mediaIds,
             previews,
             price,
+            userLists:
+              Array.isArray(userLists) && userLists.length > 0
+                ? userLists.filter((id) => typeof id === 'string' && id.length > 0)
+                : undefined,
           })
 
           results.onlyfans = {

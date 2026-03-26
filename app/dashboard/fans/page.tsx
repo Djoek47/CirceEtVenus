@@ -8,6 +8,7 @@ function normalizeFan(row: Record<string, unknown>): Fan {
   return {
     id: row.id as string,
     user_id: row.user_id as string,
+    platform_fan_id: (row.platform_fan_id ?? null) as string | null,
     platform: (row.platform ?? 'onlyfans') as Fan['platform'],
     platform_username: username,
     display_name: (row.display_name ?? null) as string | null,

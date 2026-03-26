@@ -42,6 +42,9 @@ export function MassMessageDialog() {
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isSending, setIsSending] = useState(false)
+  const [ofUserLists, setOfUserLists] = useState<{ id: string; name: string }[]>([])
+  const [selectedListIds, setSelectedListIds] = useState<string[]>([])
+  const [listsLoading, setListsLoading] = useState(false)
   const [results, setResults] = useState<{
     success: boolean
     totalSent: number
@@ -73,8 +76,40 @@ export function MassMessageDialog() {
       setMessage('')
       setPrice('')
       setMediaIds([])
+      setSelectedListIds([])
+      setOfUserLists([])
     }
   }, [open])
+
+  useEffect(() => {
+    async function loadOfLists() {
+      if (!open || !platforms.includes('onlyfans')) return
+      setListsLoading(true)
+      try {
+        const res = await fetch('/api/onlyfans/user-lists?limit=100')
+        const raw = await res.json()
+        if (!res.ok) return
+        const arr = (raw as { data?: unknown }).data ?? (raw as { lists?: unknown }).lists ?? raw
+        const list = Array.isArray(arr) ? arr : []
+        setOfUserLists(
+          list
+            .map((row: unknown) => {
+              if (!row || typeof row !== 'object') return null
+              const r = row as Record<string, unknown>
+              const id = r.id != null ? String(r.id) : ''
+              const name = r.name != null ? String(r.name) : id
+              return id ? { id, name } : null
+            })
+            .filter((x): x is { id: string; name: string } => x != null),
+        )
+      } catch {
+        setOfUserLists([])
+      } finally {
+        setListsLoading(false)
+      }
+    }
+    if (open) void loadOfLists()
+  }, [open, platforms])
 
   const togglePlatform = (platform: string) => {
     setPlatforms(prev =>
@@ -82,6 +117,10 @@ export function MassMessageDialog() {
         ? prev.filter(p => p !== platform)
         : [...prev, platform]
     )
+  }
+
+  const toggleListId = (id: string) => {
+    setSelectedListIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,13 +154,21 @@ export function MassMessageDialog() {
     setResults(null)
 
     const priceNum = price.trim() ? parseFloat(price) : undefined
-    const body: { message: string; platforms: string[]; filter?: string; price?: number; mediaIds?: string[] } = {
+    const body: {
+      message: string
+      platforms: string[]
+      filter?: string
+      price?: number
+      mediaIds?: string[]
+      userLists?: string[]
+    } = {
       message,
       platforms,
       filter,
     }
     if (priceNum != null && !Number.isNaN(priceNum) && priceNum >= 0) body.price = priceNum
     if (mediaIds.length > 0) body.mediaIds = mediaIds
+    if (platforms.includes('onlyfans') && selectedListIds.length > 0) body.userLists = selectedListIds
 
     try {
       const response = await fetch('/api/messages/mass', {
@@ -310,6 +357,34 @@ export function MassMessageDialog() {
                 <SelectItem value="renewing">Auto-Renewing Subscribers</SelectItem>
               </SelectContent>
             </Select>
+            {platforms.includes('onlyfans') && (
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-medium">OnlyFans user lists (optional)</p>
+                <p className="text-xs text-muted-foreground">
+                  Target specific lists instead of the subscriber filter above. Leave empty to use the filter.
+                </p>
+                {listsLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading lists…</p>
+                ) : ofUserLists.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No lists found. Create lists in OnlyFans or via housekeeping.</p>
+                ) : (
+                  <div className="space-y-2 max-h-36 overflow-y-auto">
+                    {ofUserLists.map((l) => (
+                      <div key={l.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`of-list-${l.id}`}
+                          checked={selectedListIds.includes(l.id)}
+                          onCheckedChange={() => toggleListId(l.id)}
+                        />
+                        <Label htmlFor={`of-list-${l.id}`} className="text-xs font-normal cursor-pointer truncate">
+                          {l.name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Results */}

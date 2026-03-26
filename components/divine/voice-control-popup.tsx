@@ -10,7 +10,7 @@ export function VoiceControlPopup() {
   const voice = useVoiceSession()
   if (!voice) return null
 
-  const { status, error, startVoiceCall, endVoiceCall, voiceVizRef } = voice
+  const { status, error, startVoiceCall, endVoiceCall, voiceVizRef, voiceSurfaceState } = voice
 
   const isActive = status === 'connected' || status === 'connecting'
   const primaryLabel =
@@ -50,7 +50,10 @@ export function VoiceControlPopup() {
           <span className="text-[11px] text-muted-foreground">
             You can keep browsing; call stays active.
           </span>
-          <DivineWorkingLogo working={isActive} className="mt-0.5" />
+          <DivineWorkingLogo
+            variant={isActive ? voiceSurfaceState : 'idle'}
+            className="mt-0.5"
+          />
         </div>
       </div>
       <canvas

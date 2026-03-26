@@ -42,6 +42,7 @@ import { BirthdaySettings } from '@/components/settings/birthday-settings'
 import { BillingSection } from '@/components/settings/billing-section'
 import { SecuritySettings } from '@/components/settings/security-settings'
 import { PlatformConnector } from '@/components/platform/platform-connector'
+import { HousekeepingListsSettings } from '@/components/settings/housekeeping-lists-settings'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'billing' | 'integrations' | 'data' | 'preferences'
@@ -686,6 +687,8 @@ export default function SettingsPage() {
           {activeTab === 'integrations' && (
             <>
               <PlatformConnector />
+
+              <HousekeepingListsSettings onlyFansConnected={integrations.onlyfans} />
 
               <Card className="border-border bg-card">
                 <CardHeader>

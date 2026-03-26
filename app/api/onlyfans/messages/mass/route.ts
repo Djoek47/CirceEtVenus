@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 // POST - Send a mass message
@@ -46,6 +47,11 @@ export async function POST(request: Request) {
         { error: 'Message text or media required' },
         { status: 400 },
       )
+    }
+
+    const mediaErr = validateChatMediaIdsForSend(mediaIds)
+    if (mediaErr) {
+      return NextResponse.json({ error: mediaErr }, { status: 400 })
     }
 
     // OnlyFans rule: all paid messages must contain at least one media file.

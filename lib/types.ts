@@ -59,6 +59,8 @@ export interface Fan {
   id: string
   user_id: string
   platform: Platform
+  /** OnlyFans / upstream platform user id (for API calls). */
+  platform_fan_id?: string | null
   platform_username: string
   display_name: string | null
   avatar_url: string | null

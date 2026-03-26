@@ -36,9 +36,10 @@ export async function POST(request: NextRequest) {
 
     const event = JSON.parse(rawBody)
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const eventType = event.type ?? event.event
 
     // OnlyFansAPI webhook events based on their settings
-    switch (event.type) {
+    switch (eventType) {
       // Chat events
       case 'chat.message':
         await handleNewMessage(supabase, event.data)
@@ -87,9 +88,34 @@ export async function POST(request: NextRequest) {
       case 'user.spent':
         await handleUserSpent(supabase, event.data)
         break
+
+      case 'fan_summary.completed':
+        await handleFanSummaryCompleted(supabase, event.data)
+        break
+
+      case 'tips.received':
+        try {
+          await handleTip(supabase, normalizeTipPayload(event.data))
+        } catch (e) {
+          console.warn('tips.received handler:', e)
+        }
+        break
+
+      case 'transactions.new':
+        await handleTransactionNew(supabase, event.data)
+        break
+
+      case 'chat_queue.updated':
+      case 'chat_queue.finished':
+        await handleChatQueueEvent(supabase, event.data, eventType)
+        break
+
+      case 'messages.deleted':
+        await handleMessageDeleted(supabase, event.data)
+        break
       
       default:
-        console.log('Unknown event type:', event.type)
+        console.log('Unknown event type:', eventType)
     }
 
     return NextResponse.json({ received: true })
@@ -442,4 +468,133 @@ async function handleUserSpent(supabase: ReturnType<typeof createClient> extends
     })
     .eq('user_id', connection.user_id)
     .eq('date', new Date().toISOString().split('T')[0])
+}
+
+function normalizeTipPayload(data: unknown): {
+  accountId: string
+  tip: { amount: number; fromUser: { id: string; username: string; name: string } }
+} {
+  if (!data || typeof data !== 'object') throw new Error('invalid payload')
+  const d = data as Record<string, unknown>
+  const accountId = String(d.accountId ?? d.account_id ?? '')
+  const tipObj = (typeof d.tip === 'object' && d.tip !== null ? d.tip : d) as Record<string, unknown>
+  const amount = Number(tipObj.amount ?? d.amount ?? 0)
+  const fromUser = (tipObj.fromUser ?? d.fromUser) as Record<string, unknown> | undefined
+  if (!fromUser || typeof fromUser !== 'object') throw new Error('missing fromUser')
+  return {
+    accountId,
+    tip: {
+      amount,
+      fromUser: {
+        id: String(fromUser.id ?? ''),
+        username: String(fromUser.username ?? ''),
+        name: String(fromUser.name ?? ''),
+      },
+    },
+  }
+}
+
+async function handleFanSummaryCompleted(
+  supabase: ReturnType<typeof createClient>,
+  data: unknown,
+) {
+  if (!data || typeof data !== 'object') return
+  const d = data as Record<string, unknown>
+  const accountId = String(d.accountId ?? d.account_id ?? '')
+  const fanRaw = d.fanId ?? d.fan_id ?? d.userId
+  const fanObj = typeof d.fan === 'object' && d.fan !== null ? (d.fan as Record<string, unknown>) : null
+  const fanId = fanRaw ?? fanObj?.id
+  if (!accountId || fanId == null) return
+
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('user_id')
+    .eq('platform', 'onlyfans')
+    .eq('access_token', accountId)
+    .maybeSingle()
+
+  if (!connection) return
+
+  const summary = d.summary ?? d.data ?? d
+  await supabase.from('fan_ai_summaries').upsert(
+    {
+      user_id: connection.user_id,
+      platform_fan_id: String(fanId),
+      status: 'completed',
+      summary_json: typeof summary === 'object' && summary !== null ? summary : { value: summary },
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,platform_fan_id' },
+  )
+}
+
+async function handleTransactionNew(supabase: ReturnType<typeof createClient>, data: unknown) {
+  if (!data || typeof data !== 'object') return
+  const d = data as Record<string, unknown>
+  const accountId = String(d.accountId ?? d.account_id ?? '')
+  const amount = Number(d.amount ?? 0)
+  const user = (d.user ?? d.fromUser) as Record<string, unknown> | undefined
+  const uid = user && typeof user === 'object' ? String(user.id ?? '') : ''
+  if (!accountId || !amount || !uid) return
+
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('user_id')
+    .eq('platform', 'onlyfans')
+    .eq('access_token', accountId)
+    .maybeSingle()
+
+  if (!connection) return
+
+  await supabase
+    .rpc('increment_fan_spending', {
+      p_user_id: connection.user_id,
+      p_fan_id: uid,
+      p_amount: amount,
+    })
+    .catch(() => undefined)
+}
+
+async function handleChatQueueEvent(
+  supabase: ReturnType<typeof createClient>,
+  data: unknown,
+  eventType: string,
+) {
+  if (!data || typeof data !== 'object') return
+  const d = data as Record<string, unknown>
+  const accountId = String(d.accountId ?? d.account_id ?? '')
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('user_id')
+    .eq('platform', 'onlyfans')
+    .eq('access_token', accountId)
+    .maybeSingle()
+
+  if (!connection) return
+
+  const title = eventType === 'chat_queue.finished' ? 'Mass message finished' : 'Mass message queue updated'
+  const desc =
+    typeof d.progress === 'string'
+      ? d.progress
+      : typeof d.message === 'string'
+        ? d.message
+        : 'Campaign queue update'
+
+  await supabase.from('notifications').insert({
+    user_id: connection.user_id,
+    type: 'message',
+    title,
+    description: desc,
+    link: '/dashboard/messages',
+    read: false,
+    platform: 'onlyfans',
+  })
+}
+
+async function handleMessageDeleted(supabase: ReturnType<typeof createClient>, data: unknown) {
+  if (!data || typeof data !== 'object') return
+  const d = data as Record<string, unknown>
+  const messageId = d.messageId ?? d.message_id ?? d.id
+  if (messageId == null) return
+  await supabase.from('messages').delete().eq('platform_message_id', String(messageId))
 }

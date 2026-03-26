@@ -7,6 +7,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
+/** OnlyFans engagement APIs often return 403 for non–performer / restricted accounts. */
+function isEngagementAccessForbidden(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes('[403]') ||
+    m.includes('api error: 403') ||
+    m.includes(' 403 ') ||
+    (m.includes('403') && (m.includes('performer') || m.includes('access this endpoint'))) ||
+    m.includes('real performer account')
+  )
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -75,6 +87,17 @@ export async function GET(request: NextRequest) {
     const message = err instanceof Error ? err.message : 'Failed to fetch engagement'
     if (String(message).includes('ONLYFANS_SESSION_EXPIRED')) {
       return NextResponse.json({ error: 'OnlyFans session expired; please reconnect.' }, { status: 401 })
+    }
+    if (isEngagementAccessForbidden(message)) {
+      return NextResponse.json(
+        {
+          error:
+            'Message engagement analytics are not available for this OnlyFans account. The data partner only exposes this for eligible creator (performer) accounts.',
+          code: 'ENGAGEMENT_FORBIDDEN',
+          hint: 'If you use a valid creator account, contact OnlyFansAPI support if this persists.',
+        },
+        { status: 403 },
+      )
     }
     return NextResponse.json({ error: message }, { status: 500 })
   }

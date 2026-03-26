@@ -24,7 +24,7 @@ export function applyDivineUiActions(
     }
     if (a.type === 'focus_fan' && a.fanId) {
       setFocusedFan({ id: a.fanId })
-      router.push('/dashboard/messages')
+      router.push(`/dashboard/messages?fanId=${encodeURIComponent(a.fanId)}`)
     }
   }
 }

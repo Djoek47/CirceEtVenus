@@ -609,7 +609,8 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
       {
         type: 'function' as const,
         name: 'ui_navigate',
-        description: 'Open a dashboard screen in the app (Divine full).',
+        description:
+          'Open a dashboard screen in the app. For Divine Manager sections use ?section=mimic (Mimic Test), voice (voice call), tasks (today plan), or alerts (urgent jobs).',
         parameters: {
           type: 'object',
           properties: {
@@ -624,6 +625,10 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
                 '/dashboard/fans',
                 '/dashboard/analytics',
                 '/dashboard/divine-manager',
+                '/dashboard/divine-manager?section=mimic',
+                '/dashboard/divine-manager?section=voice',
+                '/dashboard/divine-manager?section=tasks',
+                '/dashboard/divine-manager?section=alerts',
                 '/dashboard/ai-studio',
                 '/dashboard/social',
                 '/dashboard/settings',

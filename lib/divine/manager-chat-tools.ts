@@ -52,6 +52,28 @@ export const ALLOWED_UI_PATHS = new Set<string>([
   '/dashboard/guide',
 ])
 
+/** Allows `/dashboard/divine-manager?section=mimic` style links; only `section` query is permitted. */
+export function isAllowedUiNavigatePath(path: string): boolean {
+  const trimmed = path.trim()
+  if (!trimmed.startsWith('/dashboard')) return false
+  if (ALLOWED_UI_PATHS.has(trimmed)) return true
+  const base = trimmed.split('?')[0]
+  if (!ALLOWED_UI_PATHS.has(base)) return false
+  if (base !== '/dashboard/divine-manager') return false
+  if (!trimmed.includes('?')) return true
+  try {
+    const qs = trimmed.slice(trimmed.indexOf('?'))
+    const params = new URLSearchParams(qs)
+    const keys = [...params.keys()]
+    if (keys.length === 0) return true
+    if (keys.length !== 1 || keys[0] !== 'section') return false
+    const v = params.get('section') ?? ''
+    return /^[a-z0-9_-]{1,40}$/i.test(v)
+  } catch {
+    return false
+  }
+}
+
 export function getBaseUrl(): string {
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
@@ -218,7 +240,7 @@ export async function runContextTool(
         return data.error || `This fan's thread is no longer available on OnlyFans.`
       }
       if (data.error || !res.ok) return data.error ?? 'Failed to fetch thread.'
-      const thread = (data.thread ?? []).slice(-25).map((m) => `${m.from}: ${m.text.slice(0, 200)}`)
+      const thread = (data.thread ?? []).slice(-40).map((m) => `${m.from}: ${m.text.slice(0, 400)}`)
       return thread.length ? `Thread:\n${thread.join('\n')}` : 'No messages in thread.'
     }
     if (name === 'get_reply_suggestions') {
@@ -449,7 +471,7 @@ export async function runToolCall(
   pendingConfirmations: Array<{ type: string; intent_id: string; summary?: string }>
   uiActions: DivineUiAction[]
 }> {
-  const { cookie, supabase, userId, divineFull } = opts
+  const { cookie, supabase, userId } = opts
   const name = tc.function.name
   let args: Record<string, unknown> = {}
   try {
@@ -463,13 +485,10 @@ export async function runToolCall(
 
   if (name === 'ui_navigate') {
     const path = typeof args.path === 'string' ? args.path : ''
-    if (!divineFull) {
-      return { tool_call_id: tc.id, content: DIVINE_FULL_UPGRADE_MESSAGE, pendingConfirmations: emptyPending, uiActions }
-    }
-    if (!ALLOWED_UI_PATHS.has(path)) {
+    if (!isAllowedUiNavigatePath(path)) {
       return {
         tool_call_id: tc.id,
-        content: 'That path is not available for in-app navigation. Use a listed dashboard route.',
+        content: 'That path is not available for in-app navigation. Use a listed dashboard route (Divine Manager may use ?section=mimic|voice|tasks|alerts).',
         pendingConfirmations: emptyPending,
         uiActions,
       }
@@ -485,9 +504,6 @@ export async function runToolCall(
 
   if (name === 'ui_focus_fan') {
     const fanId = typeof args.fanId === 'string' ? args.fanId : ''
-    if (!divineFull) {
-      return { tool_call_id: tc.id, content: DIVINE_FULL_UPGRADE_MESSAGE, pendingConfirmations: emptyPending, uiActions }
-    }
     if (!fanId.trim()) {
       return { tool_call_id: tc.id, content: 'fanId is required.', pendingConfirmations: emptyPending, uiActions }
     }

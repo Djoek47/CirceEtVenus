@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
+import { buildMessageContentForAi, hasMediaInRawMessage } from '@/lib/divine/of-thread-text'
 
 /**
  * POST: Get DM thread with a fan for Divine context.
@@ -49,11 +50,22 @@ export async function POST(req: NextRequest) {
       const tb = b?.createdAt ? new Date(b.createdAt).getTime() : 0
       return ta - tb
     })
-    const thread = messages.map((m: any) => ({
-      from: m.isSentByMe ? 'creator' : 'fan',
-      text: (m.text || '').replace(/<[^>]+>/g, ' ').trim().slice(0, 500),
-      createdAt: m.createdAt,
-    }))
+    const thread: Array<{
+      from: 'creator' | 'fan'
+      text: string
+      createdAt: string
+      hasMedia: boolean
+    }> = []
+    for (const m of messages) {
+      const content = buildMessageContentForAi(m as Record<string, unknown>)
+      if (!content) continue
+      thread.push({
+        from: (m as { isSentByMe?: boolean }).isSentByMe ? 'creator' : 'fan',
+        text: content.slice(0, 500),
+        createdAt: (m as { createdAt?: string }).createdAt ?? new Date().toISOString(),
+        hasMedia: hasMediaInRawMessage(m as Record<string, unknown>),
+      })
+    }
 
     return NextResponse.json({ fanId, thread })
   } catch (e) {

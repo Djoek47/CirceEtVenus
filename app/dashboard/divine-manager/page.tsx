@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   getSettings,
@@ -45,6 +46,7 @@ const MODE_LABELS: Record<DivineManagerMode, string> = {
 }
 
 export default function DivineManagerPage() {
+  const searchParams = useSearchParams()
   const panelCtx = useDivinePanel()
   const voiceSession = useVoiceSession()
   const [loading, setLoading] = useState(true)
@@ -121,6 +123,17 @@ export default function DivineManagerPage() {
   const closeAfterActionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetIdleRef = useRef<(() => void) | null>(null)
   const [replyDialogOpen, setReplyDialogOpen] = useState(false)
+
+  useEffect(() => {
+    const section = searchParams.get('section')
+    if (!section) return
+    if (!['mimic', 'voice', 'tasks', 'alerts'].includes(section)) return
+    const id = `divine-section-${section}`
+    const t = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 200)
+    return () => clearTimeout(t)
+  }, [searchParams])
   const [replyContext, setReplyContext] = useState<{
     fan: { id: string; username?: string | null; name?: string | null }
     circeSuggestions: string[]
@@ -1279,9 +1292,11 @@ export default function DivineManagerPage() {
 
         <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" aria-hidden />
 
-        <MimicTestWizard />
+        <div id="divine-section-mimic" className="scroll-mt-24">
+          <MimicTestWizard />
+        </div>
 
-        <Card className="divine-card">
+        <Card id="divine-section-alerts" className="divine-card scroll-mt-24">
           <CardHeader>
             <CardTitle className="font-serif text-lg">Urgent alerts &amp; jobs</CardTitle>
             <CardDescription>
@@ -1428,7 +1443,7 @@ export default function DivineManagerPage() {
           </Button>
         </div>
 
-      <Card className="divine-card">
+      <Card id="divine-section-tasks" className="divine-card scroll-mt-24">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
@@ -1539,7 +1554,7 @@ export default function DivineManagerPage() {
       </Card>
 
       {settings.beta_acknowledged && mode !== 'off' && (
-        <Card className="divine-card">
+        <Card id="divine-section-voice" className="divine-card scroll-mt-24">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>

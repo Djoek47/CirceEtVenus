@@ -1,20 +1,27 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ConversationList, type Conversation } from './conversation-list'
 import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
 import { MessageEngagementInsights } from './message-engagement-insights'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Loader2, ArrowLeft, BarChart3, MessageSquare } from 'lucide-react'
+import { useDivinePanel } from '@/components/divine/divine-panel-context'
 
 type MessagesView = 'conversations' | 'insights'
 
 interface MessagesLayoutProps {
   userId: string
+  /** From server `?fanId=` on first paint (client navigations use URL via useSearchParams). */
+  initialFanId?: string
 }
 
-export function MessagesLayout({ userId }: MessagesLayoutProps) {
+function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
+  const searchParams = useSearchParams()
+  const divinePanel = useDivinePanel()
+  const fanIdFromUrl = searchParams.get('fanId') ?? initialFanId ?? undefined
   const [view, setView] = useState<MessagesView>('conversations')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
@@ -76,6 +83,21 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
   useEffect(() => {
     loadConversations()
   }, [loadConversations])
+
+  // Open the thread for ?fanId= or Divine voice/chat "focus fan"
+  useEffect(() => {
+    if (!fanIdFromUrl || conversations.length === 0) return
+    const match = conversations.find((c) => String(c.user.id) === String(fanIdFromUrl))
+    if (match) setSelectedConversation(match)
+  }, [fanIdFromUrl, conversations])
+
+  useEffect(() => {
+    const id = divinePanel?.focusedFan?.id
+    if (!id || conversations.length === 0) return
+    if (selectedConversation && String(selectedConversation.user.id) === String(id)) return
+    const match = conversations.find((c) => String(c.user.id) === String(id))
+    if (match) setSelectedConversation(match)
+  }, [divinePanel?.focusedFan?.id, conversations, selectedConversation])
 
   if (loading) {
     return (
@@ -231,5 +253,21 @@ export function MessagesLayout({ userId }: MessagesLayoutProps) {
         </>
       )}
     </div>
+  )
+}
+
+function MessagesLoadingShell() {
+  return (
+    <div className="flex h-[calc(100vh-8rem)] items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+    </div>
+  )
+}
+
+export function MessagesLayout(props: MessagesLayoutProps) {
+  return (
+    <Suspense fallback={<MessagesLoadingShell />}>
+      <MessagesLayoutContent {...props} />
+    </Suspense>
   )
 }

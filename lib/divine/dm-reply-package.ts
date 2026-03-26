@@ -9,6 +9,10 @@ import {
   generateMessageSuggestionsWithOpenAI,
 } from '@/lib/ai/message-suggestions'
 import type { NormalizedChatMessage } from '@/lib/ai/message-suggestions'
+import {
+  formatThreadTextForAi,
+  normalizeSortedRawOfMessages,
+} from '@/lib/divine/of-thread-text'
 
 type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
 
@@ -70,7 +74,7 @@ export async function fetchDmReplySuggestionsPackage(
 
   const api = createOnlyFansAPI(connection.access_token)
   const [threadRes, convRes] = await Promise.all([
-    api.getMessages(String(fanId), { limit: 30 }),
+    api.getMessages(String(fanId), { limit: 80 }),
     api.getConversations({ limit: 60 }),
   ])
   const fanFromConv = (convRes.conversations || []).find((c: any) => String(c.user?.id) === String(fanId))
@@ -82,20 +86,15 @@ export async function fetchDmReplySuggestionsPackage(
   const rawMessages = (threadRes.messages || []).sort((a: any, b: any) =>
     new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime(),
   )
-  const messages: NormalizedChatMessage[] = rawMessages
-    .filter((m: any) => m?.text?.trim())
-    .map((m: any) => ({
-      from: m.isSentByMe ? ('creator' as const) : ('fan' as const),
-      text: String(m.text || '').replace(/<[^>]+>/g, ' ').trim(),
-      createdAt: m.createdAt || new Date().toISOString(),
-    }))
+  const messages: NormalizedChatMessage[] = normalizeSortedRawOfMessages(rawMessages)
 
   const threadPreview =
     messages.length > 0
-      ? messages
-          .slice(-25)
-          .map((m) => `${m.from}: ${m.text.slice(0, 200)}`)
-          .join('\n')
+      ? formatThreadTextForAi(messages, {
+          lastN: 50,
+          lineMax: 800,
+          maxTotalChars: 12000,
+        })
       : ''
 
   if (messages.length === 0) {

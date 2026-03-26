@@ -35,6 +35,7 @@ import type { NormalizedChatMessage } from '@/lib/ai/message-suggestions'
 import { createClient } from '@/lib/supabase/client'
 import { isBoundaryNiche, NICHE_LABELS } from '@/lib/niches'
 import { proxyImageUrl } from '@/lib/proxy-image-url'
+import { getProxiedMediaPresentation, isVideoMedia, type RawOnlyFansMedia } from '@/lib/messages/of-media'
 
 interface OnlyFansConversation {
   user: {
@@ -94,6 +95,89 @@ interface ChatWindowProps {
   conversation: OnlyFansConversation | null
   userId: string
   onMessageSent?: () => void
+}
+
+function ChatMediaItem({ media }: { media: OnlyFansMedia }) {
+  const pres = getProxiedMediaPresentation(media as RawOnlyFansMedia)
+  const [imgSrc, setImgSrc] = useState(pres.displaySrc)
+  const [videoSrc, setVideoSrc] = useState(pres.displaySrc)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    const p = getProxiedMediaPresentation(media as RawOnlyFansMedia)
+    setImgSrc(p.displaySrc)
+    setVideoSrc(p.displaySrc)
+    setFailed(false)
+  }, [media.id])
+
+  if (!media.canView && media.canView !== undefined) {
+    return (
+      <div className="relative rounded-lg bg-muted/50 p-4 text-center">
+        <p className="text-sm text-muted-foreground">Locked media</p>
+      </div>
+    )
+  }
+
+  if (failed) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-muted/40 p-3 text-center">
+        <p className="text-sm text-muted-foreground">Could not load media</p>
+      </div>
+    )
+  }
+
+  const video = isVideoMedia(media as RawOnlyFansMedia)
+
+  if (video) {
+    const src = videoSrc || pres.displaySrc
+    if (!src) {
+      return (
+        <div className="rounded-lg bg-muted/50 p-4 text-center">
+          <p className="text-sm text-muted-foreground">Video unavailable</p>
+        </div>
+      )
+    }
+    return (
+      <video
+        src={src}
+        poster={pres.poster || undefined}
+        controls
+        className="rounded-lg max-w-full"
+        referrerPolicy="no-referrer"
+        onError={() => {
+          if (pres.altSrc && videoSrc !== pres.altSrc) {
+            setVideoSrc(pres.altSrc)
+          } else {
+            setFailed(true)
+          }
+        }}
+      />
+    )
+  }
+
+  if (!imgSrc) {
+    return (
+      <div className="rounded-lg bg-muted/50 p-4 text-center">
+        <p className="text-sm text-muted-foreground">Image unavailable</p>
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt="Media"
+      className="rounded-lg max-w-full"
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (pres.altSrc && imgSrc !== pres.altSrc) {
+          setImgSrc(pres.altSrc)
+        } else {
+          setFailed(true)
+        }
+      }}
+    />
+  )
 }
 
 export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
@@ -526,8 +610,11 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         </DropdownMenu>
       </CardHeader>
 
-      {/* Messages Area */}
+      {/* Messages Area — live thread with the fan */}
       <CardContent ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Fan conversation
+        </p>
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -579,61 +666,9 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                   >
                     {msg.media && msg.media.length > 0 && (
                       <div className="mb-2 space-y-2">
-                        {msg.media.map((m) => {
-                          // Get the best available URL from the OnlyFans API response and proxy it
-                          const rawImageUrl = m.files?.thumb?.url || m.files?.squarePreview?.url || m.files?.preview?.url || m.files?.full?.url || m.preview || m.url
-                          const rawVideoUrl = m.files?.full?.url || m.url
-                          const rawPosterUrl = m.files?.thumb?.url || m.files?.preview?.url || m.preview
-                          
-                          // Proxy the URLs to avoid CORS/403 issues
-                          const imageUrl = proxyImageUrl(rawImageUrl)
-                          const videoUrl = proxyImageUrl(rawVideoUrl)
-                          const posterUrl = proxyImageUrl(rawPosterUrl)
-                          
-                          // Check if media can be viewed
-                          if (!m.canView && m.canView !== undefined) {
-                            return (
-                              <div key={m.id} className="relative rounded-lg bg-muted/50 p-4 text-center">
-                                <p className="text-sm text-muted-foreground">Locked media</p>
-                              </div>
-                            )
-                          }
-                          
-                          return (
-                            <div key={m.id} className="relative">
-                              {m.type === 'photo' ? (
-                                imageUrl ? (
-                                  <img 
-                                    src={imageUrl} 
-                                    alt="Media" 
-                                    className="rounded-lg max-w-full"
-                                    onError={(e) => {
-                                      // Hide broken images
-                                      (e.target as HTMLImageElement).style.display = 'none'
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="rounded-lg bg-muted/50 p-4 text-center">
-                                    <p className="text-sm text-muted-foreground">Image unavailable</p>
-                                  </div>
-                                )
-                              ) : (
-                                videoUrl ? (
-                                  <video 
-                                    src={videoUrl} 
-                                    poster={posterUrl || undefined}
-                                    controls 
-                                    className="rounded-lg max-w-full"
-                                  />
-                                ) : (
-                                  <div className="rounded-lg bg-muted/50 p-4 text-center">
-                                    <p className="text-sm text-muted-foreground">Video unavailable</p>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          )
-                        })}
+                        {msg.media.map((m) => (
+                          <ChatMediaItem key={m.id} media={m} />
+                        ))}
                       </div>
                     )}
                     {/* Show preview images if media array is empty but previews exist */}
@@ -645,6 +680,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                             src={proxyImageUrl(p.url) || p.url} 
                             alt="Preview" 
                             className="rounded-lg max-w-full"
+                            referrerPolicy="no-referrer"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none'
                             }}
@@ -681,8 +717,11 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         )}
       </CardContent>
 
-      {/* Message Input + AI helpers */}
-      <div className="border-t border-border p-4 space-y-3">
+      {/* Divine AI helpers + composer (local only until you send) */}
+      <div className="border-t border-border bg-muted/20 p-4 space-y-3">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Divine AI — suggestions (not sent)
+        </p>
         {error && (
           <p className="text-xs text-destructive mb-1">{error}</p>
         )}
@@ -911,6 +950,9 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         </div>
         <p className="text-[10px] text-muted-foreground">
           You can send paid (PPV) content: set a price and/or attach media so the fan pays to unlock.
+        </p>
+        <p className="text-[10px] text-muted-foreground/90">
+          Only the fan conversation above is visible to fans. Scan and suggestion cards stay in Creatix until you send a message.
         </p>
       </div>
     </Card>

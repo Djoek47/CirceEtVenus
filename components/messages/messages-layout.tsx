@@ -41,6 +41,11 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
     searchParams.get('fanId') ?? searchParams.get('chat') ?? initialFanId ?? undefined
   const platformFromUrl =
     searchParams.get('platform') ?? initialPlatform ?? undefined
+  // Prefer explicit voice focus first; fallback to URL deep-link.
+  const preferredFanIdRef = useRef<string | undefined>(undefined)
+  preferredFanIdRef.current = divinePanel?.focusedFan?.id ?? fanIdFromUrl
+  const preferredPlatformRef = useRef<string | undefined>(undefined)
+  preferredPlatformRef.current = divinePanel?.focusedFan?.id ? undefined : platformFromUrl
   const [view, setView] = useState<MessagesView>('conversations')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
@@ -95,6 +100,15 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
       setConversations(allConversations)
       setSelectedConversation((prev) => {
         if (allConversations.length === 0) return null
+        const preferredFanId = preferredFanIdRef.current
+        if (preferredFanId) {
+          const preferred = pickConversationForDeepLink(
+            allConversations,
+            preferredFanId,
+            preferredPlatformRef.current,
+          )
+          if (preferred) return preferred
+        }
         if (!prev) return allConversations[0]
         const stillThere = allConversations.find((c) => String(c.user.id) === String(prev.user.id))
         return stillThere ?? allConversations[0]

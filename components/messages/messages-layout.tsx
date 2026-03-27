@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ConversationList, type Conversation } from './conversation-list'
 import { ChatWindow } from './chat-window'
@@ -28,6 +28,8 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Tracks last focused fan id from Divine so we only sync list selection when focus actually changes (avoids React #185 when switching chats: stale focus vs new selection). */
+  const prevFocusedFanIdRef = useRef<string | undefined>(undefined)
 
   const loadConversations = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true)
@@ -114,11 +116,31 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
 
   useEffect(() => {
     const id = divinePanel?.focusedFan?.id
-    if (!id || conversations.length === 0) return
-    if (selectedConversation && String(selectedConversation.user.id) === String(id)) return
+    if (conversations.length === 0) return
+    if (!id) {
+      prevFocusedFanIdRef.current = undefined
+      return
+    }
     const match = conversations.find((c) => String(c.user.id) === String(id))
-    if (match) setSelectedConversation(match)
-  }, [divinePanel?.focusedFan?.id, conversations, selectedConversation])
+    if (!match) return
+
+    const focusChanged = prevFocusedFanIdRef.current !== id
+    prevFocusedFanIdRef.current = id
+
+    if (focusChanged) {
+      setSelectedConversation((prev) => {
+        if (prev && String(prev.user.id) === String(id)) return prev
+        return match
+      })
+      return
+    }
+
+    // Same focus id, but conversation list refreshed (new object refs / lastMessage). Re-bind row without clobbering a user-picked thread that focus has not caught up to yet.
+    setSelectedConversation((prev) => {
+      if (!prev || String(prev.user.id) !== String(id)) return prev
+      return match
+    })
+  }, [divinePanel?.focusedFan?.id, conversations])
 
   if (loading) {
     return (

@@ -69,54 +69,81 @@ export async function getRuntimePlatformConnection(
   userId: string,
   platform: RuntimePlatform,
 ): Promise<RuntimePlatformConnection> {
-  const { data: row } = await supabase
+  const { data: rows } = await supabase
     .from('platform_connections')
     .select('is_connected, platform_username, access_token, platform_user_id')
     .eq('user_id', userId)
     .eq('platform', platform)
-    .maybeSingle()
+    .order('updated_at', { ascending: false, nullsFirst: false })
 
-  const isConnected = (row as { is_connected?: boolean } | null)?.is_connected === true
-  const accessTokenRaw = (row as { access_token?: string | null } | null)?.access_token
-  const platformUserIdRaw = (row as { platform_user_id?: string | null } | null)?.platform_user_id
-  const usernameRaw = (row as { platform_username?: string | null } | null)?.platform_username
-
-  const accessToken =
-    typeof accessTokenRaw === 'string' && accessTokenRaw.trim() ? accessTokenRaw.trim() : null
-  const platformUserId =
-    typeof platformUserIdRaw === 'string' && platformUserIdRaw.trim()
-      ? platformUserIdRaw.trim()
-      : null
-  const username = typeof usernameRaw === 'string' && usernameRaw.trim() ? usernameRaw.trim() : null
-
-  const hasRequiredCredential =
-    platform === 'onlyfans' ? accessToken != null : platformUserId != null
-
-  if (!isConnected) {
+  const list = Array.isArray(rows) ? rows : []
+  const normalized = list.map((row) => {
+    const isConnected = (row as { is_connected?: boolean }).is_connected === true
+    const accessTokenRaw = (row as { access_token?: string | null }).access_token
+    const platformUserIdRaw = (row as { platform_user_id?: string | null }).platform_user_id
+    const usernameRaw = (row as { platform_username?: string | null }).platform_username
+    const accessToken =
+      typeof accessTokenRaw === 'string' && accessTokenRaw.trim() ? accessTokenRaw.trim() : null
+    const platformUserId =
+      typeof platformUserIdRaw === 'string' && platformUserIdRaw.trim()
+        ? platformUserIdRaw.trim()
+        : null
+    const username = typeof usernameRaw === 'string' && usernameRaw.trim() ? usernameRaw.trim() : null
+    const hasRequiredCredential =
+      platform === 'onlyfans' ? accessToken != null : platformUserId != null
     return {
-      platform,
-      connected: false,
-      reason: 'not_connected',
+      isConnected,
+      hasRequiredCredential,
       username,
       accessToken,
       platformUserId,
     }
+  })
+
+  // Prefer the newest connected row that has required credential.
+  const connectedUsable = normalized.find((r) => r.isConnected && r.hasRequiredCredential)
+  if (connectedUsable) {
+    return {
+      platform,
+      connected: true,
+      username: connectedUsable.username,
+      accessToken: connectedUsable.accessToken,
+      platformUserId: connectedUsable.platformUserId,
+    }
   }
-  if (!hasRequiredCredential) {
+
+  // Next best: connected row exists but missing required credential.
+  const connectedMissingCred = normalized.find((r) => r.isConnected && !r.hasRequiredCredential)
+  if (connectedMissingCred) {
     return {
       platform,
       connected: false,
       reason: 'missing_credential',
-      username,
-      accessToken,
-      platformUserId,
+      username: connectedMissingCred.username,
+      accessToken: connectedMissingCred.accessToken,
+      platformUserId: connectedMissingCred.platformUserId,
     }
   }
+
+  // Fallback: latest row (likely disconnected or empty).
+  const latest = normalized[0]
+  if (latest) {
+    return {
+      platform,
+      connected: false,
+      reason: 'not_connected',
+      username: latest.username,
+      accessToken: latest.accessToken,
+      platformUserId: latest.platformUserId,
+    }
+  }
+
   return {
     platform,
-    connected: true,
-    username,
-    accessToken,
-    platformUserId,
+    connected: false,
+    reason: 'not_connected',
+    username: null,
+    accessToken: null,
+    platformUserId: null,
   }
 }

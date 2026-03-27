@@ -1295,9 +1295,26 @@ export async function runToolCall(
       (typeof args.text === 'string' && args.text) ||
       (typeof args.body === 'string' && args.body) ||
       ''
+    let platform: 'onlyfans' | 'fansly' = args.platform === 'fansly' ? 'fansly' : 'onlyfans'
+    const fanIdArg = typeof args.fanId === 'string' ? args.fanId.trim() : ''
+    // Voice often omits `platform`; infer from recents cache so we don't default to
+    // onlyfans incorrectly when the focused fan is from fansly.
+    if (args.platform == null && fanIdArg) {
+      const { data: recent } = await supabase
+        .from('divine_fan_recents')
+        .select('platform')
+        .eq('user_id', userId)
+        .eq('fan_id', fanIdArg)
+        .order('last_seen_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if ((recent as { platform?: string } | null)?.platform === 'fansly') {
+        platform = 'fansly'
+      }
+    }
     intentBody.fanId = args.fanId
     intentBody.message = msgRaw
-    intentBody.platform = args.platform ?? 'onlyfans'
+    intentBody.platform = platform
     intentBody.price = args.price
     intentBody.mediaIds = args.mediaIds
   }

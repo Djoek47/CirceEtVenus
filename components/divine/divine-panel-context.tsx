@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -17,6 +18,7 @@ import {
 } from '@/lib/divine/divine-ui-actions'
 import type { DivineVoiceMemoryPayload } from '@/lib/divine/voice-memory-types'
 import { buildDeferredNavigationActions } from '@/lib/divine/deferred-navigation'
+import { formatFanLookupHint, type DivineLookupMeta } from '@/lib/divine/divine-lookup-meta'
 
 export type { DivineUiAction, DmSuggestionBridgePayload } from '@/lib/divine/divine-ui-actions'
 
@@ -42,6 +44,9 @@ type DivinePanelContextValue = {
   setChatInput: (value: string) => void
   chatLoading: boolean
   chatWorkingHint: string | null
+  /** Status line for fan name/username lookup (spellback + resolution). */
+  fanLookupHint: string | null
+  setFanLookupHint: (hint: string | null) => void
   sendChat: () => Promise<void>
   generatedText: string | null
   setGeneratedText: (text: string | null) => void
@@ -82,12 +87,15 @@ export function DivinePanelProvider({
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [chatWorkingHint, setChatWorkingHint] = useState<string | null>(null)
+  const [fanLookupHint, setFanLookupHint] = useState<string | null>(null)
   const [generatedText, setGeneratedText] = useState<string | null>(null)
   const [generatePrompt, setGeneratePrompt] = useState('')
   const [generateLoading, setGenerateLoading] = useState(false)
   const [dmSuggestionBridge, setDmSuggestionBridge] = useState<DmSuggestionBridgePayload | null>(null)
   const [dmOverlayFanId, setDmOverlayFanId] = useState<string | null>(null)
   const [dmOverlayCollapsed, setDmOverlayCollapsed] = useState(false)
+  const focusedFanIdRef = useRef<string | null>(null)
+  focusedFanIdRef.current = focusedFan?.id ?? null
 
   const clearDmSuggestionBridge = useCallback(() => {
     setDmSuggestionBridge(null)
@@ -106,6 +114,7 @@ export function DivinePanelProvider({
           setDmOverlayFanId(fanId)
           setDmOverlayCollapsed(false)
         },
+        currentFocusedFanId: focusedFanIdRef.current,
       })
     },
     [router],
@@ -167,6 +176,7 @@ export function DivinePanelProvider({
   const sendChat = useCallback(async () => {
     const trimmed = chatInput.trim()
     if (!trimmed || chatLoading) return
+    setFanLookupHint(null)
     const nextMessages: ChatMessage[] = [
       ...chatMessages,
       { role: 'user', content: trimmed },
@@ -202,14 +212,29 @@ export function DivinePanelProvider({
           for (const block of chunks) {
             const line = block.trim()
             if (!line.startsWith('data: ')) continue
-            let payload: { type?: string; text?: string; actions?: unknown; ui_actions?: DivineUiAction[]; message?: string }
+            let payload: {
+              type?: string
+              text?: string
+              actions?: unknown
+              ui_actions?: DivineUiAction[]
+              lookup_meta?: DivineLookupMeta[]
+              message?: string
+            }
             try {
               payload = JSON.parse(line.slice(6)) as typeof payload
             } catch {
               continue
             }
             if (payload.type === 'tools_done') {
-              setChatWorkingHint('Drafting reply…')
+              const lm = payload.lookup_meta
+              if (lm?.length) {
+                setFanLookupHint(
+                  formatFanLookupHint(lm[0]) ?? 'Looking for fan id, username, or chat name…',
+                )
+                setChatWorkingHint('Looking up fan…')
+              } else {
+                setChatWorkingHint('Drafting reply…')
+              }
             }
             if (payload.type === 'token' && payload.text) {
               assembled += payload.text
@@ -224,6 +249,10 @@ export function DivinePanelProvider({
             }
             if (payload.type === 'done') {
               applyDivineUiActionsWithBridge(payload.ui_actions)
+              const lm = payload.lookup_meta
+              if (lm?.length) {
+                setFanLookupHint(formatFanLookupHint(lm[0]) ?? null)
+              }
             }
             if (payload.type === 'error') {
               throw new Error(payload.message || 'Stream error')
@@ -245,12 +274,16 @@ export function DivinePanelProvider({
           reply?: string
           error?: string
           ui_actions?: DivineUiAction[]
+          lookup_meta?: DivineLookupMeta[]
         }
         if (data.error) throw new Error(data.error)
         if (data.reply) {
           setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
         }
         applyDivineUiActionsWithBridge(data.ui_actions)
+        if (data.lookup_meta?.length) {
+          setFanLookupHint(formatFanLookupHint(data.lookup_meta[0]) ?? null)
+        }
       }
     } catch (e) {
       console.error(e)
@@ -310,6 +343,8 @@ export function DivinePanelProvider({
     setChatInput,
     chatLoading,
     chatWorkingHint,
+    fanLookupHint,
+    setFanLookupHint,
     sendChat,
     generatedText,
     setGeneratedText,

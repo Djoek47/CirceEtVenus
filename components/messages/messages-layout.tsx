@@ -123,6 +123,24 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
     setSelectedConversation(match)
   }, [divinePanel?.focusedFan?.id, conversations])
 
+  const threadInsightDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const conv = selectedConversation
+    if (!conv || conv.platform !== 'onlyfans') return
+    const id = String(conv.user.id)
+    if (threadInsightDebounceRef.current) clearTimeout(threadInsightDebounceRef.current)
+    threadInsightDebounceRef.current = setTimeout(() => {
+      void fetch('/api/divine/refresh-thread-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fanId: id }),
+      }).catch(() => undefined)
+    }, 4000)
+    return () => {
+      if (threadInsightDebounceRef.current) clearTimeout(threadInsightDebounceRef.current)
+    }
+  }, [selectedConversation?.user.id, selectedConversation?.platform])
+
   if (loading) {
     return (
       <div className="flex h-[calc(100vh-8rem)] items-center justify-center">

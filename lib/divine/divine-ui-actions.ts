@@ -53,6 +53,8 @@ export type ApplyDivineUiOptions = {
   onShowDmReplySuggestions?: (payload: DmSuggestionBridgePayload) => void
   /** When focus_fan uses presentation overlay, open floating DM instead of navigating. */
   onFocusFanOverlay?: (fanId: string) => void
+  /** When set, skip duplicate focus_fan for the same id (avoids navigation loops / React churn). */
+  currentFocusedFanId?: string | null
 }
 
 function capStringList(lines: string[], cap: number, lineMax: number): string[] {
@@ -123,6 +125,9 @@ export function applyDivineUiActions(
     if (a.type === 'focus_fan' && a.fanId) {
       const id = String(a.fanId).trim()
       if (FAN_ID_RE.test(id)) {
+        if (options?.currentFocusedFanId != null && options.currentFocusedFanId === id) {
+          continue
+        }
         setFocusedFan({ id })
         if (a.presentation === 'overlay' && options?.onFocusFanOverlay) {
           options.onFocusFanOverlay(id)

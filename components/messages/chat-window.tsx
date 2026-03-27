@@ -40,6 +40,7 @@ import { createClient } from '@/lib/supabase/client'
 import { isBoundaryNiche, NICHE_LABELS } from '@/lib/niches'
 import { proxyImageUrl } from '@/lib/proxy-image-url'
 import { getProxiedMediaPresentation, isVideoMedia, type RawOnlyFansMedia } from '@/lib/messages/of-media'
+import { FanProfileModal } from '@/components/messages/fan-profile-modal'
 
 interface OnlyFansConversation {
   user: {
@@ -219,6 +220,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const [creatorGenderIdentity, setCreatorGenderIdentity] = useState<string | null>(null)
   const divinePanel = useDivinePanel()
   const voiceSession = useVoiceSession()
+  const [profileOpen, setProfileOpen] = useState(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -656,7 +658,11 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                 Open Divine Manager
               </a>
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setProfileOpen(true)
+              }}
+            >
               <User className="mr-2 h-4 w-4" />
               View Profile
             </DropdownMenuItem>
@@ -1055,6 +1061,15 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
           Only the fan conversation above is visible to fans. Scan and suggestion cards stay in Creatix until you send a message.
         </p>
       </div>
+      <FanProfileModal
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        fanId={String(fan.id)}
+        platform={conversation.platform === 'onlyfans' ? 'onlyfans' : 'fansly'}
+        initialUsername={fan.username}
+        initialName={fan.name}
+        initialAvatar={fan.avatar}
+      />
     </Card>
   )
 }

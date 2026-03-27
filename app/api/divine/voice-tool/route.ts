@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       content: result.content,
       ui_actions: result.uiActions,
       pending_confirmations: result.pendingConfirmations,
+      lookup_meta: result.lookupMeta ?? undefined,
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Voice tool failed'

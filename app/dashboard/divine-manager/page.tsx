@@ -582,15 +582,19 @@ export default function DivineManagerPage() {
                     args as Record<string, unknown>,
                   )
                   if (summary) {
-                    const eventPayload = {
-                      type: 'conversation.item.create',
-                      item: {
-                        type: 'function_call_output',
-                        call_id: item.id,
-                        output: summary,
-                      },
+                    const callId =
+                      (item as { call_id?: string; id?: string }).call_id ?? (item as { id?: string }).id
+                    if (callId) {
+                      const eventPayload = {
+                        type: 'conversation.item.create',
+                        item: {
+                          type: 'function_call_output',
+                          call_id: callId,
+                          output: summary,
+                        },
+                      }
+                      dc.send(JSON.stringify(eventPayload))
                     }
-                    dc.send(JSON.stringify(eventPayload))
                   }
                 } else {
                   await runTool(item.name, args as Record<string, unknown>)

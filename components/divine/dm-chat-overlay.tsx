@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { ChatWindow } from '@/components/messages/chat-window'
 import { Button } from '@/components/ui/button'
-import { ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, User, X } from 'lucide-react'
+import { FanProfileModal } from '@/components/messages/fan-profile-modal'
 import { cn } from '@/lib/utils'
 
 type FanMeta = { username?: string | null; display_name?: string | null }
@@ -12,6 +13,7 @@ type FanMeta = { username?: string | null; display_name?: string | null }
 export function DmChatOverlay() {
   const panel = useDivinePanel()
   const [meta, setMeta] = useState<FanMeta | null>(null)
+  const [profileOpen, setProfileOpen] = useState(false)
 
   const fanId = panel?.dmOverlayFanId ?? null
   const collapsed = panel?.dmOverlayCollapsed ?? false
@@ -92,6 +94,16 @@ export function DmChatOverlay() {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
+            aria-label="Fan profile"
+            onClick={() => setProfileOpen(true)}
+          >
+            <User className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             aria-label={collapsed ? 'Expand chat' : 'Collapse chat'}
             onClick={() => panel.setDmOverlayCollapsed(!collapsed)}
           >
@@ -116,6 +128,14 @@ export function DmChatOverlay() {
           </div>
         </div>
       )}
+      <FanProfileModal
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        fanId={fanId}
+        platform="onlyfans"
+        initialUsername={meta?.username}
+        initialName={meta?.display_name}
+      />
     </div>
   )
 }

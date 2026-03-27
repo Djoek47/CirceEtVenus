@@ -11,6 +11,8 @@ import {
 } from 'react'
 import { useDivinePanel, type FocusedFan } from '@/components/divine/divine-panel-context'
 import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
+import { formatFanLookupHint } from '@/lib/divine/divine-lookup-meta'
+import type { DivineLookupMeta } from '@/lib/divine/divine-lookup-meta'
 import type { DivineVoiceDisconnectReason } from '@/lib/divine/voice-memory-types'
 import type { VoiceHangupPolicy } from '@/lib/divine-manager'
 
@@ -24,6 +26,33 @@ function summarizeVoiceToolArgs(args: Record<string, unknown>): string {
   } catch {
     return '(args)'
   }
+}
+
+/** Realtime API uses `call_id` on function_call items to pair with function_call_output; `id` is the item id. */
+function extractRealtimeFunctionCallId(item: { call_id?: string; id?: string }): string | undefined {
+  const cid = item.call_id ?? item.id
+  return typeof cid === 'string' && cid.length > 0 ? cid : undefined
+}
+
+/** When no call_id is available, inject the tool text as a user message so the model still sees the result. */
+function injectToolResultFallback(dc: RTCDataChannel, toolName: string, summary: string) {
+  const text = `[${toolName} tool result]\n${summary}`.slice(0, 12_000)
+  dc.send(
+    JSON.stringify({
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text }],
+      },
+    }),
+  )
+  dc.send(
+    JSON.stringify({
+      type: 'response.create',
+      response: { modalities: ['audio'] },
+    }),
+  )
 }
 
 type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error'
@@ -44,7 +73,7 @@ type VoiceSessionContextValue = {
    * Inject a text "user message" into the live Realtime conversation, then request
    * an assistant response. Used for the Divine Manager briefing buttons.
    */
-  sendBriefingQuestion: (text: string) => Promise<void>
+  sendBriefingQuestion: (text: string, opts?: { allowHangupAfterMs?: number }) => Promise<void>
   remoteVoiceStream: MediaStream | null
   localVoiceStream: MediaStream | null
   voiceVizRef: React.RefObject<HTMLCanvasElement>
@@ -229,7 +258,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     cancelIdleTimerRef.current = cancelIdleTimer
   }, [cancelIdleTimer])
 
-  const sendBriefingQuestion = useCallback(async (text: string) => {
+  const sendBriefingQuestion = useCallback(async (text: string, opts?: { allowHangupAfterMs?: number }) => {
     const dc = oaiDataChannelRef.current
     if (!dc) {
       throw new Error('Voice session is not connected')
@@ -255,6 +284,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }),
     )
     scheduleIdleDisconnectRef.current()
+
+    const ms = opts?.allowHangupAfterMs
+    if (typeof ms === 'number' && ms > 0) {
+      window.setTimeout(() => setUserHangupAllowed(true), ms)
+    }
   }, [])
 
   const refreshVoiceHangupPolicy = useCallback(async () => {
@@ -383,7 +417,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           }
 
           /** Shared path: cue + Realtime function_call_output so the model always receives tool results. */
-          const finalizeRealtimeToolOutput = (callId: string | undefined, summary: string | null) => {
+          const finalizeRealtimeToolOutput = (
+            callId: string | undefined,
+            summary: string | null,
+            toolName?: string,
+          ) => {
             if (summary == null || summary === '') return
             const lowerSummary = summary.toLowerCase()
             const isErrorSummary =
@@ -402,6 +440,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                   },
                 }),
               )
+            } else if (toolName) {
+              // OpenAI Realtime must pair output to call_id; if the event shape omitted it, still deliver text.
+              injectToolResultFallback(dc, toolName, summary)
             }
           }
 
@@ -430,6 +471,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 content?: string
                 ui_actions?: { type: string; path?: string; fanId?: string }[]
                 pending_confirmations?: { type: string; intent_id: string; summary?: string }[]
+                lookup_meta?: DivineLookupMeta[]
               }
               if (!res.ok) {
                 const detail = data.error?.trim() || `HTTP ${res.status}`
@@ -446,6 +488,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 if (rest.length) {
                   divinePanel?.applyUiActionsFromTools?.(rest)
                 }
+              }
+              if (Array.isArray(data.lookup_meta) && data.lookup_meta.length > 0) {
+                const hint = formatFanLookupHint(data.lookup_meta[0])
+                if (hint) divinePanel?.setFanLookupHint?.(hint)
               }
               let out = typeof data.content === 'string' ? data.content.trim() : ''
               if (Array.isArray(data.pending_confirmations) && data.pending_confirmations.length) {
@@ -514,9 +560,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                         }
                       })()
                     : (tc.arguments ?? {}) as Record<string, unknown>
-                const callId = tc.id ?? tc.call_id
+                const callId = extractRealtimeFunctionCallId(tc)
                 const summary = await runTool(name!, args)
-                finalizeRealtimeToolOutput(callId, summary)
+                finalizeRealtimeToolOutput(callId, summary, name!)
               }),
             )
 
@@ -532,9 +578,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                       }
                     })()
                   : (tc.arguments ?? {}) as Record<string, unknown>
-              const callId = tc.id ?? tc.call_id
+              const callId = extractRealtimeFunctionCallId(tc)
               const summary = await runTool(tc.name, args)
-              finalizeRealtimeToolOutput(callId, summary)
+              finalizeRealtimeToolOutput(callId, summary, tc.name)
             }
             return
           }
@@ -542,7 +588,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             // Parallelize function_call tool runs and send outputs back per call_id.
             const fnItems = payload.response.output.filter(
               (item) => item?.type === 'function_call' && item.name,
-            ) as Array<{ id?: string; name: string; arguments?: string }>
+            ) as Array<{ id?: string; call_id?: string; name: string; arguments?: string }>
 
             await Promise.all(
               fnItems.map(async (item) => {
@@ -558,7 +604,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                     : {}
 
                 const summary = await runTool(item.name, args as Record<string, unknown>)
-                finalizeRealtimeToolOutput(item.id, summary)
+                finalizeRealtimeToolOutput(extractRealtimeFunctionCallId(item), summary, item.name)
               }),
             )
           }
@@ -605,6 +651,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             resumeBriefingSentRef.current = true
             await sendBriefingQuestion(
               `The last voice session ended before everything finished. Resume hint: ${m.resume_hint}. Ask briefly if they want to continue that or start fresh; if they decline, move on.`,
+              { allowHangupAfterMs: 10_000 },
             )
           }
         } catch {

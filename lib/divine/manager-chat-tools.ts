@@ -14,7 +14,17 @@ import {
 import { runAiStudioToolServer } from '@/lib/divine/run-ai-studio-tool'
 import { runDivineAiToolServer, isDivineAiToolId } from '@/lib/divine/run-ai-tool-core'
 import { fetchDmReplySuggestionsPackage } from '@/lib/divine/dm-reply-package'
+import type { DivineDmConversationRow } from '@/lib/divine/divine-dm-conversations'
 import { loadDivineDmConversations } from '@/lib/divine/divine-dm-conversations'
+import type { DivineLookupMeta } from '@/lib/divine/divine-lookup-meta'
+import {
+  appendLookupMetaBlock,
+  buildDedupeKey,
+  formatSpellbackLine,
+  rankConversationsByQuery,
+  toCandidates,
+  truncatePreservingLookupMeta,
+} from '@/lib/divine/divine-lookup-meta'
 import { loadDivineDmThread } from '@/lib/divine/divine-dm-thread'
 import { isDivineFullAccess, DIVINE_FULL_UPGRADE_MESSAGE } from '@/lib/divine/divine-full-access'
 import { draftFanReplyWithMimic } from '@/lib/divine/draft-fan-reply'
@@ -38,7 +48,6 @@ export const AI_TOOL_NAME_TO_ID: Record<string, string> = {
 
 /** Tools implemented in runContextTool (DB + internal helpers, not /api/divine/intent). */
 export const CONTEXT_TOOL_NAMES = new Set<string>([
-  'get_dm_conversations',
   'get_dm_thread',
   'get_reply_suggestions',
   'get_dm_thread_and_suggestions',
@@ -63,7 +72,6 @@ export const CONTEXT_TOOL_NAMES = new Set<string>([
   'get_reputation_briefing',
   'list_reputation_briefings',
   'get_task_status',
-  'lookup_fan',
 ])
 
 export type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
@@ -232,6 +240,307 @@ function buildShowDmReplySuggestionsAction(
   }
 }
 
+async function getDmFocusPresentation(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<'overlay' | 'navigate'> {
+  const settings = await getSettings(supabase, userId)
+  const mode = settings?.automation_rules?.dm_focus_mode ?? 'navigate'
+  return mode === 'overlay' ? 'overlay' : 'navigate'
+}
+
+function fanRecentToConversationRow(r: {
+  fan_id: string
+  username: string | null
+  display_name: string | null
+}): DivineDmConversationRow {
+  return {
+    fanId: r.fan_id,
+    username: r.username ?? 'unknown',
+    name: r.display_name,
+    lastMessage: null,
+    lastMessageAt: null,
+    unreadCount: 0,
+  }
+}
+
+/** Shared with runToolCall — spellback, lookup_meta, fuzzy fallbacks; focus_fan only on confident single exact match. */
+export async function runGetDmConversationsToolResult(
+  supabase: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<{ content: string; uiActions: DivineUiAction[]; lookupMeta: DivineLookupMeta | null }> {
+  const limit = typeof args.limit === 'number' ? Math.min(Math.max(args.limit, 1), 50) : 20
+  const rawQuery = typeof args.query === 'string' ? args.query.trim() : ''
+  const { conversations, message } = await loadDivineDmConversations(supabase, userId, { limit, query: rawQuery })
+  const uiActions: DivineUiAction[] = []
+
+  if (message === 'OnlyFans not connected') {
+    return { content: 'OnlyFans is not connected. Connect OnlyFans in Settings → Integrations.', uiActions, lookupMeta: null }
+  }
+  if (conversations.length > 0) {
+    await upsertFanRecentsFromConversations(supabase, userId, conversations)
+  }
+
+  const list = conversations.slice(0, 15).map((c) => {
+    const label = c.name ? `${c.name} (@${c.username})` : `@${c.username}`
+    const last = c.lastMessage ?? ''
+    return `${label} [id: ${c.fanId}]${c.unreadCount ? ` [${c.unreadCount} unread]` : ''}: ${last.slice(0, 60)}`
+  })
+  const listBody = list.length
+    ? `Recent conversations (name, username, fanId, last message):\n${list.join('\n')}`
+    : 'No recent conversations.'
+
+  if (!rawQuery) {
+    const meta: DivineLookupMeta = {
+      tool: 'get_dm_conversations',
+      heard_query: '',
+      resolved: 'browse',
+      candidates: [],
+      dedupe_key: buildDedupeKey('', []),
+      next_step_hint: 'Browse results or pass query to search.',
+    }
+    return { content: appendLookupMetaBlock(listBody, meta), uiActions, lookupMeta: meta }
+  }
+
+  let content = formatSpellbackLine(rawQuery) + listBody
+
+  if (conversations.length === 1 && conversations[0].fanId) {
+    const presentation = await getDmFocusPresentation(supabase, userId)
+    uiActions.push({ type: 'focus_fan', fanId: conversations[0].fanId, presentation })
+    content += `\n\n[resolved_fan_id:${conversations[0].fanId}]`
+    const meta: DivineLookupMeta = {
+      tool: 'get_dm_conversations',
+      heard_query: rawQuery,
+      resolved: 'exact',
+      candidates: toCandidates([{ row: conversations[0], score: 1 }]),
+      dedupe_key: buildDedupeKey(rawQuery, toCandidates([{ row: conversations[0], score: 1 }])),
+      next_step_hint:
+        'Exact match — chat opens in app. Do not call get_dm_conversations again with the same query. Use get_dm_thread with this fanId.',
+    }
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  if (conversations.length > 1) {
+    const top = conversations.slice(0, 3).map((row) => ({ row, score: 1 }))
+    const cands = toCandidates(top)
+    const meta: DivineLookupMeta = {
+      tool: 'get_dm_conversations',
+      heard_query: rawQuery,
+      resolved: 'multi_match_confirm_required',
+      candidates: cands,
+      dedupe_key: buildDedupeKey(rawQuery, cands),
+      next_step_hint:
+        'Do NOT call get_dm_conversations again with the same query. Ask which fanId to open or use ui_focus_fan(fanId).',
+    }
+    content +=
+      '\n\nMultiple matches — ask the creator which fan to open (fanId) or narrow the name.'
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  const broad = await loadDivineDmConversations(supabase, userId, { limit: 80, query: '' })
+  if (broad.conversations.length > 0) {
+    await upsertFanRecentsFromConversations(supabase, userId, broad.conversations)
+  }
+  const ranked = rankConversationsByQuery(rawQuery, broad.conversations, 8)
+
+  if (ranked.length === 0) {
+    const meta: DivineLookupMeta = {
+      tool: 'get_dm_conversations',
+      heard_query: rawQuery,
+      resolved: 'no_match',
+      candidates: [],
+      dedupe_key: buildDedupeKey(rawQuery, []),
+      next_step_hint:
+        'No match. Do NOT repeat get_dm_conversations with the same query. Ask the creator to re-say or retype the exact username, or provide fan id.',
+    }
+    content += '\n\nNo close matches in recent chats. Ask them to confirm spelling or open Messages to copy fan id.'
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  const best = ranked[0]!
+  const second = ranked[1]
+
+  if (best.score >= 0.78 && (!second || second.score < 0.52)) {
+    const cands = toCandidates([best])
+    const meta: DivineLookupMeta = {
+      tool: 'get_dm_conversations',
+      heard_query: rawQuery,
+      resolved: 'fuzzy_confirm_required',
+      candidates: cands,
+      dedupe_key: buildDedupeKey(rawQuery, cands),
+      next_step_hint:
+        'Fuzzy best — do NOT open chat until confirmed. Ask “Is this the right fan?” then ui_focus_fan(fanId). Do NOT call get_dm_conversations again.',
+    }
+    const label = best.row.name ? `${best.row.name} (@${best.row.username})` : `@${best.row.username}`
+    content += `\n\nClosest match (please confirm): ${label} [id: ${best.row.fanId}] (similarity ~${(best.score * 100).toFixed(0)}%).`
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  const top3 = ranked.slice(0, 3)
+  const cands = toCandidates(top3)
+  const meta: DivineLookupMeta = {
+    tool: 'get_dm_conversations',
+    heard_query: rawQuery,
+    resolved: 'fuzzy_ambiguous',
+    candidates: cands,
+    dedupe_key: buildDedupeKey(rawQuery, cands),
+    next_step_hint:
+      'List options 1–3 with fanIds. Do NOT call get_dm_conversations again with the same query.',
+  }
+  content += '\n\nPossible fuzzy matches — ask which option or use fan id.'
+  return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+}
+
+export async function runLookupFanToolResult(
+  supabase: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<{ content: string; uiActions: DivineUiAction[]; lookupMeta: DivineLookupMeta | null }> {
+  const rawQuery = typeof args.query === 'string' ? args.query.trim() : ''
+  const uiActions: DivineUiAction[] = []
+  if (!rawQuery) {
+    return { content: 'query is required (name or username substring).', uiActions, lookupMeta: null }
+  }
+
+  const cached = await searchFanRecents(supabase, userId, rawQuery, 20)
+  if (cached.length > 0) {
+    const rows = cached.map(fanRecentToConversationRow)
+    const ranked = rankConversationsByQuery(rawQuery, rows, 20)
+    const ordered = ranked.length ? ranked : rows.map((row) => ({ row, score: 0.6 }))
+    const lines = ordered.slice(0, 15).map(({ row }) => {
+      const label = row.name ? `${row.name} (@${row.username})` : `@${row.username}`
+      return `${label} [fanId: ${row.fanId}]`
+    })
+    let content = formatSpellbackLine(rawQuery) + `Cached fans (recent DMs):\n${lines.join('\n')}`
+
+    if (cached.length === 1 && cached[0].fan_id) {
+      const presentation = await getDmFocusPresentation(supabase, userId)
+      uiActions.push({ type: 'focus_fan', fanId: String(cached[0].fan_id), presentation })
+      content += `\n\n[resolved_fan_id:${cached[0].fan_id}]`
+      const row = rows[0]!
+      const meta: DivineLookupMeta = {
+        tool: 'lookup_fan',
+        heard_query: rawQuery,
+        resolved: 'exact',
+        candidates: toCandidates([{ row, score: 1 }]),
+        dedupe_key: buildDedupeKey(rawQuery, toCandidates([{ row, score: 1 }])),
+        next_step_hint: 'Exact cache hit — chat opens. Do not call lookup_fan again with the same query.',
+      }
+      return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    }
+
+    const top3 = ordered.slice(0, 3)
+    const cands = toCandidates(top3)
+    const meta: DivineLookupMeta = {
+      tool: 'lookup_fan',
+      heard_query: rawQuery,
+      resolved: 'multi_match_confirm_required',
+      candidates: cands,
+      dedupe_key: buildDedupeKey(rawQuery, cands),
+      next_step_hint: 'Do NOT call lookup_fan again with the same query. Ask which fanId.',
+    }
+    content += '\n\nMultiple cached matches — ask fanId or narrow the query.'
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  const { conversations, message } = await loadDivineDmConversations(supabase, userId, { limit: 30, query: rawQuery })
+  if (message === 'OnlyFans not connected') {
+    return { content: 'OnlyFans is not connected. Connect OnlyFans in Settings → Integrations.', uiActions, lookupMeta: null }
+  }
+  if (conversations.length > 0) {
+    await upsertFanRecentsFromConversations(supabase, userId, conversations)
+  }
+
+  const linesOf = (conv: typeof conversations) =>
+    conv.slice(0, 15).map((c) => {
+      const label = c.name ? `${c.name} (@${c.username})` : `@${c.username}`
+      return `${label} [fanId: ${c.fanId}]`
+    })
+
+  let content = formatSpellbackLine(rawQuery)
+
+  if (conversations.length === 1 && conversations[0].fanId) {
+    const presentation = await getDmFocusPresentation(supabase, userId)
+    uiActions.push({ type: 'focus_fan', fanId: conversations[0].fanId, presentation })
+    content += `Matches from OnlyFans:\n${linesOf(conversations).join('\n')}\n\n[resolved_fan_id:${conversations[0].fanId}]`
+    const meta: DivineLookupMeta = {
+      tool: 'lookup_fan',
+      heard_query: rawQuery,
+      resolved: 'exact',
+      candidates: toCandidates([{ row: conversations[0], score: 1 }]),
+      dedupe_key: buildDedupeKey(rawQuery, toCandidates([{ row: conversations[0], score: 1 }])),
+      next_step_hint: 'Exact match — do not call lookup_fan again.',
+    }
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  if (conversations.length > 1) {
+    const top = conversations.slice(0, 3).map((row) => ({ row, score: 1 }))
+    const cands = toCandidates(top)
+    const meta: DivineLookupMeta = {
+      tool: 'lookup_fan',
+      heard_query: rawQuery,
+      resolved: 'multi_match_confirm_required',
+      candidates: cands,
+      dedupe_key: buildDedupeKey(rawQuery, cands),
+      next_step_hint: 'Do NOT call lookup_fan again. Ask which fanId.',
+    }
+    content += `Matches from OnlyFans:\n${linesOf(conversations).join('\n')}\n\nMultiple matches — ask fanId.`
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  const broad = await loadDivineDmConversations(supabase, userId, { limit: 80, query: '' })
+  if (broad.conversations.length > 0) {
+    await upsertFanRecentsFromConversations(supabase, userId, broad.conversations)
+  }
+  const ranked = rankConversationsByQuery(rawQuery, broad.conversations, 8)
+  content += `Matches from OnlyFans:\n(none for strict query)\n`
+
+  if (ranked.length === 0) {
+    const meta: DivineLookupMeta = {
+      tool: 'lookup_fan',
+      heard_query: rawQuery,
+      resolved: 'no_match',
+      candidates: [],
+      dedupe_key: buildDedupeKey(rawQuery, []),
+      next_step_hint: 'No match. Ask to retype username or fan id. Do not repeat lookup_fan with the same query.',
+    }
+    content += `No fans matched "${rawQuery}" in cache or live list after fuzzy scan.`
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  const best = ranked[0]!
+  const second = ranked[1]
+  if (best.score >= 0.78 && (!second || second.score < 0.52)) {
+    const cands = toCandidates([best])
+    const meta: DivineLookupMeta = {
+      tool: 'lookup_fan',
+      heard_query: rawQuery,
+      resolved: 'fuzzy_confirm_required',
+      candidates: cands,
+      dedupe_key: buildDedupeKey(rawQuery, cands),
+      next_step_hint: 'Confirm fuzzy best before ui_focus_fan. Do not repeat lookup_fan.',
+    }
+    const label = best.row.name ? `${best.row.name} (@${best.row.username})` : `@${best.row.username}`
+    content += `Closest fuzzy match: ${label} [fanId: ${best.row.fanId}] (~${(best.score * 100).toFixed(0)}%). Ask to confirm.`
+    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  }
+
+  const top3 = ranked.slice(0, 3)
+  const cands = toCandidates(top3)
+  const meta: DivineLookupMeta = {
+    tool: 'lookup_fan',
+    heard_query: rawQuery,
+    resolved: 'fuzzy_ambiguous',
+    candidates: cands,
+    dedupe_key: buildDedupeKey(rawQuery, cands),
+    next_step_hint: 'Offer 1–3 options with fanIds. Do not repeat lookup_fan.',
+  }
+  content += `Possible fuzzy matches — ask which fan or fan id.`
+  return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+}
+
 export async function runContextTool(
   name: string,
   args: Record<string, unknown>,
@@ -329,29 +638,6 @@ export async function runContextTool(
       const vj = (await visionRes.json()) as { choices?: Array<{ message?: { content?: string } }> }
       const text = vj.choices?.[0]?.message?.content ?? ''
       return text.slice(0, 1200) || 'No description returned.'
-    }
-    if (name === 'get_dm_conversations') {
-      if (!ctx) return 'Context unavailable.'
-      const limit = typeof args.limit === 'number' ? Math.min(Math.max(args.limit, 1), 50) : 20
-      const rawQuery = typeof args.query === 'string' ? args.query.trim() : ''
-      const { conversations, message } = await loadDivineDmConversations(ctx.supabase, ctx.userId, {
-        limit,
-        query: rawQuery,
-      })
-      if (message === 'OnlyFans not connected') {
-        return 'OnlyFans is not connected. Connect OnlyFans in Settings → Integrations.'
-      }
-      if (conversations.length > 0) {
-        await upsertFanRecentsFromConversations(ctx.supabase, ctx.userId, conversations)
-      }
-      const list = conversations.slice(0, 15).map((c) => {
-        const label = c.name ? `${c.name} (@${c.username})` : `@${c.username}`
-        const last = c.lastMessage ?? ''
-        return `${label} [id: ${c.fanId}]${c.unreadCount ? ` [${c.unreadCount} unread]` : ''}: ${last.slice(0, 60)}`
-      })
-      return list.length
-        ? `Recent conversations (name, username, fanId, last message):\n${list.join('\n')}`
-        : 'No recent conversations.'
     }
     if (name === 'get_dm_thread') {
       if (!ctx) return 'Context unavailable.'
@@ -652,37 +938,6 @@ export async function runContextTool(
       })
       return list.length ? `Content:\n${list.join('\n')}` : 'No content found.'
     }
-    if (name === 'lookup_fan') {
-      if (!ctx) return 'Context unavailable.'
-      const rawQuery = typeof args.query === 'string' ? args.query.trim() : ''
-      if (!rawQuery) return 'query is required (name or username substring).'
-      const cached = await searchFanRecents(ctx.supabase, ctx.userId, rawQuery, 20)
-      if (cached.length > 0) {
-        const lines = cached.map((r) => {
-          const label = r.display_name ? `${r.display_name} (@${r.username ?? 'unknown'})` : `@${r.username ?? 'unknown'}`
-          return `${label} [fanId: ${r.fan_id}]`
-        })
-        return `Cached fans (recent DMs):\n${lines.join('\n')}\nUse ui_focus_fan with fanId to open the chat.`
-      }
-      const { conversations, message } = await loadDivineDmConversations(ctx.supabase, ctx.userId, {
-        limit: 30,
-        query: rawQuery,
-      })
-      if (message === 'OnlyFans not connected') {
-        return 'OnlyFans is not connected. Connect OnlyFans in Settings → Integrations.'
-      }
-      if (conversations.length > 0) {
-        await upsertFanRecentsFromConversations(ctx.supabase, ctx.userId, conversations)
-      }
-      if (!conversations.length) {
-        return `No fans matched "${rawQuery}" in cache or live OnlyFans list. Try a shorter name or get_dm_conversations.`
-      }
-      const lines = conversations.slice(0, 15).map((c) => {
-        const label = c.name ? `${c.name} (@${c.username})` : `@${c.username}`
-        return `${label} [fanId: ${c.fanId}]`
-      })
-      return `Matches from OnlyFans:\n${lines.join('\n')}\nUse ui_focus_fan with fanId.`
-    }
     if (name === 'get_task_status') {
       if (!ctx) return 'Context unavailable.'
       const mem = await getVoiceMemoryPayload(ctx.supabase, ctx.userId)
@@ -706,20 +961,62 @@ export async function runIntent(
   type: string,
   args: Record<string, unknown>,
   cookie: string,
-): Promise<{ status: string; intent_id?: string; summary?: string; message?: string; success?: boolean }> {
+): Promise<{
+  status: string
+  intent_id?: string
+  summary?: string
+  message?: string
+  success?: boolean
+  error?: string
+}> {
   const base = getBaseUrl()
   const body: Record<string, unknown> = { type, ...args }
   if (type === 'create_task' && args.summary) {
     body.payload = { type: (args as { type?: string }).type ?? 'content_idea', summary: args.summary }
     body.summary = args.summary
   }
-  const res = await fetch(`${base}/api/divine/intent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify(body),
-  })
-  const data = await res.json().catch(() => ({}))
-  return data as { status: string; intent_id?: string; summary?: string; message?: string; success?: boolean }
+  let res: Response
+  try {
+    res = await fetch(`${base}/api/divine/intent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify(body),
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'fetch failed'
+    return { status: 'failed', error: `Intent request failed: ${msg}` }
+  }
+
+  const text = await res.text()
+  let data: Record<string, unknown> = {}
+  if (text.trim()) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>
+    } catch {
+      return {
+        status: 'failed',
+        error: `Intent response was not JSON (${res.status}). Body: ${text.slice(0, 200)}`,
+      }
+    }
+  } else if (!res.ok) {
+    return { status: 'failed', error: `Intent request failed (${res.status}) with empty body.` }
+  } else {
+    return { status: 'failed', error: 'Intent returned 200 with empty body (unexpected).' }
+  }
+
+  if (!res.ok) {
+    const err = typeof data.error === 'string' ? data.error : `HTTP ${res.status}`
+    return { status: 'failed', error: err, ...data }
+  }
+
+  return data as {
+    status: string
+    intent_id?: string
+    summary?: string
+    message?: string
+    success?: boolean
+    error?: string
+  }
 }
 
 export type ToolCallPart = { id: string; function: { name: string; arguments: string } }
@@ -737,6 +1034,7 @@ export async function runToolCall(
   content: string
   pendingConfirmations: Array<{ type: string; intent_id: string; summary?: string }>
   uiActions: DivineUiAction[]
+  lookupMeta?: DivineLookupMeta | null
 }> {
   const { cookie, supabase, userId } = opts
   const name = tc.function.name
@@ -882,6 +1180,27 @@ export async function runToolCall(
     }
   }
 
+  if (name === 'get_dm_conversations') {
+    const out = await runGetDmConversationsToolResult(supabase, userId, args)
+    return {
+      tool_call_id: tc.id,
+      content: truncatePreservingLookupMeta(out.content, 4000),
+      pendingConfirmations: emptyPending,
+      uiActions: out.uiActions,
+      lookupMeta: out.lookupMeta,
+    }
+  }
+  if (name === 'lookup_fan') {
+    const out = await runLookupFanToolResult(supabase, userId, args)
+    return {
+      tool_call_id: tc.id,
+      content: truncatePreservingLookupMeta(out.content, 4000),
+      pendingConfirmations: emptyPending,
+      uiActions: out.uiActions,
+      lookupMeta: out.lookupMeta,
+    }
+  }
+
   if (isContextTool) {
     const summary = await runContextTool(name, args, cookie, { supabase, userId })
     return { tool_call_id: tc.id, content: summary.slice(0, 4000), pendingConfirmations: emptyPending, uiActions }
@@ -895,8 +1214,13 @@ export async function runToolCall(
     intentBody.platforms = Array.isArray(args.platforms) ? args.platforms : [args.platforms]
   }
   if (name === 'send_message') {
+    const msgRaw =
+      (typeof args.message === 'string' && args.message) ||
+      (typeof args.text === 'string' && args.text) ||
+      (typeof args.body === 'string' && args.body) ||
+      ''
     intentBody.fanId = args.fanId
-    intentBody.message = args.message
+    intentBody.message = msgRaw
     intentBody.platform = args.platform ?? 'onlyfans'
     intentBody.price = args.price
     intentBody.mediaIds = args.mediaIds
@@ -945,8 +1269,27 @@ export async function runToolCall(
     }
   }
 
+  if (name === 'send_message') {
+    const hasMedia = Array.isArray(args.mediaIds) && args.mediaIds.length > 0
+    const m = typeof intentBody.message === 'string' ? intentBody.message.trim() : ''
+    if (!m && !hasMedia) {
+      return {
+        tool_call_id: tc.id,
+        content:
+          'send_message was not run: message text is empty. Pass the exact text in the "message" argument (voice sometimes uses "text" — that is accepted too).',
+        pendingConfirmations: emptyPending,
+        uiActions,
+      }
+    }
+  }
+
   const intentRes = await runIntent(name, intentBody, cookie)
-  let summary = intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)
+  let summary =
+    intentRes.summary ??
+    intentRes.message ??
+    (typeof intentRes.error === 'string' ? intentRes.error : undefined) ??
+    (intentRes.status && intentRes.status !== 'executed' ? `Intent status: ${intentRes.status}` : undefined) ??
+    JSON.stringify(intentRes)
   const dataIntent = name as string
   if (dataIntent === 'list_fans' && Array.isArray((intentRes as { fans?: unknown[] }).fans)) {
     const fans = (intentRes as { fans: unknown[] }).fans

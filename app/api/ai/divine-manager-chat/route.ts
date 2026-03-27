@@ -5,6 +5,7 @@ import {
   runToolCall,
   type DivineUiAction,
 } from '@/lib/divine/manager-chat-tools'
+import type { DivineLookupMeta } from '@/lib/divine/divine-lookup-meta'
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -805,6 +806,8 @@ You have access to tools: analyze content, generate captions, predict viral, get
 Fans and engagement: list_fans (filter: active, expired, latest, top) for "who are my fans", "top spenders", "expired subs"; get_fan_subscription_history for a fan's renewals; list_followings for who they follow; get_top_message for best-performing message and buyers; get_message_engagement (type direct or mass) for "how did my messages perform"; publish_queue_item to publish a saved post or saved mass message. Route: "who spent the most" → list_fans filter=top; "how did my mass message do" → get_message_engagement type=mass; "publish my saved post" → publish_queue_item.
 You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. Prefer get_dm_thread_and_suggestions when they need both thread and reply ideas immediately. Use start_thread_scan_async when the scan should run in the background while they do other things (e.g. Analytics or get_stats); use get_task_status to see whether tasks finished. get_fan_thread_insights returns the stored thread snapshot and merged personality profile (updated in the background after messages). refresh_fan_thread_scan forces a fresh fetch from OnlyFans. draft_fan_reply drafts a message in the creator's voice (Mimic Test); it does not send—creator reviews first. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options; the app opens Messages for that fan and shows the same panels as the in-chat buttons—use openPanel (venus|circe|flirt|scan|all) when they only want one panel (e.g. "Venus reply"). send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.
 
+DM name lookup rules: Tool output begins with spellback ("I heard …") and ends with [divine_lookup_meta:…]. Follow next_step_hint. If resolved is fuzzy_confirm_required, multi_match_confirm_required, or fuzzy_ambiguous, do not claim the chat is already open; ask the creator to confirm or pick a fanId. Do not call get_dm_conversations or lookup_fan again with the same name query in the same turn—if unclear, ask a clarifying question first. If resolved is exact, use that fanId for get_dm_thread / send_message.
+
 Chat behavior (match voice Divine Manager): After any tool runs—including slow or heavy ones (analyze, pricing, publish, fan lists, notifications)—write a clear summary of what came back and what the creator should do next. Do not stop after a bare tool result or a single sentence if the user still needs context. When you have addressed their request, end with a short offer to help further, e.g. "Is there anything else you want me to look at?" Do not imply the conversation is "closed" or that you are hanging up; this is text chat and stays open until they send another message.`
 
     const focusedFanLine = focusedFan?.id
@@ -887,6 +890,9 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
     const toolOutputs = await Promise.all(
       toolCalls.map((tc) => runToolCall(tc, { cookie, supabase, userId: user.id, divineFull })),
     )
+    const lookupMetas = toolOutputs
+      .map((o) => o.lookupMeta)
+      .filter((m): m is DivineLookupMeta => m != null)
     const toolResults: Array<{ role: 'tool'; tool_call_id: string; content: string }> = toolOutputs.map((o) => ({
       role: 'tool',
       tool_call_id: o.tool_call_id,
@@ -917,7 +923,12 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
       const streamOut = new ReadableStream<Uint8Array>({
         async start(controller) {
           try {
-            controller.enqueue(sendLine({ type: 'tools_done' }))
+            controller.enqueue(
+              sendLine({
+                type: 'tools_done',
+                lookup_meta: lookupMetas.length ? lookupMetas : undefined,
+              }),
+            )
             const resStream = await fetch('https://api.openai.com/v1/chat/completions', {
               method: 'POST',
               headers: {
@@ -973,6 +984,7 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
                 type: 'done',
                 actions: pendingConfirmations.length ? pendingConfirmations : undefined,
                 ui_actions: allUiActions.length ? allUiActions : undefined,
+                lookup_meta: lookupMetas.length ? lookupMetas : undefined,
               }),
             )
             controller.close()
@@ -1023,6 +1035,7 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
       reply: string
       actions?: Array<{ type: string; intent_id: string; summary?: string }>
       ui_actions?: DivineUiAction[]
+      lookup_meta?: DivineLookupMeta[]
     } = {
       reply: reply || 'Done. If you asked to send a message or publish content, check the app to confirm.',
     }
@@ -1031,6 +1044,9 @@ Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.
     }
     if (allUiActions.length) {
       response.ui_actions = allUiActions
+    }
+    if (lookupMetas.length) {
+      response.lookup_meta = lookupMetas
     }
     return NextResponse.json(response)
   } catch (err) {

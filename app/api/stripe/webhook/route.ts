@@ -3,6 +3,9 @@ import Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
 
+// Stripe endpoint to register: https://www.circeetvenus.com/api/stripe/webhook
+// During phased cutover, keep https://www.cetv.app/api/stripe/webhook active temporarily.
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!

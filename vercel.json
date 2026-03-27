@@ -1,4 +1,60 @@
 {
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/",
+      "permanent": true
+    },
+    {
+      "source": "/features",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/features",
+      "permanent": true
+    },
+    {
+      "source": "/pricing",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/pricing",
+      "permanent": true
+    },
+    {
+      "source": "/how-it-works",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/how-it-works",
+      "permanent": true
+    },
+    {
+      "source": "/about",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/about",
+      "permanent": true
+    },
+    {
+      "source": "/contact",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/contact",
+      "permanent": true
+    },
+    {
+      "source": "/privacy",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/privacy",
+      "permanent": true
+    },
+    {
+      "source": "/cookies",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/cookies",
+      "permanent": true
+    },
+    {
+      "source": "/terms",
+      "has": [{ "type": "host", "value": "www.cetv.app" }],
+      "destination": "https://www.circeetvenus.com/terms",
+      "permanent": true
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/divine-manager",

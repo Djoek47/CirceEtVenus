@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAppUrl } from '@/lib/site-url'
 
 const TWITTER_CLIENT_ID = process.env.TWITTER_CLIENT_ID
 const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET
-const TWITTER_REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL 
-  ? `${process.env.NEXT_PUBLIC_APP_URL}/api/twitter/callback`
-  : 'http://localhost:3000/api/twitter/callback'
+const TWITTER_REDIRECT_URI = `${getAppUrl()}/api/twitter/callback`
 
 export async function GET(request: NextRequest) {
   try {

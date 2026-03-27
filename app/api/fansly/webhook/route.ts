@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { getPrefsForWebhook } from '@/lib/notification-preferences'
 
-// Fansly Webhook – register URL in Fansly API Console: https://your-domain.com/api/fansly/webhook
+// Fansly Webhook – register URL in Fansly API Console: https://www.circeetvenus.com/api/fansly/webhook
+// During phased cutover, keep https://www.cetv.app/api/fansly/webhook active temporarily.
 // Set FANSLY_WEBHOOK_SECRET to verify signatures (header: x-fansly-signature, HMAC-SHA256 hex).
 // Set FANSLY_WEBHOOK_ENABLED=true to accept webhooks.
 

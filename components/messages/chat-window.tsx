@@ -306,7 +306,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const focusedFanId = conversation?.user?.id
   const focusedFanUsername = conversation?.user?.username
   const focusedFanName = conversation?.user?.name
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focusedFanId == null || !divinePanel) return
     const fan = {
       id: String(focusedFanId),

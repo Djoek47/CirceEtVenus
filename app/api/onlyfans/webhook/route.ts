@@ -5,7 +5,8 @@ import { getPrefsForWebhook } from '@/lib/notification-preferences'
 import { maybeCreateWhaleTipUrgentTask } from '@/lib/divine/urgent-alerts'
 import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
 
-// Configure OnlyFans API webhook URL to: https://<your-domain>/api/onlyfans/webhook (POST only; do not use site root).
+// Configure OnlyFans webhook URL to: https://www.circeetvenus.com/api/onlyfans/webhook
+// During phased cutover, keep https://www.cetv.app/api/onlyfans/webhook active until provider retries are clean.
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!

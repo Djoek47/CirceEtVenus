@@ -3,6 +3,7 @@ import { Cinzel, DM_Sans, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { CookieConsent } from '@/components/cookie-consent'
+import { getAppUrl, getCanonicalUrl } from '@/lib/site-url'
 import './globals.css'
 
 const cinzel = Cinzel({ 
@@ -23,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://circe-venus.vercel.app'),
+  metadataBase: new URL(getAppUrl()),
   title: 'Circe et Venus - Divine Creator Management',
   description:
     'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction. Manage fans, content, analytics with divine precision.',
@@ -89,8 +90,8 @@ export default function RootLayout({
               '@context': 'https://schema.org',
               '@type': 'Organization',
               name: 'Circe et Venus',
-              url: 'https://circe-venus.vercel.app',
-              logo: 'https://circe-venus.vercel.app/icon.png',
+              url: getAppUrl(),
+              logo: getCanonicalUrl('/icon.png'),
             }),
           }}
         />

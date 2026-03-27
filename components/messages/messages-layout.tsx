@@ -25,11 +25,11 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
   const [view, setView] = useState<MessagesView>('conversations')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const selectedRef = useRef<Conversation | null>(null)
+  selectedRef.current = selectedConversation
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  /** Tracks last focused fan id from Divine so we only sync list selection when focus actually changes (avoids React #185 when switching chats: stale focus vs new selection). */
-  const prevFocusedFanIdRef = useRef<string | undefined>(undefined)
 
   const loadConversations = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true)
@@ -116,30 +116,11 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
 
   useEffect(() => {
     const id = divinePanel?.focusedFan?.id
-    if (conversations.length === 0) return
-    if (!id) {
-      prevFocusedFanIdRef.current = undefined
-      return
-    }
+    if (!id || conversations.length === 0) return
+    if (selectedRef.current && String(selectedRef.current.user.id) === String(id)) return
     const match = conversations.find((c) => String(c.user.id) === String(id))
     if (!match) return
-
-    const focusChanged = prevFocusedFanIdRef.current !== id
-    prevFocusedFanIdRef.current = id
-
-    if (focusChanged) {
-      setSelectedConversation((prev) => {
-        if (prev && String(prev.user.id) === String(id)) return prev
-        return match
-      })
-      return
-    }
-
-    // Same focus id, but conversation list refreshed (new object refs / lastMessage). Re-bind row without clobbering a user-picked thread that focus has not caught up to yet.
-    setSelectedConversation((prev) => {
-      if (!prev || String(prev.user.id) !== String(id)) return prev
-      return match
-    })
+    setSelectedConversation(match)
   }, [divinePanel?.focusedFan?.id, conversations])
 
   if (loading) {

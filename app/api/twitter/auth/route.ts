@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import crypto from 'crypto'
+import { getAppUrl } from '@/lib/site-url'
 
 // Twitter OAuth 2.0 with PKCE
 const TWITTER_CLIENT_ID = process.env.TWITTER_CLIENT_ID
 const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET
-const TWITTER_REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL 
-  ? `${process.env.NEXT_PUBLIC_APP_URL}/api/twitter/callback`
-  : 'http://localhost:3000/api/twitter/callback'
+const TWITTER_REDIRECT_URI = `${getAppUrl()}/api/twitter/callback`
 
 // Generate PKCE code verifier and challenge
 function generatePKCE() {

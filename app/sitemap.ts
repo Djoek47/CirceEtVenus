@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next'
+import { getAppUrl } from '@/lib/site-url'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://circe-venus.vercel.app'
+  const baseUrl = getAppUrl()
   const now = new Date().toISOString()
 
   const publicPaths = [
@@ -12,11 +13,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     '/auth/login',
     '/auth/sign-up',
     '/auth/sign-up-success',
-    '/(legal)/about',
-    '/(legal)/contact',
-    '/(legal)/privacy',
-    '/(legal)/cookies',
-    '/(legal)/terms',
+    '/about',
+    '/contact',
+    '/privacy',
+    '/cookies',
+    '/terms',
   ]
 
   return publicPaths.map((path): MetadataRoute.Sitemap[number] => ({

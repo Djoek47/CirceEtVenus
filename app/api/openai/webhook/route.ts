@@ -5,7 +5,8 @@ import crypto from 'crypto'
  * OpenAI Webhook (Standard Webhooks).
  *
  * Set OPENAI_WEBHOOK_SECRET in env (from OpenAI project webhook settings).
- * Register this URL in the OpenAI dashboard: https://<your-domain>/api/openai/webhook
+ * Register this URL in the OpenAI dashboard: https://www.circeetvenus.com/api/openai/webhook
+ * During phased cutover, keep https://www.cetv.app/api/openai/webhook active temporarily.
  *
  * Verifies: webhook-id, webhook-timestamp, webhook-signature (HMAC-SHA256 over "id.timestamp.body").
  * Responds with 2xx quickly; handle heavy work async if needed.

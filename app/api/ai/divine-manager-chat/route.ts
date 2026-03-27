@@ -6,6 +6,7 @@ import {
   type DivineUiAction,
 } from '@/lib/divine/manager-chat-tools'
 import type { DivineLookupMeta } from '@/lib/divine/divine-lookup-meta'
+import { getPlatformConnectionSnapshot } from '@/lib/divine/platform-connection-status'
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -337,7 +338,8 @@ const CHAT_TOOLS: Array<{
     type: 'function',
     function: {
       name: 'get_integrations_summary',
-      description: 'Summarize connected platforms and social handles for scans.',
+      description:
+        'Authoritative OnlyFans/Fansly connection state plus social handles. Call this before fan lookup, DMs, or analytics when connection status is unclear.',
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -369,7 +371,7 @@ const CHAT_TOOLS: Array<{
     function: {
       name: 'ui_navigate',
       description:
-        'Open a main dashboard screen inside the app (Divine full). For Messages, use /dashboard/messages for the inbox only; to open a specific fan’s chat use ui_focus_fan with fanId.',
+        'Open a main dashboard screen inside the app (Divine full). For Messages, use /dashboard/messages for the inbox only; to open a specific fan chat use ui_focus_fan. For connection setup use /dashboard/settings?tab=integrations.',
       parameters: {
         type: 'object',
         properties: {
@@ -387,6 +389,7 @@ const CHAT_TOOLS: Array<{
               '/dashboard/ai-studio',
               '/dashboard/social',
               '/dashboard/settings',
+              '/dashboard/settings?tab=integrations',
               '/dashboard/guide',
             ],
             description: 'App route under /dashboard',
@@ -744,6 +747,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { ok: divineFull } = await isDivineFullAccess(supabase, user.id)
+    const connectionSnapshot = await getPlatformConnectionSnapshot(supabase, user.id)
 
     const { data: settings } = await supabase
       .from('divine_manager_settings')
@@ -804,7 +808,7 @@ Respect the creator's boundaries, niches, and all platform safety rules.
 Avoid explicit or illegal content entirely. Use clear, practical language.
 You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, get_dm_thread_and_suggestions (preferred for thread + replies), start_thread_scan_async (background scan while multitasking), get_task_status (pending/done tasks + navigation), voice_allow_user_hangup (voice: unlock after asking anything else), lookup_fan (fast fanId by name), get_fan_thread_insights (stored snapshot + personality profile), refresh_fan_thread_scan (force rescan thread + profile), draft_fan_reply (fan-facing draft from Mimic Test—review only, never auto-sent), analyze_image_from_url (Supabase/storage image URLs only; Divine full), list_cosmic_calendar, get_scheduled_content_summary, list_leak_alerts, update_leak_alert_case, trigger_reputation_briefing, list_reputation_mentions, get_integrations_summary, ui_navigate, ui_focus_fan (subscriber: open app screens / focus a fan), send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item, run_leak_scan. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm. For run_leak_scan, only use when they want to find leaked content or prepare DMCA review; it uses search API quota.
 Fans and engagement: list_fans (filter: active, expired, latest, top) for "who are my fans", "top spenders", "expired subs"; get_fan_subscription_history for a fan's renewals; list_followings for who they follow; get_top_message for best-performing message and buyers; get_message_engagement (type direct or mass) for "how did my messages perform"; publish_queue_item to publish a saved post or saved mass message. Route: "who spent the most" → list_fans filter=top; "how did my mass message do" → get_message_engagement type=mass; "publish my saved post" → publish_queue_item.
-You have full access to DMs: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. Prefer get_dm_thread_and_suggestions when they need both thread and reply ideas immediately. Use start_thread_scan_async when the scan should run in the background while they do other things (e.g. Analytics or get_stats); use get_task_status to see whether tasks finished. get_fan_thread_insights returns the stored thread snapshot and merged personality profile (updated in the background after messages). refresh_fan_thread_scan forces a fresh fetch from OnlyFans. draft_fan_reply drafts a message in the creator's voice (Mimic Test); it does not send—creator reviews first. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options; the app opens Messages for that fan and shows the same panels as the in-chat buttons—use openPanel (venus|circe|flirt|scan|all) when they only want one panel (e.g. "Venus reply"). send_message sends a direct message to a specific fan (use fanId from conversations). You can read users by name, scan any thread, and send a DM to that user.
+When OnlyFans is connected, you can run DM tools end-to-end: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. Prefer get_dm_thread_and_suggestions when they need both thread and reply ideas immediately. Use start_thread_scan_async when the scan should run in the background while they do other things (e.g. Analytics or get_stats); use get_task_status to see whether tasks finished. get_fan_thread_insights returns the stored thread snapshot and merged personality profile (updated in the background after messages). refresh_fan_thread_scan forces a fresh fetch from OnlyFans. draft_fan_reply drafts a message in the creator's voice (Mimic Test); it does not send—creator reviews first. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options; the app opens Messages for that fan and shows the same panels as the in-chat buttons—use openPanel (venus|circe|flirt|scan|all) when they only want one panel (e.g. "Venus reply"). send_message sends a direct message to a specific fan (use fanId from conversations). If OnlyFans is disconnected, say clearly that DM/fan tools will not work until they reconnect and offer ui_navigate to /dashboard/settings?tab=integrations.
 
 DM name lookup rules: Tool output begins with spellback ("I heard …") and ends with [divine_lookup_meta:…]. Follow next_step_hint. If resolved is fuzzy_confirm_required, multi_match_confirm_required, or fuzzy_ambiguous, do not claim the chat is already open; ask the creator to confirm or pick a fanId. Do not call get_dm_conversations or lookup_fan again with the same name query in the same turn—if unclear, ask a clarifying question first. If resolved is exact, use that fanId for get_dm_thread / send_message.
 
@@ -813,6 +817,14 @@ Chat behavior (match voice Divine Manager): After any tool runs—including slow
     const focusedFanLine = focusedFan?.id
       ? `\n\nFocused DM fan (from UI): id=${focusedFan.id}, username=${focusedFan.username ?? 'unknown'}, name=${focusedFan.name ?? 'unknown'}.\nIf a focused fan is provided, assume all DM questions refer to this fan unless the creator names someone else. Do not run a broad search first. When using DM tools (get_dm_thread, get_reply_suggestions, send_message), use this fan's id directly unless the creator clearly asks for someone else.`
       : ''
+    const platformConnectionContext = `\n\nCreator platform connections (authoritative):
+- OnlyFans: ${connectionSnapshot.onlyfansConnected ? `CONNECTED${connectionSnapshot.onlyfansUsername ? ` (@${connectionSnapshot.onlyfansUsername})` : ''}` : 'NOT CONNECTED'}
+- Fansly: ${connectionSnapshot.fanslyConnected ? `CONNECTED${connectionSnapshot.fanslyUsername ? ` (@${connectionSnapshot.fanslyUsername})` : ''}` : 'NOT CONNECTED'}
+
+Rules:
+- If OnlyFans is NOT CONNECTED, do not imply fan lookup, DM thread scans, send_message, or other OnlyFans fan tools will work. Say they need to connect first and offer ui_navigate to /dashboard/settings?tab=integrations.
+- If Fansly is NOT CONNECTED, do not imply Fansly actions will work. Offer the same integrations navigation.
+- Analytics can still include stored snapshots. Do not claim live platform-linked analytics/fan data exists when required platforms are disconnected.`
 
     const userContext = `Creator persona:
 - Tone: ${persona.tone ?? 'friendly'}
@@ -831,9 +843,8 @@ ${taskSummary}
 Recent analytics (14 days, most recent first):
 ${analyticsSummary}
 
-You have access to the creator's analytics: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth.
-
-Connected platforms: OnlyFans, Fansly. Refer to them by name when giving advice.${focusedFanLine}`
+You have access to analytics snapshots: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth. Be explicit when data is historical vs live platform-linked.
+${platformConnectionContext}${focusedFanLine}`
 
     const history = messages.slice(-6)
     const cookie = req.headers.get('cookie') || ''

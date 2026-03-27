@@ -211,6 +211,9 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   /** After switching threads or initial load, jump to latest message (top-of-thread is wrong default). */
   const pendingScrollToLatestRef = useRef(false)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Pause OnlyFans message polling after 429 until this timestamp (ms). */
+  const onlyFansPollBackoffUntilRef = useRef(0)
   const supabase = useMemo(() => createClient(), [])
   const [niches, setNiches] = useState<string[]>([])
   const [boundaries, setBoundaries] = useState<string[]>([])
@@ -448,10 +451,24 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
 
       try {
         const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}?limit=50`)
-        const data = await res.json()
+        let data: { error?: string; code?: string; messages?: OnlyFansMessage[] } = {}
+        try {
+          data = (await res.json()) as typeof data
+        } catch {
+          data = {}
+        }
 
         if (!res.ok) {
-          throw new Error(data.error || 'Failed to load messages')
+          const rateLimited = res.status === 429 || data.code === 'ONLYFANS_RATE_LIMIT'
+          if (rateLimited) {
+            onlyFansPollBackoffUntilRef.current = Date.now() + 90_000
+          }
+          throw new Error(
+            data.error ||
+              (rateLimited
+                ? 'OnlyFans is temporarily limiting requests. Wait a minute, then try again.'
+                : 'Failed to load messages'),
+          )
         }
 
         setMessages(normalizeAndSortMessages(data.messages || []))
@@ -488,17 +505,27 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     if (isNearBottom()) scrollToBottom()
   }, [messages, loading])
 
-  // Poll for new messages when a conversation is open (after initial load — avoids duplicate GET on open).
+  // Poll for new messages (OnlyFans route only). Delay first poll + slower interval to reduce rate-limit bursts with voice navigation + thread refresh.
   useEffect(() => {
-    if (!conversation) return
+    if (!conversation || conversation.platform !== 'onlyfans') return
     if (loading) return
 
     const poll = async () => {
       if (!conversation) return
+      if (Date.now() < onlyFansPollBackoffUntilRef.current) return
       setIsPolling(true)
       try {
         const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}?limit=50`)
-        const data = await res.json()
+        let data: { messages?: OnlyFansMessage[]; code?: string } = {}
+        try {
+          data = (await res.json()) as typeof data
+        } catch {
+          return
+        }
+        if (res.status === 429 || data.code === 'ONLYFANS_RATE_LIMIT') {
+          onlyFansPollBackoffUntilRef.current = Date.now() + 90_000
+          return
+        }
         if (res.ok && data?.messages) {
           setMessages((prev) => normalizeAndSortMessages([...prev, ...(data.messages || [])]))
         }
@@ -509,11 +536,23 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
       }
     }
 
-    pollIntervalRef.current = setInterval(poll, 6000)
+    if (pollStartTimeoutRef.current) clearTimeout(pollStartTimeoutRef.current)
+    pollStartTimeoutRef.current = setTimeout(() => {
+      void poll()
+      pollIntervalRef.current = setInterval(poll, 12_000)
+    }, 8_000)
+
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+      if (pollStartTimeoutRef.current) {
+        clearTimeout(pollStartTimeoutRef.current)
+        pollStartTimeoutRef.current = null
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
     }
-  }, [conversation?.user?.id, loading])
+  }, [conversation?.user?.id, conversation?.platform, loading])
 
   const handleChatFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files

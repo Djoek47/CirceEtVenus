@@ -172,7 +172,7 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
         credentials: 'include',
         body: JSON.stringify({ fanId: id }),
       }).catch(() => undefined)
-    }, 4000)
+    }, 25_000)
     return () => {
       if (threadInsightDebounceRef.current) clearTimeout(threadInsightDebounceRef.current)
     }

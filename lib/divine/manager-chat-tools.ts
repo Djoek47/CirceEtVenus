@@ -38,6 +38,7 @@ import { getVoiceMemoryPayload } from '@/lib/divine/voice-memory-server'
 import { queueThreadScanBackgroundJob, recordStatsTaskForBarrier } from '@/lib/divine/thread-scan-async'
 import { getSettings } from '@/lib/divine-manager'
 import { upsertFanRecentsFromConversations, searchFanRecents } from '@/lib/divine/fan-recents-server'
+import { getPlatformConnectionSnapshot } from '@/lib/divine/platform-connection-status'
 
 export const AI_TOOL_NAME_TO_ID: Record<string, string> = {
   analyze_content: 'standard-of-attraction',
@@ -130,6 +131,12 @@ export function isAllowedUiNavigatePath(path: string): boolean {
       if (keys.length !== 1 || keys[0] !== 'fanId') return false
       const fanId = params.get('fanId') ?? ''
       return /^[a-z0-9_-]{1,64}$/i.test(fanId)
+    }
+    if (base === '/dashboard/settings') {
+      if (keys.length === 0) return true
+      if (keys.length !== 1 || keys[0] !== 'tab') return false
+      const tab = params.get('tab') ?? ''
+      return ['profile', 'notifications', 'security', 'billing', 'integrations', 'data', 'preferences'].includes(tab)
     }
     return false
   } catch {
@@ -912,22 +919,28 @@ export async function runContextTool(
     }
     if (name === 'get_integrations_summary') {
       if (!ctx) return 'Context unavailable.'
-      const [{ data: pc }, { data: sp }] = await Promise.all([
-        ctx.supabase
-          .from('platform_connections')
-          .select('platform, platform_username, is_connected')
-          .eq('user_id', ctx.userId)
-          .eq('is_connected', true),
+      const [snapshot, { data: sp }] = await Promise.all([
+        getPlatformConnectionSnapshot(ctx.supabase, ctx.userId),
         ctx.supabase.from('social_profiles').select('platform, username').eq('user_id', ctx.userId),
       ])
       const lines: string[] = []
-      for (const c of pc || []) {
-        lines.push(`- ${(c as { platform?: string }).platform}: @${(c as { platform_username?: string }).platform_username}`)
-      }
+      lines.push(
+        snapshot.onlyfansConnected
+          ? `- onlyfans: CONNECTED${snapshot.onlyfansUsername ? ` (@${snapshot.onlyfansUsername})` : ''}`
+          : '- onlyfans: NOT CONNECTED',
+      )
+      lines.push(
+        snapshot.fanslyConnected
+          ? `- fansly: CONNECTED${snapshot.fanslyUsername ? ` (@${snapshot.fanslyUsername})` : ''}`
+          : '- fansly: NOT CONNECTED',
+      )
       for (const s of sp || []) {
         lines.push(`- social_profiles ${(s as { platform?: string }).platform}: @${(s as { username?: string }).username}`)
       }
-      return lines.length ? `Connected:\n${lines.join('\n')}` : 'No OAuth connections in Integrations yet.'
+      lines.push(
+        'If a platform is NOT CONNECTED, open /dashboard/settings?tab=integrations before using fan lookup, DMs, or live platform analytics.',
+      )
+      return `Integrations summary:\n${lines.join('\n')}`
     }
     if (name === 'get_scheduled_content_summary' || name === 'list_cosmic_calendar') {
       if (!ctx) return 'Context unavailable.'

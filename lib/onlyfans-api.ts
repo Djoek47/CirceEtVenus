@@ -7,6 +7,16 @@
 
 const ONLYFANS_API_BASE = 'https://app.onlyfansapi.com/api'
 
+/** Cloudflare / OnlyFans-API rate limit — callers should back off and show a friendly message. */
+export function isOnlyFansRateLimitError(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes('rate limit') ||
+    m.includes('too many requests') ||
+    (m.includes('cf:') && m.includes('onlyfans'))
+  )
+}
+
 interface OnlyFansAPIOptions {
   accountId?: string
 }

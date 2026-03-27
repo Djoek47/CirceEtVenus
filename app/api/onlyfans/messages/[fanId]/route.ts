@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
-import { createOnlyFansAPI } from '@/lib/onlyfans-api'
+import { createOnlyFansAPI, isOnlyFansRateLimitError } from '@/lib/onlyfans-api'
 
 // GET - Fetch messages with a specific fan
 export async function GET(
@@ -48,9 +48,16 @@ export async function GET(
     })
   } catch (error) {
     console.error('Failed to fetch messages:', error)
+    const msg = error instanceof Error ? error.message : String(error)
+    const rateLimited = isOnlyFansRateLimitError(msg)
     return NextResponse.json(
-      { error: 'Failed to fetch messages' },
-      { status: 500 }
+      {
+        error: rateLimited
+          ? 'OnlyFans is temporarily limiting requests. Wait a minute, then refresh or reopen this chat.'
+          : 'Failed to load messages',
+        code: rateLimited ? 'ONLYFANS_RATE_LIMIT' : undefined,
+      },
+      { status: rateLimited ? 429 : 500 },
     )
   }
 }

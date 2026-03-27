@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
 
     const result = await refreshFanThreadInsight(supabase, user.id, fanId, {
       force: body.force === true,
-      skipDebounce: true,
+      // Respect 90s debounce unless force — avoids a second getMessages right after ChatWindow loads (rate limits).
+      skipDebounce: body.force === true,
     })
 
     if (!result.ok) {

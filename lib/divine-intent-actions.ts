@@ -9,11 +9,6 @@ import { createTask } from '@/lib/divine-manager'
 import type { DivineManagerSettingsRow } from '@/lib/divine-manager'
 import { formatOnlyFansText } from '@/lib/onlyfans-text'
 import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
-import { getRuntimePlatformConnection } from '@/lib/divine/platform-connection-status'
-import {
-  buildPlatformCredentialMissingError,
-  buildPlatformNotConnectedError,
-} from '@/lib/divine/connection-errors'
 
 export type MassDmParams = {
   message: string
@@ -233,20 +228,22 @@ export async function executeSendMessage(
       }
     }
   }
-  const runtimeConnection = await getRuntimePlatformConnection(supabase, userId, platform)
-  if (!runtimeConnection.connected) {
-    const err =
-      runtimeConnection.reason === 'missing_credential'
-        ? buildPlatformCredentialMissingError(platform)
-        : buildPlatformNotConnectedError(platform)
-    return { success: false, summary: `${err.message} [code:${err.code}]` }
+  const { data: connection } = await supabase
+    .from('platform_connections')
+    .select('access_token, platform_user_id')
+    .eq('user_id', userId)
+    .eq('platform', platform)
+    .eq('is_connected', true)
+    .maybeSingle()
+  if (!connection) {
+    return { success: false, summary: `${platform} is not connected.` }
   }
   try {
     if (platform === 'onlyfans') {
       const bad = validateChatMediaIdsForSend(mediaIds)
       if (bad) return { success: false, summary: bad }
 
-      const api = createOnlyFansAPI(runtimeConnection.accessToken!)
+      const api = createOnlyFansAPI(connection.access_token)
       await api.sendMessage(String(fanId), {
         text: formatOnlyFansText(trimmed || '', { size: 'default' }),
         price: typeof price === 'number' && price >= 0 ? price : undefined,
@@ -258,7 +255,7 @@ export async function executeSendMessage(
     }
     if (platform === 'fansly') {
       const api = createFanslyAPI()
-      const result = await api.sendMessage(runtimeConnection.platformUserId!, String(fanId), {
+      const result = await api.sendMessage(connection.platform_user_id, String(fanId), {
         text: message.trim(),
         mediaIds: Array.isArray(mediaIds) && mediaIds.length > 0 ? mediaIds : undefined,
       })

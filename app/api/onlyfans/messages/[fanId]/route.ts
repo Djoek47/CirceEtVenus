@@ -2,11 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 import { createOnlyFansAPI, isOnlyFansRateLimitError } from '@/lib/onlyfans-api'
-import { getRuntimePlatformConnection } from '@/lib/divine/platform-connection-status'
-import {
-  buildPlatformCredentialMissingError,
-  buildPlatformNotConnectedError,
-} from '@/lib/divine/connection-errors'
 
 // GET - Fetch messages with a specific fan
 export async function GET(
@@ -22,17 +17,20 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const runtimeConnection = await getRuntimePlatformConnection(supabase, user.id, 'onlyfans')
-    if (!runtimeConnection.connected) {
-      const err =
-        runtimeConnection.reason === 'missing_credential'
-          ? buildPlatformCredentialMissingError('onlyfans')
-          : buildPlatformNotConnectedError('onlyfans')
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 400 })
+    const { data: connection } = await supabase
+      .from('platform_connections')
+      .select('access_token')
+      .eq('user_id', user.id)
+      .eq('platform', 'onlyfans')
+      .eq('is_connected', true)
+      .maybeSingle()
+
+    if (!connection?.access_token) {
+      return NextResponse.json({ error: 'OnlyFans not connected' }, { status: 400 })
     }
 
     const api = createOnlyFansAPI()
-    api.setAccountId(runtimeConnection.accessToken!)
+    api.setAccountId(connection.access_token)
 
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
@@ -78,17 +76,20 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const runtimeConnection = await getRuntimePlatformConnection(supabase, user.id, 'onlyfans')
-    if (!runtimeConnection.connected) {
-      const err =
-        runtimeConnection.reason === 'missing_credential'
-          ? buildPlatformCredentialMissingError('onlyfans')
-          : buildPlatformNotConnectedError('onlyfans')
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 400 })
+    const { data: connection } = await supabase
+      .from('platform_connections')
+      .select('access_token')
+      .eq('user_id', user.id)
+      .eq('platform', 'onlyfans')
+      .eq('is_connected', true)
+      .maybeSingle()
+
+    if (!connection?.access_token) {
+      return NextResponse.json({ error: 'OnlyFans not connected' }, { status: 400 })
     }
 
     const api = createOnlyFansAPI()
-    api.setAccountId(runtimeConnection.accessToken!)
+    api.setAccountId(connection.access_token)
 
     const body = await request.json()
     const { text, mediaIds, previews, price } = body

@@ -40,9 +40,6 @@ import { getSettings } from '@/lib/divine-manager'
 import { upsertFanRecentsFromConversations, searchFanRecents } from '@/lib/divine/fan-recents-server'
 import { getPlatformConnectionSnapshot } from '@/lib/divine/platform-connection-status'
 
-const CONNECTION_ERROR_CODE_RE =
-  /\[code:(ONLYFANS_NOT_CONNECTED|FANSLY_NOT_CONNECTED|ONLYFANS_CONNECTION_INCOMPLETE|FANSLY_CONNECTION_INCOMPLETE)\]/i
-
 export const AI_TOOL_NAME_TO_ID: Record<string, string> = {
   analyze_content: 'standard-of-attraction',
   generate_caption: 'caption-generator',
@@ -1383,11 +1380,6 @@ export async function runToolCall(
     (typeof intentRes.error === 'string' ? intentRes.error : undefined) ??
     (intentRes.status && intentRes.status !== 'executed' ? `Intent status: ${intentRes.status}` : undefined) ??
     JSON.stringify(intentRes)
-  const connectionCodeMatch = summary.match(CONNECTION_ERROR_CODE_RE)
-  if (connectionCodeMatch) {
-    summary = summary.replace(CONNECTION_ERROR_CODE_RE, '').trim()
-    uiActions.push({ type: 'navigate', path: '/dashboard/settings?tab=integrations' })
-  }
   const dataIntent = name as string
   if (dataIntent === 'list_fans' && Array.isArray((intentRes as { fans?: unknown[] }).fans)) {
     const fans = (intentRes as { fans: unknown[] }).fans

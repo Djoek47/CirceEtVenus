@@ -28,10 +28,16 @@ interface OnlyFansConversation {
   unreadCount: number
 }
 
+/** Merged OnlyFans + Fansly rows in Messages (see messages-layout). */
+export type Conversation = OnlyFansConversation & {
+  platform: 'onlyfans' | 'fansly'
+  chatId?: string
+}
+
 interface ConversationListProps {
-  conversations: OnlyFansConversation[]
+  conversations: Conversation[]
   selectedId?: string
-  onSelect: (conversation: OnlyFansConversation) => void
+  onSelect: (conversation: Conversation) => void
 }
 
 export function ConversationList({ conversations, selectedId, onSelect }: ConversationListProps) {

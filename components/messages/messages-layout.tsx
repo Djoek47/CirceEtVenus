@@ -14,14 +14,33 @@ type MessagesView = 'conversations' | 'insights'
 
 interface MessagesLayoutProps {
   userId: string
-  /** From server `?fanId=` on first paint (client navigations use URL via useSearchParams). */
+  /** From server: `?fanId=` (voice/Divine) or `?chat=` (dashboard links) on first paint. */
   initialFanId?: string
+  /** From server: `?platform=onlyfans|fansly` when using `chat=`. */
+  initialPlatform?: string
 }
 
-function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
+function pickConversationForDeepLink(
+  list: Conversation[],
+  fanId: string,
+  platform?: string | null,
+): Conversation | undefined {
+  const id = String(fanId)
+  const sameId = list.filter((c) => String(c.user.id) === id)
+  if (sameId.length === 0) return undefined
+  if (platform === 'onlyfans' || platform === 'fansly') {
+    return sameId.find((c) => c.platform === platform) ?? sameId[0]
+  }
+  return sameId[0]
+}
+
+function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: MessagesLayoutProps) {
   const searchParams = useSearchParams()
   const divinePanel = useDivinePanel()
-  const fanIdFromUrl = searchParams.get('fanId') ?? initialFanId ?? undefined
+  const fanIdFromUrl =
+    searchParams.get('fanId') ?? searchParams.get('chat') ?? initialFanId ?? undefined
+  const platformFromUrl =
+    searchParams.get('platform') ?? initialPlatform ?? undefined
   const [view, setView] = useState<MessagesView>('conversations')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
@@ -107,13 +126,21 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
     loadConversations()
   }, [loadConversations])
 
-  // Open the thread for ?fanId= or Divine voice/chat "focus fan"
+  // Open the thread for ?fanId= / ?chat= or Divine voice/chat "focus fan"
   useEffect(() => {
     if (!fanIdFromUrl || conversations.length === 0) return
-    if (selectedRef.current && String(selectedRef.current.user.id) === String(fanIdFromUrl)) return
-    const match = conversations.find((c) => String(c.user.id) === String(fanIdFromUrl))
-    if (match) setSelectedConversation(match)
-  }, [fanIdFromUrl, conversations])
+    const match = pickConversationForDeepLink(conversations, fanIdFromUrl, platformFromUrl)
+    if (!match) return
+    const cur = selectedRef.current
+    if (
+      cur &&
+      String(cur.user.id) === String(match.user.id) &&
+      cur.platform === match.platform
+    ) {
+      return
+    }
+    setSelectedConversation(match)
+  }, [fanIdFromUrl, platformFromUrl, conversations])
 
   useEffect(() => {
     const id = divinePanel?.focusedFan?.id

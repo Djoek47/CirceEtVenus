@@ -56,6 +56,12 @@ export interface DivineManagerAutomationJobs {
   [key: string]: unknown
 }
 
+/** When manual End call is allowed in the voice UI (see voice_allow_user_hangup tool). */
+export type VoiceHangupPolicy = 'always' | 'after_closing_prompt'
+
+/** How Divine focuses a fan from tools: full Messages route vs floating overlay. */
+export type DmFocusMode = 'navigate' | 'overlay'
+
 export interface DivineManagerAutomationRules {
   autoPostSchedule?: AutomationRule
   autoWelcomeDm?: AutomationRule
@@ -64,7 +70,14 @@ export interface DivineManagerAutomationRules {
   voice_auto?: DivineManagerVoiceAuto
   alerts?: DivineManagerAutomationAlerts
   jobs?: DivineManagerAutomationJobs
-  [key: string]: AutomationRule | DivineManagerVoiceAuto | DivineManagerAutomationAlerts | DivineManagerAutomationJobs | undefined
+  /**
+   * Manual hangup: 'always' = End always enabled; 'after_closing_prompt' = enabled only after
+   * the model calls voice_allow_user_hangup (after asking "anything else?").
+   */
+  voice_hangup_policy?: VoiceHangupPolicy
+  /** Where to open a fan chat when using ui_focus_fan / focus_fan. Default navigate. */
+  dm_focus_mode?: DmFocusMode
+  [key: string]: AutomationRule | DivineManagerVoiceAuto | DivineManagerAutomationAlerts | DivineManagerAutomationJobs | VoiceHangupPolicy | DmFocusMode | undefined
 }
 
 /** OF user-list housekeeping: optional auto-create + per-segment list overrides. */

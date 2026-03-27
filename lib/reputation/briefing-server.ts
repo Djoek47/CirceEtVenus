@@ -8,7 +8,11 @@ import {
   type ReputationBriefingPayload,
 } from '@/lib/reputation/briefing'
 import { runReputationScanCore } from '@/lib/reputation/run-reputation-scan'
-import { filterHandlesToAllowed, loadMergedHandlesForUser } from '@/lib/scan-identity'
+import {
+  filterHandlesToAllowed,
+  filterMentionsByHandles,
+  loadMergedHandlesForUser,
+} from '@/lib/scan-identity'
 
 const MENTION_CAP = 80
 const DAYS = 30
@@ -90,7 +94,9 @@ export async function runReputationBriefingCore(
     return { ok: false, error: fetchErr.message, status: 500 }
   }
 
-  if (!rows || rows.length === 0) {
+  let list = filterMentionsByHandles(rows || [], selectedHandles)
+
+  if (list.length === 0) {
     await runReputationScanCore(supabase, userId, {
       mode: 'both',
       handles: selectedHandles,
@@ -104,13 +110,11 @@ export async function runReputationBriefingCore(
       .gte('detected_at', since.toISOString())
       .order('detected_at', { ascending: false })
       .limit(MENTION_CAP)
-    rows = second.data
     if (second.error) {
       return { ok: false, error: second.error.message, status: 500 }
     }
+    list = filterMentionsByHandles(second.data || [], selectedHandles)
   }
-
-  const list = rows || []
 
   const plat = (profileRow as { reputation_platform_handles?: Record<string, string> | null })
     ?.reputation_platform_handles

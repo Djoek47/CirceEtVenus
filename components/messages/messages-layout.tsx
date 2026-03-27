@@ -78,6 +78,21 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
         const stillThere = allConversations.find((c) => String(c.user.id) === String(prev.user.id))
         return stillThere ?? allConversations[0]
       })
+      if (allConversations.length > 0) {
+        void fetch('/api/divine/fan-recents', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rows: allConversations.map((c) => ({
+              fanId: String(c.user.id),
+              username: c.user.username,
+              displayName: c.user.name,
+              platform: c.platform,
+            })),
+          }),
+        }).catch(() => undefined)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversations')
     } finally {

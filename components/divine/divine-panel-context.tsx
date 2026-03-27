@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   type ReactNode,
 } from 'react'
@@ -14,6 +15,8 @@ import {
   type DivineUiAction,
   type DmSuggestionBridgePayload,
 } from '@/lib/divine/divine-ui-actions'
+import type { DivineVoiceMemoryPayload } from '@/lib/divine/voice-memory-types'
+import { buildDeferredNavigationActions } from '@/lib/divine/deferred-navigation'
 
 export type { DivineUiAction, DmSuggestionBridgePayload } from '@/lib/divine/divine-ui-actions'
 
@@ -26,6 +29,7 @@ export type FocusedFan = {
 }
 
 type DivinePanelContextValue = {
+  user: User
   panelOpen: boolean
   setPanelOpen: (open: boolean) => void
   panelCollapsed: boolean
@@ -50,6 +54,11 @@ type DivinePanelContextValue = {
   clearDmSuggestionBridge: () => void
   /** Voice + tool responses: navigate, focus fan, and hydrate Messages suggestion UI when present. */
   applyUiActionsFromTools: (actions: DivineUiAction[] | undefined) => void
+  /** Floating DM thread (when dm_focus_mode is overlay). */
+  dmOverlayFanId: string | null
+  dmOverlayCollapsed: boolean
+  setDmOverlayCollapsed: (collapsed: boolean) => void
+  closeDmOverlay: () => void
 }
 
 const DivinePanelContext = createContext<DivinePanelContextValue | null>(null)
@@ -77,19 +86,83 @@ export function DivinePanelProvider({
   const [generatePrompt, setGeneratePrompt] = useState('')
   const [generateLoading, setGenerateLoading] = useState(false)
   const [dmSuggestionBridge, setDmSuggestionBridge] = useState<DmSuggestionBridgePayload | null>(null)
+  const [dmOverlayFanId, setDmOverlayFanId] = useState<string | null>(null)
+  const [dmOverlayCollapsed, setDmOverlayCollapsed] = useState(false)
 
   const clearDmSuggestionBridge = useCallback(() => {
     setDmSuggestionBridge(null)
+  }, [])
+
+  const closeDmOverlay = useCallback(() => {
+    setDmOverlayFanId(null)
+    setDmOverlayCollapsed(false)
   }, [])
 
   const applyDivineUiActionsWithBridge = useCallback(
     (actions: DivineUiAction[] | undefined) => {
       applyDivineUiActionsBase(actions, router, setFocusedFan, {
         onShowDmReplySuggestions: (payload) => setDmSuggestionBridge(payload),
+        onFocusFanOverlay: (fanId) => {
+          setDmOverlayFanId(fanId)
+          setDmOverlayCollapsed(false)
+        },
       })
     },
     [router],
   )
+
+  /** When voice async scan + barrier tasks complete, return to Messages with DM suggestions. */
+  useEffect(() => {
+    let cancelled = false
+    const POLL_MS = 4000
+
+    const clearBarrierNavigation = () =>
+      fetch('/api/divine/voice-memory', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ navigation: null }),
+      }).catch(() => undefined)
+
+    const tick = async () => {
+      if (cancelled) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      try {
+        const res = await fetch('/api/divine/voice-memory', { credentials: 'include' })
+        const json = (await res.json().catch(() => ({}))) as { memory?: DivineVoiceMemoryPayload }
+        const mem = json.memory
+        const nav = mem?.navigation
+        const barrierActive = Boolean(nav?.when === 'all_tasks_complete' && nav.taskIds?.length)
+        if (!mem || !barrierActive) return
+
+        const actions = buildDeferredNavigationActions(mem)
+        if (actions?.length) {
+          applyDivineUiActionsWithBridge(actions)
+          await clearBarrierNavigation()
+          return
+        }
+
+        const tasks = mem.tasks ?? []
+        const byId = new Map(tasks.map((t) => [t.id, t]))
+        const allTerminal = nav!.taskIds!.every((tid) => {
+          const t = byId.get(tid)
+          return t && (t.status === 'done' || t.status === 'error')
+        })
+        if (allTerminal) {
+          await clearBarrierNavigation()
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void tick()
+    const id = setInterval(() => void tick(), POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [applyDivineUiActionsWithBridge])
 
   const sendChat = useCallback(async () => {
     const trimmed = chatInput.trim()
@@ -224,6 +297,7 @@ export function DivinePanelProvider({
   }, [generatedText])
 
   const value: DivinePanelContextValue = {
+    user,
     panelOpen,
     setPanelOpen,
     panelCollapsed,
@@ -247,6 +321,10 @@ export function DivinePanelProvider({
     dmSuggestionBridge,
     clearDmSuggestionBridge,
     applyUiActionsFromTools: applyDivineUiActionsWithBridge,
+    dmOverlayFanId,
+    dmOverlayCollapsed,
+    setDmOverlayCollapsed,
+    closeDmOverlay,
   }
 
   return (

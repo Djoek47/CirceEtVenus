@@ -135,6 +135,8 @@ export async function PATCH(req: NextRequest) {
       status?: DivineVoiceMemoryPayload['status']
       resume_hint?: string | null
       clear?: boolean
+      /** Set to null to clear deferred navigation after barrier UI applied */
+      navigation?: DivineVoiceMemoryPayload['navigation'] | null
     }
 
     const { data: row, error: fetchErr } = await supabase
@@ -155,6 +157,8 @@ export async function PATCH(req: NextRequest) {
         resume_hint: undefined,
         pending_confirmations: undefined,
         action_log: [],
+        tasks: [],
+        navigation: null,
         last_updated_at: new Date().toISOString(),
       }
     } else {
@@ -167,6 +171,9 @@ export async function PATCH(req: NextRequest) {
         patch.resume_hint = body.resume_hint === null ? null : body.resume_hint?.slice(0, 800)
       }
       merged = mergeMemory(prev, patch)
+      if (Object.prototype.hasOwnProperty.call(body, 'navigation') && body.navigation === null) {
+        merged.navigation = null
+      }
     }
 
     const { error: upErr } = await supabase

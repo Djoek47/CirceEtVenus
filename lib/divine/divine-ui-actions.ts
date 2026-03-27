@@ -29,7 +29,14 @@ export type DmSuggestionBridgePayload = {
 
 export type DivineUiAction =
   | { type: 'navigate'; path: string }
-  | { type: 'focus_fan'; fanId: string }
+  | {
+      type: 'focus_fan'
+      fanId: string
+      /** Default navigate: open Messages route. overlay: floating DM panel (see dm_focus_mode). */
+      presentation?: 'navigate' | 'overlay'
+    }
+  /** Voice client only: allow manual End call when policy is after_closing_prompt. */
+  | { type: 'voice_set_hangup'; allowed: boolean }
   | {
       type: 'show_dm_reply_suggestions'
       fanId: string
@@ -44,6 +51,8 @@ export type DivineUiAction =
 
 export type ApplyDivineUiOptions = {
   onShowDmReplySuggestions?: (payload: DmSuggestionBridgePayload) => void
+  /** When focus_fan uses presentation overlay, open floating DM instead of navigating. */
+  onFocusFanOverlay?: (fanId: string) => void
 }
 
 function capStringList(lines: string[], cap: number, lineMax: number): string[] {
@@ -105,6 +114,9 @@ export function applyDivineUiActions(
   if (!actions?.length) return
   const onDm = options?.onShowDmReplySuggestions
   for (const a of actions) {
+    if (a.type === 'voice_set_hangup') {
+      continue
+    }
     if (a.type === 'navigate' && a.path.startsWith('/dashboard')) {
       router.push(a.path)
     }
@@ -112,7 +124,11 @@ export function applyDivineUiActions(
       const id = String(a.fanId).trim()
       if (FAN_ID_RE.test(id)) {
         setFocusedFan({ id })
-        router.push(`/dashboard/messages?fanId=${encodeURIComponent(id)}`)
+        if (a.presentation === 'overlay' && options?.onFocusFanOverlay) {
+          options.onFocusFanOverlay(id)
+        } else {
+          router.push(`/dashboard/messages?fanId=${encodeURIComponent(id)}`)
+        }
       }
     }
     if (a.type === 'show_dm_reply_suggestions' && onDm) {

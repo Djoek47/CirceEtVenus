@@ -87,6 +87,28 @@ export function filterHandlesToAllowed(requested: string[] | undefined, allowed:
   return out
 }
 
+/**
+ * Keep mention rows whose title, snippet, or URL references at least one handle
+ * (substring match, case-insensitive). Used so briefings scoped to selected
+ * identities do not summarize unrelated stored scans.
+ */
+export function filterMentionsByHandles<
+  T extends {
+    title?: string | null
+    content_preview?: string | null
+    source_url: string
+  },
+>(mentions: T[], handles: string[]): T[] {
+  const needles = handles
+    .map((h) => normalizeScanHandle(h).toLowerCase())
+    .filter((n) => n.length > 0)
+  if (needles.length === 0) return mentions
+  return mentions.filter((m) => {
+    const hay = `${m.title ?? ''}|${m.content_preview ?? ''}|${m.source_url ?? ''}`.toLowerCase()
+    return needles.some((n) => hay.includes(n))
+  })
+}
+
 export type ScanIdentityHandle = {
   value: string
   source: string

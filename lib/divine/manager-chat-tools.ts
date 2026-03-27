@@ -23,6 +23,10 @@ import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
 import { normalizeScanForUi } from '@/lib/divine/divine-ui-actions'
 import type { DmReplyPackageResult } from '@/lib/divine/dm-reply-package'
 import { getStats } from '@/lib/divine-intent-actions'
+import { getVoiceMemoryPayload } from '@/lib/divine/voice-memory-server'
+import { queueThreadScanBackgroundJob, recordStatsTaskForBarrier } from '@/lib/divine/thread-scan-async'
+import { getSettings } from '@/lib/divine-manager'
+import { upsertFanRecentsFromConversations, searchFanRecents } from '@/lib/divine/fan-recents-server'
 
 export const AI_TOOL_NAME_TO_ID: Record<string, string> = {
   analyze_content: 'standard-of-attraction',
@@ -58,6 +62,8 @@ export const CONTEXT_TOOL_NAMES = new Set<string>([
   'refresh_fan_thread_scan',
   'get_reputation_briefing',
   'list_reputation_briefings',
+  'get_task_status',
+  'lookup_fan',
 ])
 
 export type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
@@ -334,6 +340,9 @@ export async function runContextTool(
       })
       if (message === 'OnlyFans not connected') {
         return 'OnlyFans is not connected. Connect OnlyFans in Settings → Integrations.'
+      }
+      if (conversations.length > 0) {
+        await upsertFanRecentsFromConversations(ctx.supabase, ctx.userId, conversations)
       }
       const list = conversations.slice(0, 15).map((c) => {
         const label = c.name ? `${c.name} (@${c.username})` : `@${c.username}`
@@ -643,6 +652,50 @@ export async function runContextTool(
       })
       return list.length ? `Content:\n${list.join('\n')}` : 'No content found.'
     }
+    if (name === 'lookup_fan') {
+      if (!ctx) return 'Context unavailable.'
+      const rawQuery = typeof args.query === 'string' ? args.query.trim() : ''
+      if (!rawQuery) return 'query is required (name or username substring).'
+      const cached = await searchFanRecents(ctx.supabase, ctx.userId, rawQuery, 20)
+      if (cached.length > 0) {
+        const lines = cached.map((r) => {
+          const label = r.display_name ? `${r.display_name} (@${r.username ?? 'unknown'})` : `@${r.username ?? 'unknown'}`
+          return `${label} [fanId: ${r.fan_id}]`
+        })
+        return `Cached fans (recent DMs):\n${lines.join('\n')}\nUse ui_focus_fan with fanId to open the chat.`
+      }
+      const { conversations, message } = await loadDivineDmConversations(ctx.supabase, ctx.userId, {
+        limit: 30,
+        query: rawQuery,
+      })
+      if (message === 'OnlyFans not connected') {
+        return 'OnlyFans is not connected. Connect OnlyFans in Settings → Integrations.'
+      }
+      if (conversations.length > 0) {
+        await upsertFanRecentsFromConversations(ctx.supabase, ctx.userId, conversations)
+      }
+      if (!conversations.length) {
+        return `No fans matched "${rawQuery}" in cache or live OnlyFans list. Try a shorter name or get_dm_conversations.`
+      }
+      const lines = conversations.slice(0, 15).map((c) => {
+        const label = c.name ? `${c.name} (@${c.username})` : `@${c.username}`
+        return `${label} [fanId: ${c.fanId}]`
+      })
+      return `Matches from OnlyFans:\n${lines.join('\n')}\nUse ui_focus_fan with fanId.`
+    }
+    if (name === 'get_task_status') {
+      if (!ctx) return 'Context unavailable.'
+      const mem = await getVoiceMemoryPayload(ctx.supabase, ctx.userId)
+      const tasks = mem.tasks ?? []
+      const nav = mem.navigation
+      const summary = [
+        `tasks: ${JSON.stringify(
+          tasks.map((t) => ({ id: t.id, kind: t.kind, status: t.status, fanId: t.fanId, error: t.error })),
+        )}`,
+        `navigation: ${JSON.stringify(nav)}`,
+      ].join('\n')
+      return summary.slice(0, 3800)
+    }
   } catch (e) {
     return e instanceof Error ? e.message : 'Request failed'
   }
@@ -697,6 +750,16 @@ export async function runToolCall(
   const emptyPending: Array<{ type: string; intent_id: string; summary?: string }> = []
   const uiActions: DivineUiAction[] = []
 
+  if (name === 'voice_allow_user_hangup') {
+    return {
+      tool_call_id: tc.id,
+      content:
+        'Manual hangup is enabled. The creator can tap End call when they are ready. Say goodbye, then call end_call when they finish.',
+      pendingConfirmations: emptyPending,
+      uiActions: [{ type: 'voice_set_hangup', allowed: true }],
+    }
+  }
+
   if (name === 'ui_navigate') {
     const path = typeof args.path === 'string' ? args.path : ''
     if (!isAllowedUiNavigatePath(path)) {
@@ -721,10 +784,16 @@ export async function runToolCall(
     if (!fanId.trim()) {
       return { tool_call_id: tc.id, content: 'fanId is required.', pendingConfirmations: emptyPending, uiActions }
     }
-    uiActions.push({ type: 'focus_fan', fanId })
+    const settings = await getSettings(supabase, userId)
+    const mode = settings?.automation_rules?.dm_focus_mode ?? 'navigate'
+    const presentation = mode === 'overlay' ? 'overlay' : 'navigate'
+    uiActions.push({ type: 'focus_fan', fanId, presentation })
     return {
       tool_call_id: tc.id,
-      content: `Opening Messages and focusing fan ${fanId}.`,
+      content:
+        presentation === 'overlay'
+          ? `Opening DM overlay for fan ${fanId}.`
+          : `Opening Messages and focusing fan ${fanId}.`,
       pendingConfirmations: emptyPending,
       uiActions,
     }
@@ -751,6 +820,23 @@ export async function runToolCall(
         : JSON.stringify(out.result).slice(0, 1200)
       : (out.error ?? 'Tool failed')
     return { tool_call_id: tc.id, content: summary, pendingConfirmations: emptyPending, uiActions }
+  }
+
+  if (name === 'start_thread_scan_async') {
+    const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
+    if (!fanId) {
+      return { tool_call_id: tc.id, content: 'fanId is required.', pendingConfirmations: emptyPending, uiActions }
+    }
+    const r = await queueThreadScanBackgroundJob(supabase, userId, { fanId, openPanel: args.openPanel })
+    if (!r.taskId) {
+      return { tool_call_id: tc.id, content: r.message, pendingConfirmations: emptyPending, uiActions }
+    }
+    return {
+      tool_call_id: tc.id,
+      content: r.message,
+      pendingConfirmations: emptyPending,
+      uiActions: [{ type: 'navigate', path: '/dashboard/analytics' }],
+    }
   }
 
   const isAITool = name in AI_TOOL_NAME_TO_ID
@@ -783,7 +869,10 @@ export async function runToolCall(
       return { tool_call_id: tc.id, content: text, pendingConfirmations: emptyPending, uiActions }
     }
     const show = buildShowDmReplySuggestionsAction(fanId, pkg, highlightPanel)
-    const outActions: DivineUiAction[] = [{ type: 'focus_fan', fanId }]
+    const settingsDm = await getSettings(supabase, userId)
+    const dmMode = settingsDm?.automation_rules?.dm_focus_mode ?? 'navigate'
+    const presentation = dmMode === 'overlay' ? 'overlay' : 'navigate'
+    const outActions: DivineUiAction[] = [{ type: 'focus_fan', fanId, presentation }]
     if (show) outActions.push(show)
     return {
       tool_call_id: tc.id,
@@ -847,6 +936,7 @@ export async function runToolCall(
       period: typeof args.period === 'string' ? args.period : undefined,
       platform: typeof args.platform === 'string' ? args.platform : undefined,
     })
+    await recordStatsTaskForBarrier(supabase, userId)
     return {
       tool_call_id: tc.id,
       content: result.summary.slice(0, 6000),

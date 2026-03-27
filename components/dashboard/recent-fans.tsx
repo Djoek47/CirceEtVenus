@@ -83,6 +83,14 @@ export function RecentFans({ fans, totalFans }: RecentFansProps) {
               </span>{' '}
               fans from your connected platforms. Detailed fan profiles are still syncing — they&apos;ll appear here after your next sync.
             </p>
+            <p className="mt-3 max-w-sm text-sm text-muted-foreground">
+              Use{' '}
+              <span className="font-medium text-foreground">Connected platforms</span> at the top of this page: click your
+              OnlyFans or Fansly icon to run a sync and import fan profiles.
+            </p>
+            <Button asChild variant="default" size="sm" className="mt-4">
+              <Link href="/dashboard#dashboard-platform-sync">Go to platform sync</Link>
+            </Button>
           </div>
         ) : (
         <div className="space-y-4">

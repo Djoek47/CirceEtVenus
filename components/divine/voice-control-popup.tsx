@@ -10,7 +10,16 @@ export function VoiceControlPopup() {
   const voice = useVoiceSession()
   if (!voice) return null
 
-  const { status, error, startVoiceCall, endVoiceCall, voiceVizRef, voiceSurfaceState } = voice
+  const {
+    status,
+    error,
+    startVoiceCall,
+    endVoiceCall,
+    forceEndVoiceCall,
+    voiceVizRef,
+    voiceSurfaceState,
+    canManualHangup,
+  } = voice
 
   const isActive = status === 'connected' || status === 'connecting'
   const primaryLabel =
@@ -72,15 +81,32 @@ export function VoiceControlPopup() {
             Start call
           </Button>
         ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={endVoiceCall}
-          >
-            <PhoneOff className="h-3 w-3 mr-1" />
-            End
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={!canManualHangup}
+              title={
+                canManualHangup
+                  ? 'End voice call'
+                  : 'Wait until Divine asks if you need anything else (or force end below)'
+              }
+              onClick={endVoiceCall}
+            >
+              <PhoneOff className="h-3 w-3 mr-1" />
+              End
+            </Button>
+            {!canManualHangup && (
+              <button
+                type="button"
+                className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                onClick={forceEndVoiceCall}
+              >
+                Force end call
+              </button>
+            )}
+          </div>
         )}
       </div>
       {error && (

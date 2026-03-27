@@ -101,13 +101,21 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header with connected platform refresh buttons */}
-      <div className="flex items-center justify-between">
+      {/* Page header with connected platform refresh buttons (anchor for Recent Fans CTA) */}
+      <div
+        id="dashboard-platform-sync"
+        className="flex scroll-mt-24 items-center justify-between gap-4"
+      >
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-sm text-muted-foreground">Your creator command centre</p>
         </div>
-        <ConnectedPlatforms />
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="hidden text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:block">
+            Connected platforms
+          </span>
+          <ConnectedPlatforms />
+        </div>
       </div>
 
       {/* Divine Assistants Quick Access */}

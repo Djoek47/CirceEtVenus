@@ -108,7 +108,7 @@ Input mentions (empty array):
 []`
       : `${nicheContext}
 
-Data is from web search index snippets (not live APIs). Summarize for the creator.
+Data is from web search index snippets (not live APIs). Summarize only for the creator identities in the context block. Do not center the briefing on other names or brands that appear only in snippets unless those snippets clearly refer to the same creator under an alternate spelling or alias you were given.
 
 ${identityBlock}
 

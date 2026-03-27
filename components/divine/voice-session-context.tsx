@@ -12,6 +12,7 @@ import {
 import { useDivinePanel, type FocusedFan } from '@/components/divine/divine-panel-context'
 import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
 import type { DivineVoiceDisconnectReason } from '@/lib/divine/voice-memory-types'
+import type { VoiceHangupPolicy } from '@/lib/divine-manager'
 
 /** Must stay below `voice-tool` route `maxDuration` so the client fails first with a clear message, not a generic hang. */
 const VOICE_TOOL_FETCH_TIMEOUT_MS = 115_000
@@ -50,6 +51,14 @@ type VoiceSessionContextValue = {
   userVoiceVizRef: React.RefObject<HTMLCanvasElement>
   focusedFanForVoice: FocusedFan | null
   setFocusedFanForVoice: (fan: FocusedFan | null) => void
+  /** From Divine Manager settings; when after_closing_prompt, End is gated until voice_allow_user_hangup runs. */
+  voiceHangupPolicy: VoiceHangupPolicy
+  /** Model called voice_allow_user_hangup (after asking "anything else?"). */
+  userHangupAllowed: boolean
+  /** Whether the manual End button should be enabled (not gated). */
+  canManualHangup: boolean
+  /** End call even when canManualHangup is false (e.g. stuck session). */
+  forceEndVoiceCall: () => void
 }
 
 const VoiceSessionContext = createContext<VoiceSessionContextValue | null>(null)
@@ -68,6 +77,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const userVoiceVizRef = useRef<HTMLCanvasElement | null>(null)
   const [focusedFanForVoice, setFocusedFanForVoice] = useState<FocusedFan | null>(null)
   const [closingPending, setClosingPending] = useState(false)
+  const [voiceHangupPolicy, setVoiceHangupPolicy] = useState<VoiceHangupPolicy>('always')
+  const [userHangupAllowed, setUserHangupAllowed] = useState(false)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -172,6 +183,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       oaiDataChannelRef.current = null
       setStatus('idle')
       setError(null)
+      setUserHangupAllowed(false)
 
       void fetch('/api/divine/voice-memory', {
         method: 'PATCH',
@@ -245,9 +257,31 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     scheduleIdleDisconnectRef.current()
   }, [])
 
+  const refreshVoiceHangupPolicy = useCallback(async () => {
+    try {
+      const res = await fetch('/api/divine/manager-settings', { credentials: 'include' })
+      const json = (await res.json().catch(() => ({}))) as {
+        voice_hangup_policy?: VoiceHangupPolicy
+      }
+      if (json.voice_hangup_policy === 'after_closing_prompt') {
+        setVoiceHangupPolicy('after_closing_prompt')
+      } else {
+        setVoiceHangupPolicy('always')
+      }
+    } catch {
+      setVoiceHangupPolicy('always')
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshVoiceHangupPolicy()
+  }, [refreshVoiceHangupPolicy])
+
   const startVoiceCall = useCallback(async () => {
     if (status === 'connecting' || status === 'connected') return
     setError(null)
+    setUserHangupAllowed(false)
+    await refreshVoiceHangupPolicy()
     setStatus('connecting')
     try {
       if (typeof navigator === 'undefined') {
@@ -337,11 +371,40 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         try {
           const payload = JSON.parse(event.data as string) as {
             type?: string
-            tool_calls?: Array<{ name?: string; arguments?: string }>
+            tool_calls?: Array<{
+              id?: string
+              call_id?: string
+              name?: string
+              arguments?: string
+            }>
             response?: {
               output?: Array<{ id?: string; type?: string; name?: string; arguments?: string }>
             }
           }
+
+          /** Shared path: cue + Realtime function_call_output so the model always receives tool results. */
+          const finalizeRealtimeToolOutput = (callId: string | undefined, summary: string | null) => {
+            if (summary == null || summary === '') return
+            const lowerSummary = summary.toLowerCase()
+            const isErrorSummary =
+              lowerSummary.startsWith('error ') ||
+              lowerSummary.startsWith('failed ') ||
+              lowerSummary.includes('failed to ')
+            playCue(isErrorSummary ? 'error' : 'done')
+            if (callId) {
+              dc.send(
+                JSON.stringify({
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    call_id: callId,
+                    output: summary,
+                  },
+                }),
+              )
+            }
+          }
+
           const runTool = async (
             name: string,
             args: Record<string, unknown>,
@@ -373,7 +436,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 return `Error: Tool failed (${detail}). Say this to the creator and suggest Divine text chat if it keeps happening.`
               }
               if (Array.isArray(data.ui_actions) && data.ui_actions.length) {
-                divinePanel?.applyUiActionsFromTools?.(data.ui_actions as DivineUiAction[])
+                const raw = data.ui_actions as DivineUiAction[]
+                for (const a of raw) {
+                  if (a.type === 'voice_set_hangup' && 'allowed' in a && a.allowed) {
+                    setUserHangupAllowed(true)
+                  }
+                }
+                const rest = raw.filter((a) => a.type !== 'voice_set_hangup')
+                if (rest.length) {
+                  divinePanel?.applyUiActionsFromTools?.(rest)
+                }
               }
               let out = typeof data.content === 'string' ? data.content.trim() : ''
               if (Array.isArray(data.pending_confirmations) && data.pending_confirmations.length) {
@@ -442,7 +514,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                         }
                       })()
                     : (tc.arguments ?? {}) as Record<string, unknown>
-                return runTool(name!, args)
+                const callId = tc.id ?? tc.call_id
+                const summary = await runTool(name!, args)
+                finalizeRealtimeToolOutput(callId, summary)
               }),
             )
 
@@ -458,7 +532,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                       }
                     })()
                   : (tc.arguments ?? {}) as Record<string, unknown>
-              await runTool(tc.name, args)
+              const callId = tc.id ?? tc.call_id
+              const summary = await runTool(tc.name, args)
+              finalizeRealtimeToolOutput(callId, summary)
             }
             return
           }
@@ -482,25 +558,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                     : {}
 
                 const summary = await runTool(item.name, args as Record<string, unknown>)
-                if (!summary) return
-
-                const lowerSummary = summary.toLowerCase()
-                const isErrorSummary =
-                  lowerSummary.startsWith('error ') ||
-                  lowerSummary.startsWith('failed ') ||
-                  lowerSummary.includes('failed to ')
-                playCue(isErrorSummary ? 'error' : 'done')
-
-                const eventPayload = {
-                  type: 'conversation.item.create',
-                  item: {
-                    type: 'function_call_output',
-                    // call_id links this output to the original function_call if present.
-                    call_id: item.id,
-                    output: summary,
-                  },
-                }
-                dc.send(JSON.stringify(eventPayload))
+                finalizeRealtimeToolOutput(item.id, summary)
               }),
             )
           }
@@ -560,7 +618,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       setStatus('error')
       playCue('error')
     }
-  }, [endVoiceCall, playCue, status, divinePanel, sendBriefingQuestion])
+  }, [endVoiceCall, playCue, status, divinePanel, sendBriefingQuestion, refreshVoiceHangupPolicy])
 
   /** Arm optional idle disconnect when session becomes connected (no-op if NEXT_PUBLIC_DIVINE_VOICE_IDLE_MS unset). */
   useEffect(() => {
@@ -723,6 +781,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [localVoiceStream])
 
+  const canManualHangup = voiceHangupPolicy === 'always' || userHangupAllowed
+
+  const forceEndVoiceCall = useCallback(() => {
+    endVoiceCall('user_hangup')
+  }, [endVoiceCall])
+
   const value: VoiceSessionContextValue = {
     status,
     voiceSurfaceState,
@@ -737,6 +801,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     userVoiceVizRef,
     focusedFanForVoice,
     setFocusedFanForVoice,
+    voiceHangupPolicy,
+    userHangupAllowed,
+    canManualHangup,
+    forceEndVoiceCall,
   }
 
   return (

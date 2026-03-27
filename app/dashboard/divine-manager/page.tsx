@@ -79,6 +79,8 @@ export default function DivineManagerPage() {
     autoPostSchedule: { enabled: false, maxPerDay: 2 },
     autoWelcomeDm: { enabled: false, maxPerDay: 50 },
     autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
+    voice_hangup_policy: 'always',
+    dm_focus_mode: 'navigate',
     voice_auto: { mass_dm: false, pricing_changes: false, content_publish: false },
     alerts: {
       tasks_for_whale_tips: true,
@@ -102,6 +104,7 @@ export default function DivineManagerPage() {
   const [resetting, setResetting] = useState(false)
   const realtimeStatus = voiceSession?.status ?? 'idle'
   const closingPending = voiceSession?.closingPending ?? false
+  const canManualHangup = voiceSession?.canManualHangup ?? true
   const realtimeError = voiceSession?.error ?? null
   const remoteVoiceStream = voiceSession?.remoteVoiceStream ?? null
   const voiceVizRef = voiceSession?.voiceVizRef ?? useRef<HTMLCanvasElement | null>(null)
@@ -186,6 +189,9 @@ export default function DivineManagerPage() {
               mass_dm_batch_enabled: false,
               ...merged.jobs,
             },
+            voice_hangup_policy:
+              merged.voice_hangup_policy === 'after_closing_prompt' ? 'after_closing_prompt' : 'always',
+            dm_focus_mode: merged.dm_focus_mode === 'overlay' ? 'overlay' : 'navigate',
           })
           setSelectedMode(s.mode)
           setManagerArchetype(s.manager_archetype || 'hermes')
@@ -403,6 +409,8 @@ export default function DivineManagerPage() {
         autoPostSchedule: { enabled: false, maxPerDay: 2 },
         autoWelcomeDm: { enabled: false, maxPerDay: 50 },
         autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
+        voice_hangup_policy: 'always',
+        dm_focus_mode: 'navigate',
         voice_auto: { mass_dm: false, pricing_changes: false, content_publish: false },
         alerts: {
           tasks_for_whale_tips: true,
@@ -1198,6 +1206,49 @@ export default function DivineManagerPage() {
                         }
                       />
                     </div>
+                    <div className="space-y-2 pt-2 border-t border-border">
+                      <Label>Manual End call button</Label>
+                      <Select
+                        value={automationRules.voice_hangup_policy ?? 'always'}
+                        onValueChange={(v) =>
+                          setAutomationRules((r) => ({
+                            ...r,
+                            voice_hangup_policy: v as 'always' | 'after_closing_prompt',
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="always">Always available</SelectItem>
+                          <SelectItem value="after_closing_prompt">Only after Divine asks if you need anything else</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Strict mode requires Divine to call voice_allow_user_hangup before End unlocks. Use Force end if stuck.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Open fan chat from Divine</Label>
+                      <Select
+                        value={automationRules.dm_focus_mode ?? 'navigate'}
+                        onValueChange={(v) =>
+                          setAutomationRules((r) => ({
+                            ...r,
+                            dm_focus_mode: v as 'navigate' | 'overlay',
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="navigate">Navigate to Messages</SelectItem>
+                          <SelectItem value="overlay">Floating overlay (stay on current page)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </>
@@ -1942,10 +1993,31 @@ export default function DivineManagerPage() {
                   {realtimeStatus === 'connecting' ? 'Connecting…' : 'Start voice call'}
                 </Button>
               ) : (
-                <Button size="sm" variant="destructive" onClick={endRealtimeVoice}>
-                  <PhoneOff className="h-3 w-3" />
-                  End call
-                </Button>
+                <div className="flex flex-col items-start gap-1">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={!canManualHangup}
+                    title={
+                      canManualHangup
+                        ? 'End voice call'
+                        : 'Wait until Divine asks if you need anything else, or use Force end'
+                    }
+                    onClick={endRealtimeVoice}
+                  >
+                    <PhoneOff className="h-3 w-3" />
+                    End call
+                  </Button>
+                  {!canManualHangup && voiceSession?.forceEndVoiceCall && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      onClick={() => voiceSession.forceEndVoiceCall()}
+                    >
+                      Force end call
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             {realtimeError && (

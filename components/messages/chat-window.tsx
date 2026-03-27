@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -210,7 +210,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   /** After switching threads or initial load, jump to latest message (top-of-thread is wrong default). */
   const pendingScrollToLatestRef = useRef(false)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [niches, setNiches] = useState<string[]>([])
   const [boundaries, setBoundaries] = useState<string[]>([])
   const [flirtLevel, setFlirtLevel] = useState<number>(2)

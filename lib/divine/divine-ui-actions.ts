@@ -125,14 +125,18 @@ export function applyDivineUiActions(
     if (a.type === 'focus_fan' && a.fanId) {
       const id = String(a.fanId).trim()
       if (FAN_ID_RE.test(id)) {
-        if (options?.currentFocusedFanId != null && options.currentFocusedFanId === id) {
-          continue
+        const alreadyFocused =
+          options?.currentFocusedFanId != null && options.currentFocusedFanId === id
+        if (!alreadyFocused) {
+          setFocusedFan({ id })
         }
-        setFocusedFan({ id })
         if (a.presentation === 'overlay' && options?.onFocusFanOverlay) {
           options.onFocusFanOverlay(id)
         } else {
-          router.push(`/dashboard/messages?fanId=${encodeURIComponent(id)}`)
+          // Plain /dashboard/messages (no ?fanId=): Messages selects the thread from focusedFan
+          // after conversations load—same as picking a chat in the list. Avoids client crashes seen
+          // with deep-link query + searchParams on some navigations.
+          router.push('/dashboard/messages')
         }
       }
     }

@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { ConversationList, type Conversation } from './conversation-list'
+import { ConversationList, conversationRowKey, type Conversation } from './conversation-list'
 import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
 import { MessageEngagementInsights } from './message-engagement-insights'
@@ -304,7 +304,9 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
           <div className="hidden md:flex flex-1 gap-4 min-h-0">
             <ConversationList
               conversations={conversations}
-              selectedId={selectedConversation?.user.id}
+              selectedKey={
+                selectedConversation ? conversationRowKey(selectedConversation) : undefined
+              }
               onSelect={(conv) => setSelectedConversation(conv)}
             />
             <ChatWindow
@@ -325,7 +327,9 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
             ) : (
               <ConversationList
                 conversations={conversations}
-                selectedId={selectedConversation?.user.id}
+                selectedKey={
+                  selectedConversation ? conversationRowKey(selectedConversation) : undefined
+                }
                 onSelect={(conv) => setSelectedConversation(conv)}
               />
             )}

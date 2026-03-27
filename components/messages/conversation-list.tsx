@@ -34,13 +34,19 @@ export type Conversation = OnlyFansConversation & {
   chatId?: string
 }
 
+/** Stable row id + list key when the same numeric id can exist on OnlyFans and Fansly. */
+export function conversationRowKey(c: Pick<Conversation, 'platform' | 'user'>): string {
+  return `${c.platform}:${String(c.user.id)}`
+}
+
 interface ConversationListProps {
   conversations: Conversation[]
-  selectedId?: string
+  /** Highlight row; use `conversationRowKey(selected)` so platform+id disambiguates. */
+  selectedKey?: string
   onSelect: (conversation: Conversation) => void
 }
 
-export function ConversationList({ conversations, selectedId, onSelect }: ConversationListProps) {
+export function ConversationList({ conversations, selectedKey, onSelect }: ConversationListProps) {
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get('search') ?? ''
   const [searchQuery, setSearchQuery] = useState(initialQuery)
@@ -94,11 +100,11 @@ export function ConversationList({ conversations, selectedId, onSelect }: Conver
         <div className="space-y-1">
           {filteredConversations.map((conv) => (
             <button
-              key={conv.user.id}
+              key={conversationRowKey(conv)}
               onClick={() => onSelect(conv)}
               className={cn(
                 'flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors',
-                selectedId === conv.user.id
+                selectedKey != null && selectedKey === conversationRowKey(conv)
                   ? 'bg-secondary'
                   : 'hover:bg-secondary/50'
               )}

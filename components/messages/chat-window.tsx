@@ -447,7 +447,9 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     }
 
     loadMessages()
-  }, [conversation])
+    // Prefer id + platform over full `conversation` so parents that pass inline objects
+    // (or stale memo) cannot retrigger this effect every render (React #185).
+  }, [conversation?.user?.id, conversation?.platform])
 
   // Opened a thread or finished loading: jump to latest before paint (avoids flash at top).
   useLayoutEffect(() => {

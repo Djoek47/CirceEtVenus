@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { ChatWindow } from '@/components/messages/chat-window'
 import { Button } from '@/components/ui/button'
@@ -45,7 +45,30 @@ export function DmChatOverlay() {
     }
   }, [fanId])
 
-  if (!panel || !fanId || !userId) return null
+  // Stable identity: ChatWindow keys effects on conversation; a new object every render
+  // (especially `new Date()` in lastMessage) caused infinite updates (React #185).
+  // Must run before any early return (rules of hooks).
+  const conversation = useMemo(() => {
+    if (!fanId) return null
+    return {
+      user: {
+        id: fanId,
+        username: meta?.username ?? '…',
+        name: meta?.display_name ?? meta?.username ?? 'Fan',
+        avatar: '',
+      },
+      lastMessage: {
+        id: 'stub',
+        text: '',
+        createdAt: '1970-01-01T00:00:00.000Z',
+        isRead: true,
+      },
+      unreadCount: 0,
+      platform: 'onlyfans' as const,
+    }
+  }, [fanId, meta?.username, meta?.display_name])
+
+  if (!panel || !fanId || !userId || !conversation) return null
 
   const title =
     meta?.display_name && meta?.username
@@ -53,23 +76,6 @@ export function DmChatOverlay() {
       : meta?.username
         ? `@${meta.username}`
         : `Fan ${fanId.slice(0, 8)}…`
-
-  const conversation = {
-    user: {
-      id: fanId,
-      username: meta?.username ?? '…',
-      name: meta?.display_name ?? meta?.username ?? 'Fan',
-      avatar: '',
-    },
-    lastMessage: {
-      id: 'stub',
-      text: '',
-      createdAt: new Date().toISOString(),
-      isRead: true,
-    },
-    unreadCount: 0,
-    platform: 'onlyfans' as const,
-  }
 
   return (
     <div

@@ -69,12 +69,44 @@ export async function getRuntimePlatformConnection(
   userId: string,
   platform: RuntimePlatform,
 ): Promise<RuntimePlatformConnection> {
-  const { data: rows } = await supabase
+  const { data: rows, error } = await supabase
     .from('platform_connections')
     .select('is_connected, platform_username, access_token, platform_user_id')
     .eq('user_id', userId)
     .eq('platform', platform)
-    .order('updated_at', { ascending: false, nullsFirst: false })
+  if (error) {
+    // Fallback path for schema drift / query errors: keep chat usable and avoid false negatives.
+    const { data: fallback } = await supabase
+      .from('platform_connections')
+      .select('platform_username, access_token, platform_user_id')
+      .eq('user_id', userId)
+      .eq('platform', platform)
+      .eq('is_connected', true)
+      .maybeSingle()
+    const usernameRaw = (fallback as { platform_username?: string | null } | null)?.platform_username
+    const accessTokenRaw = (fallback as { access_token?: string | null } | null)?.access_token
+    const platformUserIdRaw = (fallback as { platform_user_id?: string | null } | null)?.platform_user_id
+    const username = typeof usernameRaw === 'string' && usernameRaw.trim() ? usernameRaw.trim() : null
+    const accessToken =
+      typeof accessTokenRaw === 'string' && accessTokenRaw.trim() ? accessTokenRaw.trim() : null
+    const platformUserId =
+      typeof platformUserIdRaw === 'string' && platformUserIdRaw.trim()
+        ? platformUserIdRaw.trim()
+        : null
+    const hasRequiredCredential =
+      platform === 'onlyfans' ? accessToken != null : platformUserId != null
+    if (hasRequiredCredential) {
+      return { platform, connected: true, username, accessToken, platformUserId }
+    }
+    return {
+      platform,
+      connected: false,
+      reason: fallback ? 'missing_credential' : 'not_connected',
+      username,
+      accessToken,
+      platformUserId,
+    }
+  }
 
   const list = Array.isArray(rows) ? rows : []
   const normalized = list.map((row) => {

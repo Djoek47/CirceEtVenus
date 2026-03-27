@@ -110,6 +110,7 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
   // Open the thread for ?fanId= or Divine voice/chat "focus fan"
   useEffect(() => {
     if (!fanIdFromUrl || conversations.length === 0) return
+    if (selectedRef.current && String(selectedRef.current.user.id) === String(fanIdFromUrl)) return
     const match = conversations.find((c) => String(c.user.id) === String(fanIdFromUrl))
     if (match) setSelectedConversation(match)
   }, [fanIdFromUrl, conversations])
@@ -148,7 +149,8 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
     return () => {
       if (threadInsightDebounceRef.current) clearTimeout(threadInsightDebounceRef.current)
     }
-  }, [selectedConversation?.user.id, selectedConversation?.platform, selectedConversation, fanIdFromUrl])
+    // Omit full `selectedConversation` — new object refs from refresh would retrigger unnecessarily.
+  }, [selectedConversation?.user.id, selectedConversation?.platform, fanIdFromUrl])
 
   if (loading) {
     return (

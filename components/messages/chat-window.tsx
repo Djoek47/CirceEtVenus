@@ -305,20 +305,34 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   }
 
   // When a conversation becomes active, automatically focus that fan for Divine + voice (primitives-only deps to avoid infinite loop when context updates).
-  const focusedFanId = conversation?.user?.id
-  const focusedFanUsername = conversation?.user?.username
-  const focusedFanName = conversation?.user?.name
+  // Normalize id (API may flip number/string) and trim strings (undefined vs "" must not oscillate deps).
+  const focusedFanIdKey =
+    conversation?.user?.id != null && conversation.user.id !== ''
+      ? String(conversation.user.id)
+      : undefined
+  const focusedFanUsername = conversation?.user?.username?.trim() || undefined
+  const focusedFanName = conversation?.user?.name?.trim() || undefined
   useLayoutEffect(() => {
-    if (focusedFanId == null || !divinePanel) return
+    if (focusedFanIdKey == null || !divinePanel) return
     const fan = {
-      id: String(focusedFanId),
-      username: focusedFanUsername ?? undefined,
-      name: focusedFanName ?? undefined,
+      id: focusedFanIdKey,
+      username: focusedFanUsername,
+      name: focusedFanName,
     }
-    divinePanel.setFocusedFan(fan)
-    voiceSession?.setFocusedFanForVoice(fan)
+    const cur = divinePanel.focusedFan
+    const curVoice = voiceSession?.focusedFanForVoice
+    const fieldsMatch = (
+      a: { id: string; username?: string | null; name?: string | null } | null | undefined,
+    ) =>
+      a != null &&
+      String(a.id) === fan.id &&
+      (a.username?.trim() || undefined) === fan.username &&
+      (a.name?.trim() || undefined) === fan.name
+    if (fieldsMatch(cur) && fieldsMatch(curVoice)) return
+    if (!fieldsMatch(cur)) divinePanel.setFocusedFan(fan)
+    if (!fieldsMatch(curVoice)) voiceSession?.setFocusedFanForVoice(fan)
     // Intentionally omit divinePanel/voiceSession from deps: their refs change when we call setFocusedFan, which would retrigger this effect and cause "Maximum update depth exceeded" (React #185).
-  }, [focusedFanId, focusedFanUsername, focusedFanName])
+  }, [focusedFanIdKey, focusedFanUsername, focusedFanName])
 
   const dmSuggestionBridge = divinePanel?.dmSuggestionBridge ?? null
   const clearDmSuggestionBridge = divinePanel?.clearDmSuggestionBridge

@@ -2,6 +2,7 @@
  * Shared Divine Manager tool execution for chat and voice (single source of truth).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { executeDivineIntentPost, type IntentBody } from '@/lib/divine/divine-intent-execute'
 import { runLeakScan } from '@/lib/leaks/run-scan'
 import { runReputationScanCore } from '@/lib/reputation/run-reputation-scan'
 import { runReputationBriefingCore } from '@/lib/reputation/briefing-server'
@@ -264,6 +265,32 @@ function fanRecentToConversationRow(r: {
   }
 }
 
+/** Non-exact lookups: land on Messages so the creator can confirm or pick (avoids “stuck” off-page). */
+function prependMessagesNavForNonExactLookup(
+  uiActions: DivineUiAction[],
+  resolved: DivineLookupMeta['resolved'],
+) {
+  if (
+    resolved === 'multi_match_confirm_required' ||
+    resolved === 'fuzzy_ambiguous' ||
+    resolved === 'fuzzy_confirm_required' ||
+    resolved === 'no_match'
+  ) {
+    uiActions.unshift({ type: 'navigate', path: '/dashboard/messages' })
+  }
+}
+
+function finalizeLookupToolReturn(
+  content: string,
+  uiActions: DivineUiAction[],
+  lookupMeta: DivineLookupMeta | null,
+): { content: string; uiActions: DivineUiAction[]; lookupMeta: DivineLookupMeta | null } {
+  if (lookupMeta) {
+    prependMessagesNavForNonExactLookup(uiActions, lookupMeta.resolved)
+  }
+  return { content, uiActions, lookupMeta }
+}
+
 /** Shared with runToolCall — spellback, lookup_meta, fuzzy fallbacks; focus_fan only on confident single exact match. */
 export async function runGetDmConversationsToolResult(
   supabase: SupabaseClient,
@@ -300,7 +327,7 @@ export async function runGetDmConversationsToolResult(
       dedupe_key: buildDedupeKey('', []),
       next_step_hint: 'Browse results or pass query to search.',
     }
-    return { content: appendLookupMetaBlock(listBody, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(listBody, meta), uiActions, meta)
   }
 
   let content = formatSpellbackLine(rawQuery) + listBody
@@ -318,7 +345,7 @@ export async function runGetDmConversationsToolResult(
       next_step_hint:
         'Exact match — chat opens in app. Do not call get_dm_conversations again with the same query. Use get_dm_thread with this fanId.',
     }
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   if (conversations.length > 1) {
@@ -335,7 +362,7 @@ export async function runGetDmConversationsToolResult(
     }
     content +=
       '\n\nMultiple matches — ask the creator which fan to open (fanId) or narrow the name.'
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   const broad = await loadDivineDmConversations(supabase, userId, { limit: 80, query: '' })
@@ -355,7 +382,7 @@ export async function runGetDmConversationsToolResult(
         'No match. Do NOT repeat get_dm_conversations with the same query. Ask the creator to re-say or retype the exact username, or provide fan id.',
     }
     content += '\n\nNo close matches in recent chats. Ask them to confirm spelling or open Messages to copy fan id.'
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   const best = ranked[0]!
@@ -374,7 +401,7 @@ export async function runGetDmConversationsToolResult(
     }
     const label = best.row.name ? `${best.row.name} (@${best.row.username})` : `@${best.row.username}`
     content += `\n\nClosest match (please confirm): ${label} [id: ${best.row.fanId}] (similarity ~${(best.score * 100).toFixed(0)}%).`
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   const top3 = ranked.slice(0, 3)
@@ -389,7 +416,7 @@ export async function runGetDmConversationsToolResult(
       'List options 1–3 with fanIds. Do NOT call get_dm_conversations again with the same query.',
   }
   content += '\n\nPossible fuzzy matches — ask which option or use fan id.'
-  return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
 }
 
 export async function runLookupFanToolResult(
@@ -427,7 +454,7 @@ export async function runLookupFanToolResult(
         dedupe_key: buildDedupeKey(rawQuery, toCandidates([{ row, score: 1 }])),
         next_step_hint: 'Exact cache hit — chat opens. Do not call lookup_fan again with the same query.',
       }
-      return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+      return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
     }
 
     const top3 = ordered.slice(0, 3)
@@ -441,7 +468,7 @@ export async function runLookupFanToolResult(
       next_step_hint: 'Do NOT call lookup_fan again with the same query. Ask which fanId.',
     }
     content += '\n\nMultiple cached matches — ask fanId or narrow the query.'
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   const { conversations, message } = await loadDivineDmConversations(supabase, userId, { limit: 30, query: rawQuery })
@@ -472,7 +499,7 @@ export async function runLookupFanToolResult(
       dedupe_key: buildDedupeKey(rawQuery, toCandidates([{ row: conversations[0], score: 1 }])),
       next_step_hint: 'Exact match — do not call lookup_fan again.',
     }
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   if (conversations.length > 1) {
@@ -487,7 +514,7 @@ export async function runLookupFanToolResult(
       next_step_hint: 'Do NOT call lookup_fan again. Ask which fanId.',
     }
     content += `Matches from OnlyFans:\n${linesOf(conversations).join('\n')}\n\nMultiple matches — ask fanId.`
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   const broad = await loadDivineDmConversations(supabase, userId, { limit: 80, query: '' })
@@ -507,7 +534,7 @@ export async function runLookupFanToolResult(
       next_step_hint: 'No match. Ask to retype username or fan id. Do not repeat lookup_fan with the same query.',
     }
     content += `No fans matched "${rawQuery}" in cache or live list after fuzzy scan.`
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   const best = ranked[0]!
@@ -524,7 +551,7 @@ export async function runLookupFanToolResult(
     }
     const label = best.row.name ? `${best.row.name} (@${best.row.username})` : `@${best.row.username}`
     content += `Closest fuzzy match: ${label} [fanId: ${best.row.fanId}] (~${(best.score * 100).toFixed(0)}%). Ask to confirm.`
-    return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+    return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
   }
 
   const top3 = ranked.slice(0, 3)
@@ -538,7 +565,7 @@ export async function runLookupFanToolResult(
     next_step_hint: 'Offer 1–3 options with fanIds. Do not repeat lookup_fan.',
   }
   content += `Possible fuzzy matches — ask which fan or fan id.`
-  return { content: appendLookupMetaBlock(content, meta), uiActions, lookupMeta: meta }
+  return finalizeLookupToolReturn(appendLookupMetaBlock(content, meta), uiActions, meta)
 }
 
 export async function runContextTool(
@@ -957,10 +984,24 @@ export async function runContextTool(
   return 'Unknown context tool.'
 }
 
+/** Same shape as POST /api/divine/intent (tool args + intent `type` last). */
+function buildIntentRequestBody(intentType: string, args: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = { ...args, type: intentType }
+  if (intentType === 'get_message_engagement' && (args.type === 'direct' || args.type === 'mass')) {
+    body.channel = args.type
+  }
+  if (intentType === 'create_task' && args.summary) {
+    body.payload = { type: (args as { type?: string }).type ?? 'content_idea', summary: args.summary }
+    body.summary = args.summary
+  }
+  return body
+}
+
 export async function runIntent(
   type: string,
   args: Record<string, unknown>,
   cookie: string,
+  ctx?: { supabase: SupabaseClient },
 ): Promise<{
   status: string
   intent_id?: string
@@ -969,12 +1010,31 @@ export async function runIntent(
   success?: boolean
   error?: string
 }> {
-  const base = getBaseUrl()
-  const body: Record<string, unknown> = { type, ...args }
-  if (type === 'create_task' && args.summary) {
-    body.payload = { type: (args as { type?: string }).type ?? 'content_idea', summary: args.summary }
-    body.summary = args.summary
+  const body = buildIntentRequestBody(type, args) as IntentBody
+
+  if (ctx?.supabase) {
+    const {
+      data: { user },
+    } = await ctx.supabase.auth.getUser()
+    if (!user) {
+      return { status: 'failed', error: 'Unauthorized' }
+    }
+    const result = await executeDivineIntentPost(ctx.supabase, user, body)
+    if (result.status >= 400) {
+      const err = typeof result.body.error === 'string' ? result.body.error : `HTTP ${result.status}`
+      return { status: 'failed', error: err, ...result.body }
+    }
+    return result.body as {
+      status: string
+      intent_id?: string
+      summary?: string
+      message?: string
+      success?: boolean
+      error?: string
+    }
   }
+
+  const base = getBaseUrl()
   let res: Response
   try {
     res = await fetch(`${base}/api/divine/intent`, {
@@ -1235,12 +1295,12 @@ export async function runToolCall(
   const pendingConfirmations: Array<{ type: string; intent_id: string; summary?: string }> = []
 
   if (name === 'get_notifications') {
-    const intentRes = await runIntent('get_notifications_summary', intentBody, cookie)
+    const intentRes = await runIntent('get_notifications_summary', intentBody, cookie, { supabase })
     const summary = (intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)).slice(0, 4000)
     return { tool_call_id: tc.id, content: summary, pendingConfirmations, uiActions }
   }
   if (name === 'list_notifications') {
-    const intentRes = await runIntent('list_notifications', intentBody, cookie)
+    const intentRes = await runIntent('list_notifications', intentBody, cookie, { supabase })
     let summary = intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)
     const r = intentRes as { notifications?: unknown[] }
     if (Array.isArray(r.notifications) && r.notifications.length) {
@@ -1249,7 +1309,7 @@ export async function runToolCall(
     return { tool_call_id: tc.id, content: summary.slice(0, 6000), pendingConfirmations, uiActions }
   }
   if (name === 'mark_notifications_read') {
-    const intentRes = await runIntent('mark_notifications_read', intentBody, cookie)
+    const intentRes = await runIntent('mark_notifications_read', intentBody, cookie, { supabase })
     const summary = (intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)).slice(0, 2000)
     return { tool_call_id: tc.id, content: summary, pendingConfirmations, uiActions }
   }
@@ -1283,7 +1343,7 @@ export async function runToolCall(
     }
   }
 
-  const intentRes = await runIntent(name, intentBody, cookie)
+  const intentRes = await runIntent(name, intentBody, cookie, { supabase })
   let summary =
     intentRes.summary ??
     intentRes.message ??

@@ -1,11 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { DivineWorkingLogo } from '@/components/divine/divine-working-logo'
+import { FanProfileModal } from '@/components/messages/fan-profile-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Crown, Loader2, Copy, ChevronRight, MessageSquare, FileText } from 'lucide-react'
+import { Crown, Loader2, Copy, ChevronRight, MessageSquare, FileText, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const VOICE_BAR_COUNT = 5
@@ -29,6 +31,7 @@ function VoiceWaveIcon({ className }: { className?: string }) {
 
 export function DivinePanel() {
   const ctx = useDivinePanel()
+  const [profileOpen, setProfileOpen] = useState(false)
   if (!ctx) return null
 
   const {
@@ -115,13 +118,23 @@ export function DivinePanel() {
             </p>
           )}
           {focusedFan && (
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground flex items-center justify-between">
-              <span>
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground flex items-center justify-between gap-2">
+              <span className="min-w-0">
                 Focused fan:{' '}
                 <span className="font-medium">
                   {focusedFan.name || focusedFan.username || focusedFan.id}
                 </span>
               </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 shrink-0 gap-1 px-2 text-[10px]"
+                onClick={() => setProfileOpen(true)}
+              >
+                <User className="h-3 w-3" />
+                Profile
+              </Button>
             </div>
           )}
           {/* Chat section */}
@@ -228,6 +241,16 @@ export function DivinePanel() {
           className="fixed inset-0 z-30 bg-black/20 md:hidden"
           aria-label="Close panel"
           onClick={collapse}
+        />
+      )}
+      {focusedFan && (
+        <FanProfileModal
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          fanId={focusedFan.id}
+          platform="onlyfans"
+          initialUsername={focusedFan.username}
+          initialName={focusedFan.name}
         />
       )}
     </>

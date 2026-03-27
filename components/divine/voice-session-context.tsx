@@ -55,6 +55,16 @@ function injectToolResultFallback(dc: RTCDataChannel, toolName: string, summary:
   )
 }
 
+/** After `function_call_output` items are added, Realtime does not auto-speak — must request a new response. */
+function triggerRealtimeAssistantResponse(dc: RTCDataChannel) {
+  dc.send(
+    JSON.stringify({
+      type: 'response.create',
+      response: { modalities: ['audio'] },
+    }),
+  )
+}
+
 type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error'
 
 /** Purple = tool/model work; gold = assistant speaking; idle = neither. */
@@ -416,13 +426,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          /** Shared path: cue + Realtime function_call_output so the model always receives tool results. */
+          /**
+           * Shared path: cue + Realtime function_call_output so the model receives tool results.
+           * Returns whether the caller should run `triggerRealtimeAssistantResponse` after the batch:
+           * `paired` = sent function_call_output (needs response.create); `fallback` = already sent response.create inside inject.
+           */
           const finalizeRealtimeToolOutput = (
             callId: string | undefined,
             summary: string | null,
             toolName?: string,
-          ) => {
-            if (summary == null || summary === '') return
+          ): 'paired' | 'fallback' | 'none' => {
+            if (summary == null || summary === '') return 'none'
             const lowerSummary = summary.toLowerCase()
             const isErrorSummary =
               lowerSummary.startsWith('error ') ||
@@ -440,10 +454,14 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                   },
                 }),
               )
-            } else if (toolName) {
+              return 'paired'
+            }
+            if (toolName) {
               // OpenAI Realtime must pair output to call_id; if the event shape omitted it, still deliver text.
               injectToolResultFallback(dc, toolName, summary)
+              return 'fallback'
             }
+            return 'none'
           }
 
           const runTool = async (
@@ -471,7 +489,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 content?: string
                 ui_actions?: { type: string; path?: string; fanId?: string }[]
                 pending_confirmations?: { type: string; intent_id: string; summary?: string }[]
-                lookup_meta?: DivineLookupMeta[]
+                /** voice-tool returns a single meta object; some clients use an array */
+                lookup_meta?: DivineLookupMeta | DivineLookupMeta[]
               }
               if (!res.ok) {
                 const detail = data.error?.trim() || `HTTP ${res.status}`
@@ -489,8 +508,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                   divinePanel?.applyUiActionsFromTools?.(rest)
                 }
               }
-              if (Array.isArray(data.lookup_meta) && data.lookup_meta.length > 0) {
-                const hint = formatFanLookupHint(data.lookup_meta[0])
+              const rawLm = data.lookup_meta
+              const firstLm = Array.isArray(rawLm) ? rawLm[0] : rawLm
+              if (firstLm && typeof firstLm === 'object') {
+                const hint = formatFanLookupHint(firstLm)
                 if (hint) divinePanel?.setFanLookupHint?.(hint)
               }
               let out = typeof data.content === 'string' ? data.content.trim() : ''
@@ -547,7 +568,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             const endCallToolCalls = toolCalls.filter((tc) => tc.name === 'end_call')
             const parallelToolCalls = toolCalls.filter((tc) => tc.name && tc.name !== 'end_call')
 
-            await Promise.all(
+            let needAssistantResponse = false
+            const results = await Promise.all(
               parallelToolCalls.map(async (tc) => {
                 const name = tc.name
                 const args =
@@ -562,9 +584,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                     : (tc.arguments ?? {}) as Record<string, unknown>
                 const callId = extractRealtimeFunctionCallId(tc)
                 const summary = await runTool(name!, args)
-                finalizeRealtimeToolOutput(callId, summary, name!)
+                return finalizeRealtimeToolOutput(callId, summary, name!)
               }),
             )
+            if (results.some((r) => r === 'paired')) needAssistantResponse = true
 
             for (const tc of endCallToolCalls) {
               if (!tc.name) continue
@@ -580,7 +603,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                   : (tc.arguments ?? {}) as Record<string, unknown>
               const callId = extractRealtimeFunctionCallId(tc)
               const summary = await runTool(tc.name, args)
-              finalizeRealtimeToolOutput(callId, summary, tc.name)
+              if (finalizeRealtimeToolOutput(callId, summary, tc.name) === 'paired') {
+                needAssistantResponse = true
+              }
+            }
+            if (needAssistantResponse) {
+              triggerRealtimeAssistantResponse(dc)
+              scheduleIdleDisconnectRef.current()
             }
             return
           }
@@ -590,7 +619,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
               (item) => item?.type === 'function_call' && item.name,
             ) as Array<{ id?: string; call_id?: string; name: string; arguments?: string }>
 
-            await Promise.all(
+            const doneResults = await Promise.all(
               fnItems.map(async (item) => {
                 const args =
                   typeof item.arguments === 'string'
@@ -604,9 +633,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                     : {}
 
                 const summary = await runTool(item.name, args as Record<string, unknown>)
-                finalizeRealtimeToolOutput(extractRealtimeFunctionCallId(item), summary, item.name)
+                return finalizeRealtimeToolOutput(extractRealtimeFunctionCallId(item), summary, item.name)
               }),
             )
+            if (doneResults.some((r) => r === 'paired')) {
+              triggerRealtimeAssistantResponse(dc)
+              scheduleIdleDisconnectRef.current()
+            }
           }
         } catch {
           // ignore non-JSON or unexpected format

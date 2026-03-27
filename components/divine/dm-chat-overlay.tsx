@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { ChatWindow } from '@/components/messages/chat-window'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,23 @@ export function DmChatOverlay() {
   const fanId = panel?.dmOverlayFanId ?? null
   const collapsed = panel?.dmOverlayCollapsed ?? false
   const userId = panel?.user?.id
+
+  const threadRefreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!fanId) return
+    if (threadRefreshDebounceRef.current) clearTimeout(threadRefreshDebounceRef.current)
+    threadRefreshDebounceRef.current = setTimeout(() => {
+      void fetch('/api/divine/refresh-thread-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ fanId }),
+      }).catch(() => undefined)
+    }, 4000)
+    return () => {
+      if (threadRefreshDebounceRef.current) clearTimeout(threadRefreshDebounceRef.current)
+    }
+  }, [fanId])
 
   useEffect(() => {
     if (!fanId) {

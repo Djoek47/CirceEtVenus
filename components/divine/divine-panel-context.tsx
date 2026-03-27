@@ -106,6 +106,7 @@ export function DivinePanelProvider({
     setDmOverlayCollapsed(false)
   }, [])
 
+  /** Voice + chat tools: same `focus_fan` id must not re-run navigation (idempotent). */
   const applyDivineUiActionsWithBridge = useCallback(
     (actions: DivineUiAction[] | undefined) => {
       applyDivineUiActionsBase(actions, router, setFocusedFan, {

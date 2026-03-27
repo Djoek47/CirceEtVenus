@@ -126,20 +126,29 @@ function MessagesLayoutContent({ userId, initialFanId }: MessagesLayoutProps) {
   const threadInsightDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const conv = selectedConversation
-    if (!conv || conv.platform !== 'onlyfans') return
-    const id = String(conv.user.id)
+    let id: string | null = null
+    if (conv?.platform === 'onlyfans') {
+      id = String(conv.user.id)
+    } else if (conv?.platform === 'fansly') {
+      return
+    } else if (!conv && fanIdFromUrl) {
+      // Deep link (?fanId=) while conversations still loading — same debounced refresh as overlay/Divine focus
+      id = String(fanIdFromUrl)
+    }
+    if (!id) return
     if (threadInsightDebounceRef.current) clearTimeout(threadInsightDebounceRef.current)
     threadInsightDebounceRef.current = setTimeout(() => {
       void fetch('/api/divine/refresh-thread-insight', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ fanId: id }),
       }).catch(() => undefined)
     }, 4000)
     return () => {
       if (threadInsightDebounceRef.current) clearTimeout(threadInsightDebounceRef.current)
     }
-  }, [selectedConversation?.user.id, selectedConversation?.platform])
+  }, [selectedConversation?.user.id, selectedConversation?.platform, selectedConversation, fanIdFromUrl])
 
   if (loading) {
     return (

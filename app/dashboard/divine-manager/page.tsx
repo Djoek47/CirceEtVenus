@@ -559,6 +559,7 @@ export default function DivineManagerPage() {
           }
           // Format 2: response.done with output items of type function_call
           if (payload?.type === 'response.done' && Array.isArray(payload.response?.output)) {
+            let sentDmFunctionOutput = false
             for (const item of payload.response.output) {
               if (item?.type === 'function_call' && item.name) {
                 const args =
@@ -594,12 +595,21 @@ export default function DivineManagerPage() {
                         },
                       }
                       dc.send(JSON.stringify(eventPayload))
+                      sentDmFunctionOutput = true
                     }
                   }
                 } else {
                   await runTool(item.name, args as Record<string, unknown>)
                 }
               }
+            }
+            if (sentDmFunctionOutput) {
+              dc.send(
+                JSON.stringify({
+                  type: 'response.create',
+                  response: { modalities: ['audio'] },
+                }),
+              )
             }
           }
         } catch {

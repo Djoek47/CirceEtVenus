@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { isDivineFullAccess } from '@/lib/divine/divine-full-access'
 import { runToolCall } from '@/lib/divine/manager-chat-tools'
@@ -12,6 +13,7 @@ export const maxDuration = 120
 /**
  * POST: run a single Divine Manager tool with the same logic as text chat (for Realtime voice).
  * Body: { name: string, arguments?: Record<string, unknown> }
+ * Returns `ui_actions` unchanged from `runToolCall` — client applies via `applyUiActionsFromTools` (idempotent focus).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -29,7 +31,10 @@ export async function POST(req: NextRequest) {
     if (!name.trim()) return NextResponse.json({ error: 'name is required' }, { status: 400 })
 
     const args = body.arguments && typeof body.arguments === 'object' ? body.arguments : {}
-    const cookie = req.headers.get('cookie') || ''
+    const fromHeader = req.headers.get('cookie') || ''
+    const jar = await cookies()
+    const fromJar = jar.getAll().map((c) => `${c.name}=${c.value}`).join('; ')
+    const cookie = fromHeader || fromJar
     const { ok: divineFull } = await isDivineFullAccess(supabase, user.id)
 
     const result = await runToolCall(

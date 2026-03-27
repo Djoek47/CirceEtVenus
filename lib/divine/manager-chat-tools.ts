@@ -22,6 +22,7 @@ import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
 import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
 import { normalizeScanForUi } from '@/lib/divine/divine-ui-actions'
 import type { DmReplyPackageResult } from '@/lib/divine/dm-reply-package'
+import { getStats } from '@/lib/divine-intent-actions'
 
 export const AI_TOOL_NAME_TO_ID: Record<string, string> = {
   analyze_content: 'standard-of-attraction',
@@ -838,6 +839,20 @@ export async function runToolCall(
     const intentRes = await runIntent('mark_notifications_read', intentBody, cookie)
     const summary = (intentRes.summary ?? intentRes.message ?? JSON.stringify(intentRes)).slice(0, 2000)
     return { tool_call_id: tc.id, content: summary, pendingConfirmations, uiActions }
+  }
+
+  /** Direct DB read — avoids server-to-server /api/divine/intent (cookie + Divine Manager "off" gate) and opens Analytics in-app. */
+  if (name === 'get_stats') {
+    const result = await getStats(supabase, userId, {
+      period: typeof args.period === 'string' ? args.period : undefined,
+      platform: typeof args.platform === 'string' ? args.platform : undefined,
+    })
+    return {
+      tool_call_id: tc.id,
+      content: result.summary.slice(0, 6000),
+      pendingConfirmations: emptyPending,
+      uiActions: [{ type: 'navigate', path: '/dashboard/analytics' }],
+    }
   }
 
   const intentRes = await runIntent(name, intentBody, cookie)

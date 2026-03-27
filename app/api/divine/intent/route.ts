@@ -187,7 +187,8 @@ export async function POST(req: NextRequest) {
     }
 
     const settings = await getSettings(supabase, user.id)
-    if (!settings || settings.mode === 'off') {
+    const analyticsOnly = type === 'get_stats'
+    if ((!settings || settings.mode === 'off') && !analyticsOnly) {
       return NextResponse.json(
         { error: 'Divine Manager is off. Enable it in the Divine Manager page.' },
         { status: 400 }

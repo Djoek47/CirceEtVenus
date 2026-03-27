@@ -13,6 +13,9 @@ import { useDivinePanel, type FocusedFan } from '@/components/divine/divine-pane
 import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
 import type { DivineVoiceDisconnectReason } from '@/lib/divine/voice-memory-types'
 
+/** Must stay below `voice-tool` route `maxDuration` so the client fails first with a clear message, not a generic hang. */
+const VOICE_TOOL_FETCH_TIMEOUT_MS = 115_000
+
 function summarizeVoiceToolArgs(args: Record<string, unknown>): string {
   try {
     const s = JSON.stringify(args)
@@ -349,12 +352,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
               return 'Call ended.'
             }
             toolInFlightRef.current = true
+            const abort = new AbortController()
+            const abortTimer = setTimeout(() => abort.abort(), VOICE_TOOL_FETCH_TIMEOUT_MS)
             try {
               const res = await fetch('/api/divine/voice-tool', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ name, arguments: args }),
+                signal: abort.signal,
               })
               const data = (await res.json().catch(() => ({}))) as {
                 error?: string
@@ -363,7 +369,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                 pending_confirmations?: { type: string; intent_id: string; summary?: string }[]
               }
               if (!res.ok) {
-                return data.error ? `Error: ${data.error}` : 'Tool failed.'
+                const detail = data.error?.trim() || `HTTP ${res.status}`
+                return `Error: Tool failed (${detail}). Say this to the creator and suggest Divine text chat if it keeps happening.`
               }
               if (Array.isArray(data.ui_actions) && data.ui_actions.length) {
                 divinePanel?.applyUiActionsFromTools?.(data.ui_actions as DivineUiAction[])
@@ -394,10 +401,21 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
                       : undefined,
                 }),
               }).catch(() => undefined)
-              return out || 'Done.'
-            } catch {
-              return 'Tool failed.'
+              if (!out) {
+                return `Error: Tool returned no text (empty response). Tell the creator the server may have timed out or Divine Manager blocked the action; suggest trying Divine text chat.`
+              }
+              return out
+            } catch (e) {
+              const aborted =
+                (typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'AbortError') ||
+                (e instanceof Error && e.name === 'AbortError')
+              if (aborted) {
+                return `Error: Tool timed out after ${Math.round(VOICE_TOOL_FETCH_TIMEOUT_MS / 1000)}s (OnlyFans or AI was too slow). Tell the creator to try again or use Divine text chat.`
+              }
+              const msg = e instanceof Error ? e.message : 'network error'
+              return `Error: Tool request failed (${msg}). Tell the creator and suggest Divine text chat if it persists.`
             } finally {
+              clearTimeout(abortTimer)
               toolInFlightRef.current = false
               scheduleIdleDisconnectRef.current()
             }

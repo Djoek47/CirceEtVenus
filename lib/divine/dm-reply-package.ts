@@ -17,7 +17,8 @@ import { upsertFanThreadInsightSnapshot } from '@/lib/divine/fan-thread-insight'
 
 type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
 
-const MAX_AI_MS = 7000
+/** Cold starts + Grok/OpenAI on Vercel often exceed 7s; avoid false AI_TIMEOUT during voice. */
+const MAX_AI_MS = 20_000
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {

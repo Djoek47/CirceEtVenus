@@ -4,6 +4,12 @@ import { isDivineFullAccess } from '@/lib/divine/divine-full-access'
 import { runToolCall } from '@/lib/divine/manager-chat-tools'
 
 /**
+ * OnlyFans + AI tools can exceed default Vercel limits (often 10s on Hobby).
+ * Raise in Vercel Project → Functions if this route 504s. Pro/Enterprise supports up to 800s.
+ */
+export const maxDuration = 120
+
+/**
  * POST: run a single Divine Manager tool with the same logic as text chat (for Realtime voice).
  * Body: { name: string, arguments?: Record<string, unknown> }
  */

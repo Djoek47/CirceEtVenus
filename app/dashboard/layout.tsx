@@ -33,8 +33,9 @@ export default async function DashboardLayout({
       onboardingCompleted={profile?.onboarding_completed || false}
     >
       <TourProvider>
-        <VoiceSessionProvider>
-          <DivinePanelWrapper user={user}>
+        {/* VoiceSessionProvider must be inside DivinePanelProvider so voice tools can call applyUiActionsFromTools (router + Messages bridge). */}
+        <DivinePanelWrapper user={user}>
+          <VoiceSessionProvider>
             <div className="flex h-screen bg-background">
               {/* Desktop sidebar - hidden on mobile */}
               <div className="hidden md:block">
@@ -48,8 +49,8 @@ export default async function DashboardLayout({
               </div>
             </div>
             <VoiceControlPopup />
-          </DivinePanelWrapper>
-        </VoiceSessionProvider>
+          </VoiceSessionProvider>
+        </DivinePanelWrapper>
       </TourProvider>
     </OnboardingProvider>
   )

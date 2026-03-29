@@ -81,6 +81,8 @@ export default function DivineManagerPage() {
     autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
     voice_hangup_policy: 'always',
     dm_focus_mode: 'navigate',
+    divine_send_delay_ms: 3000,
+    dm_pricing_style: 'balanced',
     voice_auto: { mass_dm: false, pricing_changes: false, content_publish: false },
     alerts: {
       tasks_for_whale_tips: true,
@@ -192,6 +194,14 @@ export default function DivineManagerPage() {
             voice_hangup_policy:
               merged.voice_hangup_policy === 'after_closing_prompt' ? 'after_closing_prompt' : 'always',
             dm_focus_mode: merged.dm_focus_mode === 'overlay' ? 'overlay' : 'navigate',
+            divine_send_delay_ms:
+              typeof merged.divine_send_delay_ms === 'number' && !Number.isNaN(merged.divine_send_delay_ms)
+                ? Math.max(0, Math.min(120_000, Math.floor(merged.divine_send_delay_ms)))
+                : 3000,
+            dm_pricing_style:
+              merged.dm_pricing_style === 'maximize_revenue' || merged.dm_pricing_style === 'premium_domme'
+                ? merged.dm_pricing_style
+                : 'balanced',
           })
           setSelectedMode(s.mode)
           setManagerArchetype(s.manager_archetype || 'hermes')
@@ -411,6 +421,8 @@ export default function DivineManagerPage() {
         autoFollowUpAfterTips: { enabled: false, maxPerDay: 20 },
         voice_hangup_policy: 'always',
         dm_focus_mode: 'navigate',
+        divine_send_delay_ms: 3000,
+        dm_pricing_style: 'balanced',
         voice_auto: { mass_dm: false, pricing_changes: false, content_publish: false },
         alerts: {
           tasks_for_whale_tips: true,
@@ -1263,6 +1275,44 @@ export default function DivineManagerPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>DM auto-send delay (ms)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={120000}
+                        step={500}
+                        value={automationRules.divine_send_delay_ms ?? 3000}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(120_000, Math.floor(Number(e.target.value) || 0)))
+                          setAutomationRules((r) => ({ ...r, divine_send_delay_ms: v }))
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        After Divine fills the composer, wait this long before sending. Use 0 for manual Send only.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>DM bundle pricing style</Label>
+                      <Select
+                        value={automationRules.dm_pricing_style ?? 'balanced'}
+                        onValueChange={(v) =>
+                          setAutomationRules((r) => ({
+                            ...r,
+                            dm_pricing_style: v as 'balanced' | 'maximize_revenue' | 'premium_domme',
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="balanced">Balanced</SelectItem>
+                          <SelectItem value="maximize_revenue">Maximize revenue</SelectItem>
+                          <SelectItem value="premium_domme">Premium / domme-leaning</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </>
@@ -1452,6 +1502,83 @@ export default function DivineManagerPage() {
                   })
                 }
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="divine-card scroll-mt-24">
+          <CardHeader>
+            <CardTitle className="font-serif text-lg">Divine messaging</CardTitle>
+            <CardDescription>
+              Composer fill, optional countdown auto-send, floating DM hub, and price-optimizer bias for bundle
+              suggestions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2 max-w-md">
+              <Label>Open fan chat from Divine</Label>
+              <Select
+                value={automationRules.dm_focus_mode ?? 'navigate'}
+                onValueChange={(v) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    dm_focus_mode: v as 'navigate' | 'overlay',
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="navigate">Navigate to Messages</SelectItem>
+                  <SelectItem value="overlay">Floating overlay</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 max-w-xs">
+              <Label>DM auto-send delay (ms)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={120000}
+                step={500}
+                value={automationRules.divine_send_delay_ms ?? 3000}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.min(120_000, Math.floor(Number(e.target.value) || 0)))
+                  setAutomationRules((r) => ({ ...r, divine_send_delay_ms: v }))
+                }}
+                onBlur={() =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    divine_send_delay_ms: Math.max(
+                      0,
+                      Math.min(120_000, Math.floor(automationRules.divine_send_delay_ms ?? 3000)),
+                    ),
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">0 = fill composer only; no countdown auto-send.</p>
+            </div>
+            <div className="space-y-2 max-w-md">
+              <Label>DM bundle pricing style</Label>
+              <Select
+                value={automationRules.dm_pricing_style ?? 'balanced'}
+                onValueChange={(v) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    dm_pricing_style: v as 'balanced' | 'maximize_revenue' | 'premium_domme',
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="balanced">Balanced</SelectItem>
+                  <SelectItem value="maximize_revenue">Maximize revenue</SelectItem>
+                  <SelectItem value="premium_domme">Premium / domme-leaning</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

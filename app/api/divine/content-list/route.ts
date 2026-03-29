@@ -16,19 +16,31 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('content')
-      .select('id, title, description, content_type, platforms, status, scheduled_at, created_at')
+      .select(
+        'id, title, description, content_type, platforms, status, scheduled_at, created_at, sales_notes, teaser_tags, spoiler_level',
+      )
       .eq('user_id', user.id)
       .order('scheduled_at', { ascending: true, nullsFirst: false })
       .limit(limit)
     if (status) query = query.eq('status', status)
     const { data: rows, error } = await query
 
+    let dataRows: any[] | null = rows
     if (error) {
-      console.error('[divine/content-list]', error)
-      return NextResponse.json({ error: 'Failed to fetch content', content: [] }, { status: 500 })
+      const retry = await supabase
+        .from('content')
+        .select('id, title, description, content_type, platforms, status, scheduled_at, created_at')
+        .eq('user_id', user.id)
+        .order('scheduled_at', { ascending: true, nullsFirst: false })
+        .limit(limit)
+      if (retry.error) {
+        console.error('[divine/content-list]', error)
+        return NextResponse.json({ error: 'Failed to fetch content', content: [] }, { status: 500 })
+      }
+      dataRows = retry.data
     }
 
-    const content = (rows || []).map((r: any) => ({
+    const content = (dataRows || []).map((r: any) => ({
       id: r.id,
       title: r.title || 'Untitled',
       description: r.description ? String(r.description).slice(0, 200) : null,
@@ -37,6 +49,9 @@ export async function GET(req: NextRequest) {
       status: r.status,
       scheduled_at: r.scheduled_at,
       created_at: r.created_at,
+      sales_notes: r.sales_notes ? String(r.sales_notes).slice(0, 300) : null,
+      teaser_tags: r.teaser_tags ?? undefined,
+      spoiler_level: r.spoiler_level ?? undefined,
     }))
 
     return NextResponse.json({ content })

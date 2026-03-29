@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -30,6 +31,19 @@ export type FocusedFan = {
   name?: string | null
 }
 
+/** Active ChatWindow registers so Divine tools can fill composer / auto-send. */
+export type DivineComposerBridge = {
+  fanId: string
+  platform: 'onlyfans' | 'fansly'
+  setComposerText: (text: string, replace?: boolean) => void
+  getComposerText: () => string
+  setComposerPrice: (price: string) => void
+  setComposerMediaIds: (ids: string[]) => void
+  sendFromComposer: () => Promise<void>
+}
+
+export type DmSendAttributionSource = 'user' | 'divine' | 'divine_scheduled'
+
 type DivinePanelContextValue = {
   user: User
   panelOpen: boolean
@@ -44,7 +58,6 @@ type DivinePanelContextValue = {
   setChatInput: (value: string) => void
   chatLoading: boolean
   chatWorkingHint: string | null
-  /** Status line for fan name/username lookup (spellback + resolution). */
   fanLookupHint: string | null
   setFanLookupHint: (hint: string | null) => void
   sendChat: () => Promise<void>
@@ -57,13 +70,29 @@ type DivinePanelContextValue = {
   copyGenerated: () => void
   dmSuggestionBridge: DmSuggestionBridgePayload | null
   clearDmSuggestionBridge: () => void
-  /** Voice + tool responses: navigate, focus fan, and hydrate Messages suggestion UI when present. */
   applyUiActionsFromTools: (actions: DivineUiAction[] | undefined) => void
-  /** Floating DM thread (when dm_focus_mode is overlay). */
+  /** Active fan in overlay (alias for multi-tab). */
   dmOverlayFanId: string | null
+  /** All fans open in the floating DM hub. */
+  dmOverlayFanIds: string[]
+  setDmOverlayActiveFanId: (fanId: string) => void
   dmOverlayCollapsed: boolean
   setDmOverlayCollapsed: (collapsed: boolean) => void
   closeDmOverlay: () => void
+  removeDmOverlayFan: (fanId: string) => void
+  /** Copyable transcript above voice pill. */
+  divineTranscript: { text: string; title?: string } | null
+  dismissDivineTranscript: () => void
+  /** ms remaining for scheduled auto-send (0 if none). */
+  scheduledDmRemainingMs: number
+  cancelScheduledDm: () => void
+  /** Default from settings; tools may override per call. */
+  divineSendDelayMs: number
+  registerComposerBridge: (bridge: DivineComposerBridge) => () => void
+  /** Next successful send from composer should log with this source (ChatWindow reads). */
+  consumePendingDmSendSource: () => DmSendAttributionSource
+  peekPendingDmSendSource: () => DmSendAttributionSource
+  clearPendingDmSendSource: () => void
 }
 
 const DivinePanelContext = createContext<DivinePanelContextValue | null>(null)
@@ -92,8 +121,19 @@ export function DivinePanelProvider({
   const [generatePrompt, setGeneratePrompt] = useState('')
   const [generateLoading, setGenerateLoading] = useState(false)
   const [dmSuggestionBridge, setDmSuggestionBridge] = useState<DmSuggestionBridgePayload | null>(null)
-  const [dmOverlayFanId, setDmOverlayFanId] = useState<string | null>(null)
+  const [dmOverlayFanIds, setDmOverlayFanIds] = useState<string[]>([])
+  const [dmOverlayActiveFanId, setDmOverlayActiveFanIdState] = useState<string | null>(null)
   const [dmOverlayCollapsed, setDmOverlayCollapsed] = useState(false)
+  const [divineTranscript, setDivineTranscript] = useState<{ text: string; title?: string } | null>(null)
+  const [scheduledDm, setScheduledDm] = useState<{ fanId: string; endAt: number } | null>(null)
+  const [scheduleUiTick, setScheduleUiTick] = useState(0)
+  const [divineSendDelayMs, setDivineSendDelayMs] = useState(3000)
+
+  const bridgesRef = useRef<Map<string, DivineComposerBridge>>(new Map())
+  const scheduledEndRef = useRef<number | null>(null)
+  const scheduledFanRef = useRef<string | null>(null)
+  const dmSendSourceRef = useRef<DmSendAttributionSource>('user')
+
   const focusedFanIdRef = useRef<string | null>(null)
   focusedFanIdRef.current = focusedFan?.id ?? null
 
@@ -101,27 +141,147 @@ export function DivinePanelProvider({
     setDmSuggestionBridge(null)
   }, [])
 
+  const dismissDivineTranscript = useCallback(() => setDivineTranscript(null), [])
+
+  const cancelScheduledDm = useCallback(() => {
+    scheduledEndRef.current = null
+    scheduledFanRef.current = null
+    setScheduledDm(null)
+  }, [])
+
+  const setDmOverlayActiveFanId = useCallback((fanId: string) => {
+    setDmOverlayFanIds((prev) => (prev.includes(fanId) ? prev : [...prev, fanId]))
+    setDmOverlayActiveFanIdState(fanId)
+  }, [])
+
   const closeDmOverlay = useCallback(() => {
-    setDmOverlayFanId(null)
+    setDmOverlayFanIds([])
+    setDmOverlayActiveFanIdState(null)
     setDmOverlayCollapsed(false)
   }, [])
 
-  /** Voice + chat tools: same `focus_fan` id must not re-run navigation (idempotent). */
+  const removeDmOverlayFan = useCallback((fanId: string) => {
+    setDmOverlayFanIds((prev) => {
+      const next = prev.filter((x) => x !== fanId)
+      setDmOverlayActiveFanIdState((cur) => {
+        if (cur !== fanId) return cur
+        return next[0] ?? null
+      })
+      if (next.length === 0) setDmOverlayCollapsed(false)
+      return next
+    })
+  }, [])
+
+  const registerComposerBridge = useCallback((bridge: DivineComposerBridge) => {
+    const key = `${bridge.platform}:${bridge.fanId}`
+    bridgesRef.current.set(key, bridge)
+    return () => {
+      bridgesRef.current.delete(key)
+    }
+  }, [])
+
+  const findBridgeForFan = useCallback((fanId: string): DivineComposerBridge | undefined => {
+    for (const b of bridgesRef.current.values()) {
+      if (b.fanId === fanId) return b
+    }
+    return undefined
+  }, [])
+
+  const consumePendingDmSendSource = useCallback((): DmSendAttributionSource => {
+    const s = dmSendSourceRef.current
+    dmSendSourceRef.current = 'user'
+    return s
+  }, [])
+
+  const peekPendingDmSendSource = useCallback((): DmSendAttributionSource => dmSendSourceRef.current, [])
+
+  const clearPendingDmSendSource = useCallback(() => {
+    dmSendSourceRef.current = 'user'
+  }, [])
+
+  useEffect(() => {
+    void fetch('/api/divine/manager-settings', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((j: { divine_send_delay_ms?: number }) => {
+        if (typeof j.divine_send_delay_ms === 'number' && !Number.isNaN(j.divine_send_delay_ms)) {
+          setDivineSendDelayMs(Math.max(0, Math.min(120_000, j.divine_send_delay_ms)))
+        }
+      })
+      .catch(() => undefined)
+  }, [user.id])
+
+  useEffect(() => {
+    if (!scheduledDm) {
+      scheduledEndRef.current = null
+      scheduledFanRef.current = null
+      return
+    }
+    scheduledEndRef.current = scheduledDm.endAt
+    scheduledFanRef.current = scheduledDm.fanId
+    const id = window.setInterval(() => {
+      setScheduleUiTick((x) => x + 1)
+      const end = scheduledEndRef.current
+      const fid = scheduledFanRef.current
+      if (end != null && fid != null && Date.now() >= end) {
+        scheduledEndRef.current = null
+        scheduledFanRef.current = null
+        setScheduledDm(null)
+        dmSendSourceRef.current = 'divine_scheduled'
+        for (const b of bridgesRef.current.values()) {
+          if (b.fanId === fid) {
+            void b.sendFromComposer()
+            break
+          }
+        }
+      }
+    }, 250)
+    return () => window.clearInterval(id)
+  }, [scheduledDm])
+
+  const scheduledDmRemainingMs = useMemo(() => {
+    if (!scheduledDm) return 0
+    void scheduleUiTick
+    return Math.max(0, scheduledDm.endAt - Date.now())
+  }, [scheduledDm, scheduleUiTick])
+
   const applyDivineUiActionsWithBridge = useCallback(
     (actions: DivineUiAction[] | undefined) => {
       applyDivineUiActionsBase(actions, router, setFocusedFan, {
         onShowDmReplySuggestions: (payload) => setDmSuggestionBridge(payload),
         onFocusFanOverlay: (fanId) => {
-          setDmOverlayFanId(fanId)
+          setDmOverlayFanIds((prev) => (prev.includes(fanId) ? prev : [...prev, fanId]))
+          setDmOverlayActiveFanIdState(fanId)
           setDmOverlayCollapsed(false)
         },
         currentFocusedFanId: focusedFanIdRef.current,
+        onShowDivineTranscript: (payload) => setDivineTranscript(payload),
+        onSetDmComposer: ({ fanId, text, replace, mediaIds, price }) => {
+          dmSendSourceRef.current = 'divine'
+          const b = findBridgeForFan(fanId)
+          if (b) {
+            b.setComposerText(text, replace !== false)
+            if (mediaIds?.length) b.setComposerMediaIds(mediaIds)
+            if (price != null && !Number.isNaN(price)) b.setComposerPrice(String(price))
+            if (price === null) b.setComposerPrice('')
+          }
+        },
+        onScheduleDmSend: ({ fanId, delayMs }) => {
+          if (delayMs <= 0) return
+          const endAt = Date.now() + delayMs
+          scheduledEndRef.current = endAt
+          scheduledFanRef.current = fanId
+          setScheduledDm({ fanId, endAt })
+        },
+        onCancelScheduledDm: cancelScheduledDm,
+        onSwitchOverlayFan: (fanId) => {
+          setDmOverlayFanIds((prev) => (prev.includes(fanId) ? prev : [...prev, fanId]))
+          setDmOverlayActiveFanIdState(fanId)
+        },
       })
     },
-    [router],
+    [router, findBridgeForFan, cancelScheduledDm],
   )
 
-  /** When voice async scan + barrier tasks complete, return to Messages with DM suggestions. */
   useEffect(() => {
     let cancelled = false
     const POLL_MS = 4000
@@ -292,7 +452,7 @@ export function DivinePanelProvider({
       setChatLoading(false)
       setChatWorkingHint(null)
     }
-  }, [chatInput, chatMessages, chatLoading, focusedFan, router, applyDivineUiActionsWithBridge])
+  }, [chatInput, chatMessages, chatLoading, focusedFan, applyDivineUiActionsWithBridge])
 
   const requestGenerate = useCallback(async () => {
     const prompt = generatePrompt.trim()
@@ -357,10 +517,22 @@ export function DivinePanelProvider({
     dmSuggestionBridge,
     clearDmSuggestionBridge,
     applyUiActionsFromTools: applyDivineUiActionsWithBridge,
-    dmOverlayFanId,
+    dmOverlayFanId: dmOverlayActiveFanId,
+    dmOverlayFanIds,
+    setDmOverlayActiveFanId,
     dmOverlayCollapsed,
     setDmOverlayCollapsed,
     closeDmOverlay,
+    removeDmOverlayFan,
+    divineTranscript,
+    dismissDivineTranscript,
+    scheduledDmRemainingMs,
+    cancelScheduledDm,
+    divineSendDelayMs,
+    registerComposerBridge,
+    consumePendingDmSendSource,
+    peekPendingDmSendSource,
+    clearPendingDmSendSource,
   }
 
   return (

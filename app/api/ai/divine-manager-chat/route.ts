@@ -416,17 +416,139 @@ const CHAT_TOOLS: Array<{
     type: 'function',
     function: {
       name: 'send_message',
-      description: 'Send a direct message to a specific fan. Use fanId from get_dm_conversations (or from get_dm_thread/get_reply_suggestions). You can send to a user by name by first calling get_dm_conversations to find their fanId.',
+      description:
+        'Send a direct message to a specific fan, OR draft into the in-app composer only. Use fanId from get_dm_conversations. mode=draft (or prepare) fills the message box and optional countdown auto-send per user settings; mode=send_now (default) sends immediately.',
       parameters: {
         type: 'object',
         properties: {
           fanId: { type: 'string', description: 'Fan ID from conversations list' },
           message: { type: 'string', description: 'Message text to send' },
+          mode: {
+            type: 'string',
+            enum: ['send_now', 'draft', 'prepare'],
+            description: 'draft/prepare = composer + optional timer; send_now = send immediately',
+          },
           platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
           price: { type: 'number' },
           mediaIds: { type: 'array', items: { type: 'string' } },
+          delayMs: { type: 'number', description: 'Override auto-send delay ms (0 disables auto-send)' },
+          auto_send: { type: 'boolean', description: 'false to disable countdown auto-send' },
         },
         required: ['fanId', 'message'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'prepare_dm',
+      description:
+        'Put DM text (and optional media/price) into the Messages composer for a fan; optional auto-send after delay from Divine settings. Prefer when the creator should review before sending.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fanId: { type: 'string' },
+          message: { type: 'string' },
+          text: { type: 'string', description: 'Alias for message' },
+          platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+          price: { type: 'number' },
+          mediaIds: { type: 'array', items: { type: 'string' } },
+          delayMs: { type: 'number' },
+          auto_send: { type: 'boolean' },
+        },
+        required: ['fanId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'open_dm_overlay',
+      description: 'Open the floating DM overlay for a fan (multi-chat hub).',
+      parameters: {
+        type: 'object',
+        properties: { fanId: { type: 'string' } },
+        required: ['fanId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'switch_overlay_fan',
+      description: 'Switch active tab in the DM overlay to another fanId.',
+      parameters: {
+        type: 'object',
+        properties: { fanId: { type: 'string' } },
+        required: ['fanId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recommend_dm_bundle',
+      description:
+        'Suggest pricing/copy for a PPV or paid DM bundle. Loads saved sales_notes/teaser_tags from Creatix when content_ids are set (from list_vault_for_dm). Respects dm_pricing_style unless overridden.',
+      parameters: {
+        type: 'object',
+        properties: {
+          goal: { type: 'string' },
+          fan_context: { type: 'string' },
+          content_summary: { type: 'string', description: 'Extra free-text context in addition to content_ids' },
+          content_ids: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Creatix content UUIDs; server merges saved sales metadata into the bundle prompt',
+          },
+          pricing_style: { type: 'string', enum: ['balanced', 'maximize_revenue', 'premium_domme'] },
+          platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+          current_price: { type: 'number' },
+        },
+        required: ['goal'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'upsert_content_sales_notes',
+      description:
+        'Save private sales/teaser metadata for a Creatix content row (vault) so Divine can recommend it in DMs. Prefer get_content_sales_metadata first to see current values. Ask structured questions; respect creator boundaries.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content_id: { type: 'string' },
+          sales_notes: { type: 'string' },
+          teaser_tags: { type: 'array', items: { type: 'string' } },
+          spoiler_level: { type: 'string', description: 'e.g. none, mild, explicit' },
+        },
+        required: ['content_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_vault_for_dm',
+      description:
+        'List Creatix content library items with ids and sales metadata for attaching or recommending in DMs.',
+      parameters: {
+        type: 'object',
+        properties: { limit: { type: 'number' } },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_content_sales_metadata',
+      description:
+        'Read one Creatix content row by id: title, description snippet, sales_notes, teaser_tags, spoiler_level. Use before/after upsert_content_sales_notes to confirm or refine vault sales metadata.',
+      parameters: {
+        type: 'object',
+        properties: { content_id: { type: 'string', description: 'UUID from list_vault_for_dm' } },
+        required: ['content_id'],
       },
     },
   },
@@ -806,9 +928,9 @@ You know their tasks, rules, and analytics. Speak as a manager, not as the creat
 Never claim you have already sent messages, changed prices, or executed actions. You may only recommend or suggest actions or rule changes.
 Respect the creator's boundaries, niches, and all platform safety rules.
 Avoid explicit or illegal content entirely. Use clear, practical language.
-You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, get_dm_thread_and_suggestions (preferred for thread + replies), start_thread_scan_async (background scan while multitasking), get_task_status (pending/done tasks + navigation), voice_allow_user_hangup (voice: unlock after asking anything else), lookup_fan (fast fanId by name), get_fan_thread_insights (stored snapshot + personality profile), refresh_fan_thread_scan (force rescan thread + profile), draft_fan_reply (fan-facing draft from Mimic Test—review only, never auto-sent), analyze_image_from_url (Supabase/storage image URLs only; Divine full), list_cosmic_calendar, get_scheduled_content_summary, list_leak_alerts, update_leak_alert_case, trigger_reputation_briefing, list_reputation_mentions, get_integrations_summary, ui_navigate, ui_focus_fan (subscriber: open app screens / focus a fan), send_message, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item, run_leak_scan. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm. For run_leak_scan, only use when they want to find leaked content or prepare DMCA review; it uses search API quota.
+You have access to tools: analyze content, generate captions, predict viral, get retention insights, get whale advice, get_dm_conversations, get_dm_thread, get_reply_suggestions, get_dm_thread_and_suggestions (preferred for thread + replies), start_thread_scan_async (background scan while multitasking), get_task_status (pending/done tasks + navigation), voice_allow_user_hangup (voice: unlock after asking anything else), lookup_fan (fast fanId by name), get_fan_thread_insights (stored snapshot + personality profile), refresh_fan_thread_scan (force rescan thread + profile), draft_fan_reply (fan-facing draft from Mimic Test—review only, never auto-sent), analyze_image_from_url (Supabase/storage image URLs only; Divine full), list_cosmic_calendar, get_scheduled_content_summary, list_leak_alerts, update_leak_alert_case, trigger_reputation_briefing, list_reputation_mentions, get_integrations_summary, ui_navigate, ui_focus_fan (subscriber: open app screens / focus a fan), send_message, prepare_dm, open_dm_overlay, switch_overlay_fan, list_vault_for_dm, get_content_sales_metadata, recommend_dm_bundle, upsert_content_sales_notes, list_content, mass_dm, get_stats, content_publish, create_task, send_notification, list_fans, get_fan_subscription_history, list_followings, get_top_message, get_message_engagement, publish_queue_item, run_leak_scan. Use the smallest set of API calls that answers the question. For mass_dm, content_publish, and publish_queue_item the app may ask them to confirm. For run_leak_scan, only use when they want to find leaked content or prepare DMCA review; it uses search API quota.
 Fans and engagement: list_fans (filter: active, expired, latest, top) for "who are my fans", "top spenders", "expired subs"; get_fan_subscription_history for a fan's renewals; list_followings for who they follow; get_top_message for best-performing message and buyers; get_message_engagement (type direct or mass) for "how did my messages perform"; publish_queue_item to publish a saved post or saved mass message. Route: "who spent the most" → list_fans filter=top; "how did my mass message do" → get_message_engagement type=mass; "publish my saved post" → publish_queue_item.
-When OnlyFans is connected, you can run DM tools end-to-end: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. Prefer get_dm_thread_and_suggestions when they need both thread and reply ideas immediately. Use start_thread_scan_async when the scan should run in the background while they do other things (e.g. Analytics or get_stats); use get_task_status to see whether tasks finished. get_fan_thread_insights returns the stored thread snapshot and merged personality profile (updated in the background after messages). refresh_fan_thread_scan forces a fresh fetch from OnlyFans. draft_fan_reply drafts a message in the creator's voice (Mimic Test); it does not send—creator reviews first. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options; the app opens Messages for that fan and shows the same panels as the in-chat buttons—use openPanel (venus|circe|flirt|scan|all) when they only want one panel (e.g. "Venus reply"). send_message sends a direct message to a specific fan (use fanId from conversations). If OnlyFans is disconnected, say clearly that DM/fan tools will not work until they reconnect and offer ui_navigate to /dashboard/settings?tab=integrations.
+When OnlyFans is connected, you can run DM tools end-to-end: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. Prefer get_dm_thread_and_suggestions when they need both thread and reply ideas immediately. Use start_thread_scan_async when the scan should run in the background while they do other things (e.g. Analytics or get_stats); use get_task_status to see whether tasks finished. get_fan_thread_insights returns the stored thread snapshot and merged personality profile (updated in the background after messages). refresh_fan_thread_scan forces a fresh fetch from OnlyFans. draft_fan_reply drafts a message in the creator's voice (Mimic Test); it does not send—creator reviews first. get_dm_thread lets you scan and read the full chat with a specific fan. get_reply_suggestions runs Scan Thread and returns Circe, Venus, and Flirt reply options; the app opens Messages for that fan and shows the same panels as the in-chat buttons—use openPanel (venus|circe|flirt|scan|all) when they only want one panel (e.g. "Venus reply"). send_message can send immediately or use mode draft/prepare (or prepare_dm) to fill the in-app DM composer for review and optional countdown auto-send per creator settings. list_vault_for_dm lists Creatix vault rows; get_content_sales_metadata reads one row's saved sales fields; recommend_dm_bundle suggests DM/PPV bundle price and copy—pass content_ids to automatically include saved sales_notes/teaser_tags in the analysis; upsert_content_sales_notes saves structured sales/teaser metadata after bounded interview questions (respect flirty level and boundaries—no explicit sexual roleplay with the creator). open_dm_overlay and switch_overlay_fan control the multi-tab floating DM hub. If OnlyFans is disconnected, say clearly that DM/fan tools will not work until they reconnect and offer ui_navigate to /dashboard/settings?tab=integrations.
 
 DM name lookup rules: Tool output begins with spellback ("I heard …") and ends with [divine_lookup_meta:…]. Follow next_step_hint. If resolved is fuzzy_confirm_required, multi_match_confirm_required, or fuzzy_ambiguous, do not claim the chat is already open; ask the creator to confirm or pick a fanId. Do not call get_dm_conversations or lookup_fan again with the same name query in the same turn—if unclear, ask a clarifying question first. If resolved is exact, use that fanId for get_dm_thread / send_message.
 
@@ -844,6 +966,8 @@ Recent analytics (14 days, most recent first):
 ${analyticsSummary}
 
 You have access to analytics snapshots: fans, revenue, and platform breakdown; use this when they ask about performance, sales, or growth. Be explicit when data is historical vs live platform-linked.
+
+Content library (sales metadata for DMs): When they want to tag or describe vault items for better PPV/DM recommendations, use list_vault_for_dm for ids, then a short structured interview: hook/teaser angle, intended buyer, spoiler_level (none | mild | explicit), CTA, and 3–8 teaser_tags. Keep tone professional and platform-safe; respect their flirty level and boundaries above—do not engage in explicit sexual roleplay with the creator in-app. Summarize fan-facing sales angles only, then save with upsert_content_sales_notes. Use get_content_sales_metadata to read back one row before editing. For bundle pricing, call recommend_dm_bundle with goal plus content_ids from the vault so saved metadata is used automatically.
 ${platformConnectionContext}${focusedFanLine}`
 
     const history = messages.slice(-6)

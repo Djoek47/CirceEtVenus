@@ -27,6 +27,10 @@ export type DmSuggestionBridgePayload = {
   recommendationReason?: string | null
 }
 
+/** Max chars for transcript / composer injection from tools (SSE + voice payloads). */
+export const DIVINE_TRANSCRIPT_MAX = 8000
+export const DIVINE_COMPOSER_MEDIA_MAX = 12
+
 export type DivineUiAction =
   | { type: 'navigate'; path: string }
   | {
@@ -48,6 +52,22 @@ export type DivineUiAction =
       recommendation?: 'circe' | 'venus' | 'flirt' | null
       recommendationReason?: string | null
     }
+  /** Copyable text above the voice pill (drafts, tool output). */
+  | { type: 'show_divine_transcript'; text: string; title?: string }
+  /** Fill the active DM composer for this fan (Creatix UI only until send). */
+  | {
+      type: 'set_dm_composer'
+      fanId: string
+      text: string
+      replace?: boolean
+      mediaIds?: string[]
+      price?: number | null
+    }
+  /** Start countdown then auto-send via registered composer bridge (0 = composer only). */
+  | { type: 'schedule_dm_send'; fanId: string; delayMs: number }
+  | { type: 'cancel_scheduled_dm' }
+  /** Switch active tab in multi-fan DM overlay. */
+  | { type: 'switch_overlay_fan'; fanId: string }
 
 export type ApplyDivineUiOptions = {
   onShowDmReplySuggestions?: (payload: DmSuggestionBridgePayload) => void
@@ -55,6 +75,17 @@ export type ApplyDivineUiOptions = {
   onFocusFanOverlay?: (fanId: string) => void
   /** When set, skip duplicate focus_fan for the same id (avoids navigation loops / React churn). */
   currentFocusedFanId?: string | null
+  onShowDivineTranscript?: (payload: { text: string; title?: string }) => void
+  onSetDmComposer?: (payload: {
+    fanId: string
+    text: string
+    replace?: boolean
+    mediaIds?: string[]
+    price?: number | null
+  }) => void
+  onScheduleDmSend?: (payload: { fanId: string; delayMs: number }) => void
+  onCancelScheduledDm?: () => void
+  onSwitchOverlayFan?: (fanId: string) => void
 }
 
 function capStringList(lines: string[], cap: number, lineMax: number): string[] {
@@ -107,6 +138,10 @@ type RouterLike = { push: (path: string) => void }
 
 export type FocusedFanInput = { id: string; username?: string | null; name?: string | null }
 
+function sanitizeTranscriptText(raw: string): string {
+  return typeof raw === 'string' ? raw.replace(/\u0000/g, '').trim().slice(0, DIVINE_TRANSCRIPT_MAX) : ''
+}
+
 export function applyDivineUiActions(
   actions: DivineUiAction[] | undefined,
   router: RouterLike,
@@ -132,7 +167,7 @@ export function applyDivineUiActions(
         }
         if (a.presentation === 'overlay' && options?.onFocusFanOverlay) {
           options.onFocusFanOverlay(id)
-        } else {
+        } else if (a.presentation !== 'overlay') {
           // Plain /dashboard/messages (no ?fanId=): Messages selects the thread from focusedFan
           // after conversations load—same as picking a chat in the list. Avoids client crashes seen
           // with deep-link query + searchParams on some navigations.
@@ -143,6 +178,44 @@ export function applyDivineUiActions(
     if (a.type === 'show_dm_reply_suggestions' && onDm) {
       const payload = sanitizeDmShowAction(a)
       if (payload) onDm(payload)
+    }
+    if (a.type === 'show_divine_transcript' && options?.onShowDivineTranscript) {
+      const text = sanitizeTranscriptText(a.text)
+      if (text) {
+        options.onShowDivineTranscript({
+          text,
+          title: typeof a.title === 'string' ? a.title.slice(0, 120) : undefined,
+        })
+      }
+    }
+    if (a.type === 'set_dm_composer' && options?.onSetDmComposer) {
+      const fanId = String(a.fanId ?? '').trim()
+      if (!FAN_ID_RE.test(fanId)) continue
+      const text = sanitizeTranscriptText(a.text)
+      const mediaIds = Array.isArray(a.mediaIds)
+        ? a.mediaIds.map((x) => String(x)).filter(Boolean).slice(0, DIVINE_COMPOSER_MEDIA_MAX)
+        : undefined
+      const price = typeof a.price === 'number' && !Number.isNaN(a.price) ? a.price : a.price === null ? null : undefined
+      options.onSetDmComposer({
+        fanId,
+        text,
+        replace: a.replace !== false,
+        mediaIds,
+        price,
+      })
+    }
+    if (a.type === 'schedule_dm_send' && options?.onScheduleDmSend) {
+      const fanId = String(a.fanId ?? '').trim()
+      if (!FAN_ID_RE.test(fanId)) continue
+      const delayMs = Math.max(0, Math.min(120_000, Math.floor(Number(a.delayMs) || 0)))
+      options.onScheduleDmSend({ fanId, delayMs })
+    }
+    if (a.type === 'cancel_scheduled_dm' && options?.onCancelScheduledDm) {
+      options.onCancelScheduledDm()
+    }
+    if (a.type === 'switch_overlay_fan' && options?.onSwitchOverlayFan) {
+      const fanId = String(a.fanId ?? '').trim()
+      if (FAN_ID_RE.test(fanId)) options.onSwitchOverlayFan(fanId)
     }
   }
 }

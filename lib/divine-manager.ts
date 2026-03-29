@@ -77,7 +77,26 @@ export interface DivineManagerAutomationRules {
   voice_hangup_policy?: VoiceHangupPolicy
   /** Where to open a fan chat when using ui_focus_fan / focus_fan. Default navigate. */
   dm_focus_mode?: DmFocusMode
-  [key: string]: AutomationRule | DivineManagerVoiceAuto | DivineManagerAutomationAlerts | DivineManagerAutomationJobs | VoiceHangupPolicy | DmFocusMode | undefined
+  /**
+   * MS to wait after Divine fills the DM composer before auto-send (0 = manual Send only).
+   * Capped client-side to 120s.
+   */
+  divine_send_delay_ms?: number
+  /**
+   * Biases price-optimizer output for DM bundle suggestions.
+   * UI labels may use friendlier names (e.g. "greedy", "findom-style").
+   */
+  dm_pricing_style?: 'balanced' | 'maximize_revenue' | 'premium_domme'
+  [key: string]:
+    | AutomationRule
+    | DivineManagerVoiceAuto
+    | DivineManagerAutomationAlerts
+    | DivineManagerAutomationJobs
+    | VoiceHangupPolicy
+    | DmFocusMode
+    | number
+    | string
+    | undefined
 }
 
 /** OF user-list housekeeping: optional auto-create + per-segment list overrides. */

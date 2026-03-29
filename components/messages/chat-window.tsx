@@ -185,7 +185,7 @@ function ChatMediaItem({ media }: { media: OnlyFansMedia }) {
   )
 }
 
-export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
+export function ChatWindow({ conversation, userId: _userId, onMessageSent }: ChatWindowProps) {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<OnlyFansMessage[]>([])
   const [loading, setLoading] = useState(false)
@@ -224,6 +224,10 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
   const divinePanel = useDivinePanel()
   const voiceSession = useVoiceSession()
   const [profileOpen, setProfileOpen] = useState(false)
+  const [divineMessageIds, setDivineMessageIds] = useState<Set<string>>(() => new Set())
+  const handleSendMessageRef = useRef<() => Promise<void>>(async () => {})
+  const messageRef = useRef('')
+  messageRef.current = message
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -472,6 +476,19 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         }
 
         setMessages(normalizeAndSortMessages(data.messages || []))
+        void fetch(
+          `/api/divine/dm-send-events?fan_id=${encodeURIComponent(String(conversation.user.id))}`,
+          { credentials: 'include' },
+        )
+          .then((r) => r.json())
+          .then((j: { events?: Array<{ onlyfans_message_id?: string | null }> }) => {
+            const ids = new Set<string>()
+            for (const e of j.events ?? []) {
+              if (e.onlyfans_message_id) ids.add(String(e.onlyfans_message_id))
+            }
+            if (ids.size) setDivineMessageIds((prev) => new Set([...prev, ...ids]))
+          })
+          .catch(() => undefined)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load messages')
       } finally {
@@ -554,6 +571,25 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     }
   }, [conversation?.user?.id, conversation?.platform, loading])
 
+  useEffect(() => {
+    if (!divinePanel || !conversation) return
+    const fanId = String(conversation.user.id)
+    const platform = conversation.platform
+    return divinePanel.registerComposerBridge({
+      fanId,
+      platform,
+      setComposerText: (text, replace) => {
+        setMessage((prev) => (replace === false ? prev + text : text))
+      },
+      getComposerText: () => messageRef.current,
+      setComposerPrice: (p) => setPpvPrice(p),
+      setComposerMediaIds: (ids) => setAttachedMediaIds(ids),
+      sendFromComposer: async () => {
+        await handleSendMessageRef.current()
+      },
+    })
+  }, [divinePanel, conversation?.user?.id, conversation?.platform])
+
   const handleChatFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files?.length || conversation?.platform !== 'onlyfans') return
@@ -575,9 +611,9 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     }
   }, [conversation?.platform])
 
-  const handleSendMessage = async () => {
-    if (!message.trim() || !conversation || sending) return
-    
+  const handleSendMessage = useCallback(async () => {
+    if ((!message.trim() && attachedMediaIds.length === 0) || !conversation || sending) return
+
     setSending(true)
     const messageText = message
     setMessage('')
@@ -585,7 +621,7 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     const priceToSend = ppvPrice.trim() ? parseFloat(ppvPrice) : undefined
     setAttachedMediaIds([])
     setPpvPrice('')
-    
+
     try {
       const body: { text: string; mediaIds?: string[]; price?: number } = { text: messageText }
       if (mediaIdsToSend.length > 0) body.mediaIds = mediaIdsToSend
@@ -596,16 +632,36 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      
-      const data = await res.json()
-      
+
+      const data = (await res.json()) as {
+        error?: string
+        message?: OnlyFansMessage & { id?: string | number }
+      }
+
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send message')
       }
-      
+
       if (data.message) {
-        setMessages(prev => normalizeAndSortMessages([...prev, data.message]))
+        const mid = data.message.id != null ? String(data.message.id) : ''
+        setMessages((prev) => normalizeAndSortMessages([...prev, data.message as OnlyFansMessage]))
         setTimeout(() => scrollToBottom(), 0)
+        const source = divinePanel?.consumePendingDmSendSource() ?? 'user'
+        if (source !== 'user') {
+          if (mid) setDivineMessageIds((prev) => new Set(prev).add(mid))
+          void fetch('/api/divine/dm-send-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              fan_id: String(conversation.user.id),
+              platform: conversation.platform === 'fansly' ? 'fansly' : 'onlyfans',
+              body_preview: messageText.slice(0, 2000),
+              source,
+              ...(mid ? { onlyfans_message_id: mid } : {}),
+            }),
+          }).catch(() => undefined)
+        }
       }
       if (conversation.platform === 'onlyfans') {
         void fetch('/api/divine/refresh-thread-insight', {
@@ -623,7 +679,19 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
     } finally {
       setSending(false)
     }
-  }
+  }, [
+    message,
+    attachedMediaIds,
+    ppvPrice,
+    conversation,
+    sending,
+    divinePanel,
+    onMessageSent,
+  ])
+
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage
+  }, [handleSendMessage])
 
   if (!conversation) {
     return (
@@ -807,6 +875,8 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
           <div className="space-y-4">
             {messages.map((msg) => {
               const isCreator = msg.fromUser.id !== conversation.user.id
+              const isDivineAssisted =
+                isCreator && divineMessageIds.has(String(msg.id))
               return (
                 <div
                   key={msg.id}
@@ -818,11 +888,19 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                   <div
                     className={cn(
                       'max-w-[70%] rounded-2xl px-4 py-2',
-                      isCreator
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary text-secondary-foreground'
+                      isDivineAssisted
+                        ? 'border border-violet-400/50 bg-violet-950/35 text-violet-50'
+                        : isCreator
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-secondary-foreground'
                     )}
                   >
+                    {isDivineAssisted && (
+                      <p className="mb-1 flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-violet-200/90">
+                        <Sparkles className="h-3 w-3" />
+                        Divine-assisted
+                      </p>
+                    )}
                     {msg.media && msg.media.length > 0 && (
                       <div className="mb-2 space-y-2">
                         {msg.media.map((m) => (
@@ -857,9 +935,11 @@ export function ChatWindow({ conversation, onMessageSent }: ChatWindowProps) {
                     <p
                       className={cn(
                         'mt-1 text-xs',
-                        isCreator
-                          ? 'text-primary-foreground/70'
-                          : 'text-muted-foreground'
+                        isDivineAssisted
+                          ? 'text-violet-200/70'
+                          : isCreator
+                            ? 'text-primary-foreground/70'
+                            : 'text-muted-foreground'
                       )}
                     >
                       {new Date(msg.createdAt).toLocaleTimeString([], {

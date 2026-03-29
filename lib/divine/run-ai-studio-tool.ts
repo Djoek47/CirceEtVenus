@@ -78,6 +78,16 @@ export async function runAiStudioToolServer(
         platform: a.platform ?? 'onlyfans',
         description: a.description ?? a.contentDescription ?? '',
       }, cookie)
+    case 'dm-bundle-pricing':
+      return postAi('dm-bundle-pricing', {
+        goal: a.goal ?? '',
+        fan_context: a.fan_context ?? a.fanContext ?? '',
+        content_summary: a.content_summary ?? a.contentSummary ?? '',
+        pricing_style: a.pricing_style ?? a.pricingStyle ?? 'balanced',
+        pricing_bias: a.pricing_bias ?? a.pricingBias ?? '',
+        platform: a.platform ?? 'onlyfans',
+        current_price: typeof a.current_price === 'number' ? a.current_price : a.currentPrice,
+      }, cookie)
     case 'voice-cloning':
       return postAi('voice-clone', {
         sampleText: a.sampleText ?? '',

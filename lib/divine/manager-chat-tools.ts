@@ -31,7 +31,7 @@ import { isDivineFullAccess, DIVINE_FULL_UPGRADE_MESSAGE } from '@/lib/divine/di
 import { draftFanReplyWithMimic } from '@/lib/divine/draft-fan-reply'
 import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
 import type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
-import { normalizeScanForUi } from '@/lib/divine/divine-ui-actions'
+import { DIVINE_TRANSCRIPT_MAX, normalizeScanForUi } from '@/lib/divine/divine-ui-actions'
 import type { DmReplyPackageResult } from '@/lib/divine/dm-reply-package'
 import { getStats } from '@/lib/divine-intent-actions'
 import { getVoiceMemoryPayload } from '@/lib/divine/voice-memory-server'
@@ -74,6 +74,8 @@ export const CONTEXT_TOOL_NAMES = new Set<string>([
   'get_reputation_briefing',
   'list_reputation_briefings',
   'get_task_status',
+  'list_vault_for_dm',
+  'get_content_sales_metadata',
 ])
 
 export type { DivineUiAction } from '@/lib/divine/divine-ui-actions'
@@ -978,6 +980,98 @@ export async function runContextTool(
       })
       return list.length ? `Content:\n${list.join('\n')}` : 'No content found.'
     }
+    if (name === 'list_vault_for_dm') {
+      if (!ctx) return 'Context unavailable.'
+      const limit = typeof args.limit === 'number' ? Math.min(Math.max(args.limit, 1), 50) : 25
+      const { data: rows, error } = await ctx.supabase
+        .from('content')
+        .select(
+          'id, title, description, content_type, status, scheduled_at, thumbnail_url, file_url, sales_notes, teaser_tags, spoiler_level',
+        )
+        .eq('user_id', ctx.userId)
+        .order('updated_at', { ascending: false })
+        .limit(limit)
+      if (error) {
+        const { data: rows2, error: err2 } = await ctx.supabase
+          .from('content')
+          .select('id, title, description, content_type, status, scheduled_at, thumbnail_url, file_url')
+          .eq('user_id', ctx.userId)
+          .order('updated_at', { ascending: false })
+          .limit(limit)
+        if (err2) return err2.message
+        const list = (rows2 ?? []).map((c: Record<string, unknown>) =>
+          JSON.stringify({
+            id: c.id,
+            title: c.title,
+            type: c.content_type,
+            status: c.status,
+            scheduled_at: c.scheduled_at,
+            has_thumb: Boolean(c.thumbnail_url || c.file_url),
+            description: typeof c.description === 'string' ? String(c.description).slice(0, 200) : null,
+          }),
+        )
+        return list.length ? `Vault (Creatix content):\n${list.join('\n')}` : 'No vault items yet.'
+      }
+      const list = (rows ?? []).map((c: Record<string, unknown>) =>
+        JSON.stringify({
+          id: c.id,
+          title: c.title,
+          type: c.content_type,
+          status: c.status,
+          scheduled_at: c.scheduled_at,
+          has_thumb: Boolean(c.thumbnail_url || c.file_url),
+          sales_notes: typeof c.sales_notes === 'string' ? String(c.sales_notes).slice(0, 400) : null,
+          teaser_tags: c.teaser_tags,
+          spoiler_level: c.spoiler_level,
+        }),
+      )
+      return list.length ? `Vault for DMs (id, notes, tags):\n${list.join('\n')}` : 'No vault items yet.'
+    }
+    if (name === 'get_content_sales_metadata') {
+      if (!ctx) return 'Context unavailable.'
+      const contentId = typeof args.content_id === 'string' ? args.content_id.trim() : ''
+      if (!contentId) return 'content_id is required.'
+      const { data: row, error } = await ctx.supabase
+        .from('content')
+        .select(
+          'id, title, description, content_type, status, scheduled_at, sales_notes, teaser_tags, spoiler_level',
+        )
+        .eq('id', contentId)
+        .eq('user_id', ctx.userId)
+        .maybeSingle()
+      if (error) {
+        const { data: row2, error: err2 } = await ctx.supabase
+          .from('content')
+          .select('id, title, description, content_type, status, scheduled_at')
+          .eq('id', contentId)
+          .eq('user_id', ctx.userId)
+          .maybeSingle()
+        if (err2) return err2.message
+        if (!row2) return 'Content not found for this creator.'
+        return JSON.stringify({
+          ...row2,
+          sales_notes: null,
+          teaser_tags: null,
+          spoiler_level: null,
+          hint: 'Run migration 033 for sales_notes / teaser_tags / spoiler_level columns.',
+        })
+      }
+      if (!row) return 'Content not found for this creator.'
+      const r = row as Record<string, unknown>
+      return JSON.stringify({
+        id: r.id,
+        title: r.title,
+        type: r.content_type,
+        status: r.status,
+        scheduled_at: r.scheduled_at,
+        description:
+          typeof r.description === 'string' ? String(r.description).slice(0, 400) : null,
+        sales_notes:
+          typeof r.sales_notes === 'string' ? String(r.sales_notes).slice(0, 2000) : r.sales_notes ?? null,
+        teaser_tags: r.teaser_tags ?? null,
+        spoiler_level: r.spoiler_level ?? null,
+      })
+    }
     if (name === 'get_task_status') {
       if (!ctx) return 'Context unavailable.'
       const mem = await getVoiceMemoryPayload(ctx.supabase, ctx.userId)
@@ -1094,6 +1188,96 @@ export async function runIntent(
 
 export type ToolCallPart = { id: string; function: { name: string; arguments: string } }
 
+type PendingConf = Array<{ type: string; intent_id: string; summary?: string }>
+
+async function runPrepareDmUiResult(
+  tc: ToolCallPart,
+  args: Record<string, unknown>,
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{
+  tool_call_id: string
+  content: string
+  pendingConfirmations: PendingConf
+  uiActions: DivineUiAction[]
+  lookupMeta?: DivineLookupMeta | null
+}> {
+  const emptyPending: PendingConf = []
+  const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
+  const msg =
+    (typeof args.message === 'string' && args.message) ||
+    (typeof args.text === 'string' && args.text) ||
+    ''
+  const mediaIds = Array.isArray(args.mediaIds)
+    ? args.mediaIds.map((x) => String(x)).filter(Boolean).slice(0, 12)
+    : undefined
+  if (!fanId) {
+    return {
+      tool_call_id: tc.id,
+      content: 'fanId is required.',
+      pendingConfirmations: emptyPending,
+      uiActions: [],
+    }
+  }
+  if (!msg.trim() && !(mediaIds && mediaIds.length > 0)) {
+    return {
+      tool_call_id: tc.id,
+      content: 'message text or mediaIds is required for a DM draft.',
+      pendingConfirmations: emptyPending,
+      uiActions: [],
+    }
+  }
+  const settings = await getSettings(supabase, userId)
+  const dmMode = settings?.automation_rules?.dm_focus_mode ?? 'navigate'
+  const presentation = dmMode === 'overlay' ? 'overlay' : 'navigate'
+  const defaultDelay = settings?.automation_rules?.divine_send_delay_ms
+  let delayMs =
+    typeof args.delayMs === 'number' && !Number.isNaN(args.delayMs)
+      ? Math.max(0, Math.min(120_000, Math.floor(args.delayMs)))
+      : typeof defaultDelay === 'number'
+        ? Math.max(0, Math.min(120_000, Math.floor(defaultDelay)))
+        : 3000
+  if (args.schedule === false || args.auto_send === false) {
+    delayMs = 0
+  }
+  const price = typeof args.price === 'number' && !Number.isNaN(args.price) ? args.price : undefined
+  const text = msg.trim()
+  const actions: DivineUiAction[] = [{ type: 'focus_fan', fanId, presentation }]
+  if (text) {
+    actions.push({
+      type: 'show_divine_transcript',
+      text: text.slice(0, DIVINE_TRANSCRIPT_MAX),
+      title: 'DM draft',
+    })
+    actions.push({
+      type: 'set_dm_composer',
+      fanId,
+      text,
+      replace: true,
+      mediaIds,
+      price: price ?? null,
+    })
+  } else if (mediaIds?.length) {
+    actions.push({
+      type: 'set_dm_composer',
+      fanId,
+      text: '',
+      replace: true,
+      mediaIds,
+      price: price ?? null,
+    })
+  }
+  if (delayMs > 0 && (text || (mediaIds?.length ?? 0) > 0)) {
+    actions.push({ type: 'schedule_dm_send', fanId, delayMs })
+  }
+  return {
+    tool_call_id: tc.id,
+    content: `Draft in the message box for fan ${fanId}.${delayMs > 0 ? ` Auto-send in ${Math.round(delayMs / 1000)}s unless you cancel.` : ' Send manually when ready.'}`,
+    pendingConfirmations: emptyPending,
+    uiActions: actions,
+  }
+}
+
 export async function runToolCall(
   tc: ToolCallPart,
   opts: {
@@ -1165,6 +1349,145 @@ export async function runToolCall(
         presentation === 'overlay'
           ? `Opening DM overlay for fan ${fanId}.`
           : `Opening Messages and focusing fan ${fanId}.`,
+      pendingConfirmations: emptyPending,
+      uiActions,
+    }
+  }
+
+  if (name === 'prepare_dm') {
+    return runPrepareDmUiResult(tc, args, supabase, userId)
+  }
+
+  if (name === 'open_dm_overlay') {
+    const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
+    if (!fanId) {
+      return { tool_call_id: tc.id, content: 'fanId is required.', pendingConfirmations: emptyPending, uiActions }
+    }
+    uiActions.push({ type: 'focus_fan', fanId, presentation: 'overlay' })
+    return {
+      tool_call_id: tc.id,
+      content: `Opening DM overlay for fan ${fanId}.`,
+      pendingConfirmations: emptyPending,
+      uiActions,
+    }
+  }
+
+  if (name === 'switch_overlay_fan') {
+    const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
+    if (!fanId) {
+      return { tool_call_id: tc.id, content: 'fanId is required.', pendingConfirmations: emptyPending, uiActions }
+    }
+    uiActions.push({ type: 'switch_overlay_fan', fanId })
+    return {
+      tool_call_id: tc.id,
+      content: `Switched overlay tab to fan ${fanId}.`,
+      pendingConfirmations: emptyPending,
+      uiActions,
+    }
+  }
+
+  if (name === 'recommend_dm_bundle') {
+    const settings = await getSettings(supabase, userId)
+    const styleRaw =
+      (typeof args.pricing_style === 'string' && args.pricing_style) ||
+      (typeof settings?.automation_rules?.dm_pricing_style === 'string' &&
+        settings.automation_rules.dm_pricing_style) ||
+      'balanced'
+    const style =
+      styleRaw === 'maximize_revenue' || styleRaw === 'premium_domme' ? styleRaw : 'balanced'
+    const bias =
+      style === 'maximize_revenue'
+        ? 'Bias: maximize PPV revenue; suggest assertive premium pricing where appropriate.'
+        : style === 'premium_domme'
+          ? 'Bias: premium dominance / findom-adjacent framing where platform-safe; consenting-adults only.'
+          : 'Bias: balanced pricing for conversion and fan trust.'
+    const goal = typeof args.goal === 'string' ? args.goal : ''
+    const fanContext = typeof args.fan_context === 'string' ? args.fan_context : ''
+    let contentRef = typeof args.content_summary === 'string' ? args.content_summary : ''
+    const idList = Array.isArray(args.content_ids)
+      ? args.content_ids.map((x) => String(x).trim()).filter(Boolean).slice(0, 12)
+      : []
+    if (idList.length) {
+      let rows: Record<string, unknown>[] | null = null
+      const q1 = await supabase
+        .from('content')
+        .select('id, title, content_type, status, sales_notes, teaser_tags, spoiler_level')
+        .eq('user_id', userId)
+        .in('id', idList)
+      if (!q1.error && q1.data) {
+        rows = q1.data as Record<string, unknown>[]
+      } else {
+        const q2 = await supabase
+          .from('content')
+          .select('id, title, content_type, status')
+          .eq('user_id', userId)
+          .in('id', idList)
+        if (!q2.error && q2.data) rows = q2.data as Record<string, unknown>[]
+      }
+      if (rows?.length) {
+        const vaultBlock = rows
+          .map((r) =>
+            JSON.stringify({
+              id: r.id,
+              title: r.title,
+              type: r.content_type,
+              status: r.status,
+              sales_notes:
+                typeof r.sales_notes === 'string' ? String(r.sales_notes).slice(0, 800) : r.sales_notes ?? null,
+              teaser_tags: r.teaser_tags ?? null,
+              spoiler_level: r.spoiler_level ?? null,
+            }),
+          )
+          .join('\n')
+        contentRef = [contentRef.trim(), `Vault items (ids + saved sales metadata):\n${vaultBlock}`]
+          .filter((s) => s.length > 0)
+          .join('\n\n')
+      }
+    }
+    const out = await runAiStudioToolServer(
+      'dm-bundle-pricing',
+      {
+        goal,
+        fan_context: fanContext,
+        content_summary: contentRef,
+        pricing_style: style,
+        pricing_bias: bias,
+        platform: args.platform === 'fansly' ? 'fansly' : 'onlyfans',
+        current_price: typeof args.current_price === 'number' ? args.current_price : undefined,
+      },
+      cookie,
+    )
+    const summary = out.success
+      ? typeof out.result === 'object' && out.result !== null && 'content' in out.result
+        ? String((out.result as { content: string }).content).slice(0, 1200)
+        : JSON.stringify(out.result).slice(0, 1200)
+      : (out.error ?? 'Tool failed')
+    return { tool_call_id: tc.id, content: summary, pendingConfirmations: emptyPending, uiActions }
+  }
+
+  if (name === 'upsert_content_sales_notes') {
+    const contentId = typeof args.content_id === 'string' ? args.content_id.trim() : ''
+    if (!contentId) {
+      return { tool_call_id: tc.id, content: 'content_id is required.', pendingConfirmations: emptyPending, uiActions }
+    }
+    const patch: Record<string, unknown> = {}
+    if (typeof args.sales_notes === 'string') patch.sales_notes = args.sales_notes.slice(0, 8000)
+    if (Array.isArray(args.teaser_tags)) {
+      patch.teaser_tags = args.teaser_tags.map((t) => String(t).slice(0, 80)).filter(Boolean).slice(0, 40)
+    }
+    if (typeof args.spoiler_level === 'string') patch.spoiler_level = args.spoiler_level.slice(0, 32)
+    if (Object.keys(patch).length === 0) {
+      return {
+        tool_call_id: tc.id,
+        content: 'Provide sales_notes, teaser_tags, and/or spoiler_level.',
+        pendingConfirmations: emptyPending,
+        uiActions,
+      }
+    }
+    const { error } = await supabase.from('content').update(patch).eq('id', contentId).eq('user_id', userId)
+    return {
+      tool_call_id: tc.id,
+      content: error ? error.message : 'Saved content sales metadata.',
       pendingConfirmations: emptyPending,
       uiActions,
     }
@@ -1360,6 +1683,10 @@ export async function runToolCall(
   }
 
   if (name === 'send_message') {
+    const modeRaw = typeof args.mode === 'string' ? args.mode.toLowerCase() : ''
+    if (modeRaw === 'draft' || modeRaw === 'prepare') {
+      return runPrepareDmUiResult(tc, args, supabase, userId)
+    }
     const hasMedia = Array.isArray(args.mediaIds) && args.mediaIds.length > 0
     const m = typeof intentBody.message === 'string' ? intentBody.message.trim() : ''
     if (!m && !hasMedia) {

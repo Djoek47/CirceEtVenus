@@ -157,7 +157,7 @@ You have access to the creator's analytics: fans, revenue, and platform breakdow
 
     You can see and act on OnlyFans fans, followings, message engagement, and queue: list_fans (filter: active, expired, latest, top) for who are my fans, top spenders, or expired subs; get_fan_subscription_history for a specific fan's renewals; list_followings for who the creator follows; get_top_message for the best-performing message and its buyers; get_message_engagement (type direct or mass) for how DMs or mass messages performed; publish_queue_item to publish a saved post or saved mass message. Prefer the smallest set of API calls that answers the question: e.g. "who spent the most this month" → list_fans with filter=top; "how did yesterday's mass message do" → get_message_engagement with type=mass; "publish my saved post about the new set" → look up queue then publish_queue_item with that queueId.
 
-When OnlyFans is connected, you have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. If a DM thread is not found (for example, the fan or conversation was deleted), tell the creator that the thread is no longer available and suggest picking another fan instead of treating it as a generic error. get_reply_suggestions and get_dm_thread_and_suggestions run Scan Thread plus Circe/Venus/Flirt reply lines synchronously (blocking until done). For a long scan while the creator does something else (e.g. open Analytics or ask get_stats), use start_thread_scan_async instead: it queues a background scan, may navigate them to Analytics, and registers tasks in voice memory. Use get_task_status to see pending or completed tasks and navigation. When they want both a background scan and stats, call start_thread_scan_async first, then get_stats; the app will return them to Messages with suggestions when every barrier task finishes—do not claim the scan is done until get_task_status shows the scan task done or the creator sees the in-app handoff. send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts.${platformConnectionLine}${focusedFanLine}${voiceMemoryLine}
+When OnlyFans is connected, you have full access to DMs and content: get_dm_conversations returns fan names, usernames, and fanIds—use it to find a user by name. get_dm_thread lets you scan and read the full chat with a specific fan. If a DM thread is not found (for example, the fan or conversation was deleted), tell the creator that the thread is no longer available and suggest picking another fan instead of treating it as a generic error. get_reply_suggestions and get_dm_thread_and_suggestions run Scan Thread plus Circe/Venus/Flirt reply lines synchronously (blocking until done). For a long scan while the creator does something else (e.g. open Analytics or ask get_stats), use start_thread_scan_async instead: it queues a background scan, may navigate them to Analytics, and registers tasks in voice memory. Use get_task_status to see pending or completed tasks and navigation. When they want both a background scan and stats, call start_thread_scan_async first, then get_stats; the app will return them to Messages with suggestions when every barrier task finishes—do not claim the scan is done until get_task_status shows the scan task done or the creator sees the in-app handoff. send_message sends a direct message to a specific fan. You can read users by name, scan any thread, and send a DM to that user. list_content shows their content calendar and scheduled posts. For vault sales metadata: list_vault_for_dm lists content ids; get_content_sales_metadata reads one item's saved notes and tags; upsert_content_sales_notes saves after a short structured interview—stay professional, respect their stated boundaries, fan-facing sales angles only. recommend_dm_bundle accepts content_ids to pull saved metadata into bundle pricing.${platformConnectionLine}${focusedFanLine}${voiceMemoryLine}
 
 DM name lookup: Tool output includes spellback ("I heard …") and [divine_lookup_meta:…]. Say the spellback out loud. If the meta says fuzzy_confirm_required, multi_match_confirm_required, or fuzzy_ambiguous, ask the creator to confirm which fan or fanId before continuing—do not insist the chat is already open. Do not call get_dm_conversations or lookup_fan again with the same name query in the same turn; ask a clarifying question instead.
 
@@ -382,17 +382,118 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
         type: 'function' as const,
         name: 'send_message',
         description:
-          'Send a direct message to a specific fan. Use fanId from get_dm_conversations. You can find the user by name with get_dm_conversations first, then send_message to that fanId.',
+          'Send a DM immediately, or draft into the in-app composer (mode draft/prepare) with optional countdown auto-send. Use fanId from get_dm_conversations.',
         parameters: {
           type: 'object',
           properties: {
             fanId: { type: 'string', description: 'Fan id from conversations list' },
             message: { type: 'string', description: 'Message text to send' },
+            mode: {
+              type: 'string',
+              enum: ['send_now', 'draft', 'prepare'],
+              description: 'draft/prepare = composer + timer; default send_now',
+            },
             platform: { type: 'string', enum: ['onlyfans', 'fansly'], description: 'Platform' },
             price: { type: 'number', description: 'Optional PPV price' },
             mediaIds: { type: 'array', items: { type: 'string' } },
+            delayMs: { type: 'number', description: 'Override auto-send delay ms' },
+            auto_send: { type: 'boolean', description: 'false disables countdown' },
           },
           required: ['fanId', 'message'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'prepare_dm',
+        description:
+          'Fill the DM composer for a fan; optional auto-send after user-configured delay. Prefer when they should review before sending.',
+        parameters: {
+          type: 'object',
+          properties: {
+            fanId: { type: 'string' },
+            message: { type: 'string' },
+            text: { type: 'string' },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+            price: { type: 'number' },
+            mediaIds: { type: 'array', items: { type: 'string' } },
+            delayMs: { type: 'number' },
+            auto_send: { type: 'boolean' },
+          },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'open_dm_overlay',
+        description: 'Open floating DM overlay for a fan.',
+        parameters: {
+          type: 'object',
+          properties: { fanId: { type: 'string' } },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'switch_overlay_fan',
+        description: 'Switch DM overlay tab.',
+        parameters: {
+          type: 'object',
+          properties: { fanId: { type: 'string' } },
+          required: ['fanId'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'list_vault_for_dm',
+        description: 'List Creatix content vault with sales metadata for DM recommendations.',
+        parameters: {
+          type: 'object',
+          properties: { limit: { type: 'number' } },
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'get_content_sales_metadata',
+        description:
+          'Read one content row: sales_notes, teaser_tags, spoiler_level. Use with list_vault_for_dm ids before or after upsert_content_sales_notes.',
+        parameters: {
+          type: 'object',
+          properties: { content_id: { type: 'string' } },
+          required: ['content_id'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'recommend_dm_bundle',
+        description:
+          'DM/PPV bundle price and copy; pass content_ids to load saved vault sales metadata from the DB.',
+        parameters: {
+          type: 'object',
+          properties: {
+            goal: { type: 'string' },
+            fan_context: { type: 'string' },
+            content_summary: { type: 'string' },
+            content_ids: { type: 'array', items: { type: 'string' } },
+            pricing_style: { type: 'string', enum: ['balanced', 'maximize_revenue', 'premium_domme'] },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+            current_price: { type: 'number' },
+          },
+          required: ['goal'],
+        },
+      },
+      {
+        type: 'function' as const,
+        name: 'upsert_content_sales_notes',
+        description: 'Save private sales/teaser metadata on a content row (vault).',
+        parameters: {
+          type: 'object',
+          properties: {
+            content_id: { type: 'string' },
+            sales_notes: { type: 'string' },
+            teaser_tags: { type: 'array', items: { type: 'string' } },
+            spoiler_level: { type: 'string' },
+          },
+          required: ['content_id'],
         },
       },
       {

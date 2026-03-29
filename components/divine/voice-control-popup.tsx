@@ -5,6 +5,7 @@ import { DivineWorkingLogo } from '@/components/divine/divine-working-logo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Mic, PhoneOff } from 'lucide-react'
+import { DivineTranscriptStack } from '@/components/divine/divine-transcript-card'
 
 export function VoiceControlPopup() {
   const voice = useVoiceSession()
@@ -32,6 +33,8 @@ export function VoiceControlPopup() {
           : 'Error'
 
   return (
+    <>
+    <DivineTranscriptStack />
     <div
       className={cn(
         'fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-all',
@@ -115,6 +118,7 @@ export function VoiceControlPopup() {
         </span>
       )}
     </div>
+    </>
   )
 }
 

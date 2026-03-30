@@ -2,6 +2,18 @@
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
 
+**GitHub:** [github.com/Djoek47/CirceEtVenus](https://github.com/Djoek47/CirceEtVenus) (product: Circe et Venus / Creatix).
+
+To push this codebase to that repo (empty or new default branch), use:
+
+```bash
+git push -u circe-et-venus main
+```
+
+(`origin` may still point at [Creatix](https://github.com/Djoek47/Creatix); the remote named `circe-et-venus` targets CirceEtVenus.)
+
+**Architecture & mobile:** See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (web vs API vs Supabase), [docs/mobile-app.md](docs/mobile-app.md) (PWA, Capacitor), and [docs/MOBILE_APP_REPO.md](docs/MOBILE_APP_REPO.md) (Expo app in a **separate repository**). Parallel work: [docs/AGENTS.md](docs/AGENTS.md).
+
 ## Built with v0
 
 This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.

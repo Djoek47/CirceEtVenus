@@ -43,6 +43,10 @@ export interface DivineManagerAutomationAlerts {
   tasks_for_whale_tips?: boolean
   /** Minimum tip (USD) to create an urgent task (default 100). */
   whale_tip_min_dollars?: number
+  /** Minimum lifetime spend (USD) to treat inbound DMs as “whale” priority (default 100). */
+  message_whale_min_dollars?: number
+  /** Minimum tip (USD) to insert a tip notification at all (default 50). */
+  tip_notify_min_dollars?: number
   /** If true, DMCA / leak workflows only create drafts until you confirm (default true). */
   dmca_draft_requires_confirmation?: boolean
   [key: string]: unknown

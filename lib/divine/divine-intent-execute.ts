@@ -102,14 +102,15 @@ async function insertDivineNotification(
   title: string,
   description: string,
   link = '/dashboard/divine-manager',
+  metadata?: Record<string, unknown>,
 ) {
-  await supabase.from('notifications').insert({
-    user_id: userId,
+  const { insertDivineAppNotification } = await import('@/lib/notifications/divine-app-notification')
+  await insertDivineAppNotification(supabase, userId, {
     type: 'system',
     title,
     description,
     link,
-    read: false,
+    metadata: { kind: 'divine_intent', ...metadata },
   })
 }
 
@@ -259,7 +260,9 @@ export async function executeDivineIntentPost(
       const title = (body.title as string)?.trim() || 'Divine Manager'
       const description = (body.description as string)?.trim() || 'Reminder from your manager.'
       const link = (body.link as string)?.trim() || '/dashboard/divine-manager'
-      await insertDivineNotification(supabase, user.id, title, description, link)
+      await insertDivineNotification(supabase, user.id, title, description, link, {
+        intent_type: 'send_notification',
+      })
       result = { success: true, summary: 'Notification added.' }
       break
     }
@@ -404,11 +407,15 @@ export async function executeDivineIntentPost(
               : type === 'send_message'
                 ? 'Divine: DM sent'
                 : 'Divine Manager'
-    await insertDivineNotification(supabase, user.id, notifTitle, result.summary)
+    await insertDivineNotification(supabase, user.id, notifTitle, result.summary, {
+      intent_type: type,
+    })
   }
 
   if (result.success && type === 'publish_queue_item') {
-    await insertDivineNotification(supabase, user.id, 'Divine: Queue item published', result.summary)
+    await insertDivineNotification(supabase, user.id, 'Divine: Queue item published', result.summary, {
+      intent_type: 'publish_queue_item',
+    })
   }
 
   return {

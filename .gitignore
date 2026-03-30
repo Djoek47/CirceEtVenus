@@ -10,3 +10,14 @@ node_modules/
 .env*.local
 .DS_Store
 .vercel
+
+# TypeScript / build artifacts (do not commit)
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+.turbo
+out/
+dist/
+
+# IDE
+.idea/
+*.swp

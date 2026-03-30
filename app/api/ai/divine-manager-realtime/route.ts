@@ -852,7 +852,10 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
           'Latest stored DM thread snapshot, merged personality profile (profile_json), iteration, and OnlyFans fan AI summary for a fan.',
         parameters: {
           type: 'object',
-          properties: { fanId: { type: 'string' } },
+          properties: {
+            fanId: { type: 'string' },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
+          },
           required: ['fanId'],
         },
       },
@@ -860,12 +863,13 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
         type: 'function' as const,
         name: 'refresh_fan_thread_scan',
         description:
-          'Re-fetch the DM thread from OnlyFans, update the stored snapshot, and merge/refine the structured fan personality profile. Use when the creator asks to refresh or rescan a fan’s thread.',
+          'Re-fetch the DM thread (OnlyFans API or Fansly in-app history), update the stored snapshot, and merge/refine the structured fan personality profile.',
         parameters: {
           type: 'object',
           properties: {
             fanId: { type: 'string' },
             force: { type: 'boolean', description: 'If true, bypass debounce and run profile merge' },
+            platform: { type: 'string', enum: ['onlyfans', 'fansly'] },
           },
           required: ['fanId'],
         },
@@ -948,12 +952,8 @@ Speak in second person ("you"). Keep replies actionable but advisory. Be concise
                 '/dashboard/divine-manager?section=tasks',
                 '/dashboard/divine-manager?section=alerts',
                 '/dashboard/ai-studio',
-                '/dashboard/ai-studio?tab=overview',
+                '/dashboard/ai-studio?tab=library',
                 '/dashboard/ai-studio?tab=tools',
-                '/dashboard/ai-studio?tab=chatter',
-                '/dashboard/ai-studio?tab=cosmic',
-                '/dashboard/ai-studio?ai=circe',
-                '/dashboard/ai-studio?ai=venus',
                 '/dashboard/ai-studio?tab=tools&ai=circe',
                 '/dashboard/ai-studio/tools/caption-generator',
                 '/dashboard/social',

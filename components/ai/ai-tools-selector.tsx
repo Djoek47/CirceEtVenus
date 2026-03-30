@@ -390,6 +390,28 @@ export function AIToolsSelector({
   const [audienceSegment, setAudienceSegment] = useState('all')
   const [campaignGoal, setCampaignGoal] = useState('')
   const [attractionImage, setAttractionImage] = useState<string | null>(null)
+  const [churnFanId, setChurnFanId] = useState<string>('manual')
+  const [churnFans, setChurnFans] = useState<
+    { id: string; username: string; display_name: string | null; total_spent: number | null; platform: string }[]
+  >([])
+
+  useEffect(() => {
+    if (selectedTool?.id !== 'churn-predictor') return
+    const sb = createClient()
+    void (async () => {
+      const {
+        data: { user },
+      } = await sb.auth.getUser()
+      if (!user) return
+      const { data } = await sb
+        .from('fans')
+        .select('id, username, display_name, total_spent, platform')
+        .eq('user_id', user.id)
+        .order('total_spent', { ascending: false })
+        .limit(150)
+      setChurnFans((data as typeof churnFans) || [])
+    })()
+  }, [selectedTool?.id])
   
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
@@ -541,10 +563,18 @@ export function AIToolsSelector({
           response = await fetch('/api/ai/churn-predictor', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fanData: fanMessage,
-              recentActivity: contentDescription,
-            }),
+            body: JSON.stringify(
+              churnFanId !== 'manual'
+                ? {
+                    fanId: churnFanId,
+                    recentActivity: contentDescription || undefined,
+                    spendingHistory: fanMessage || undefined,
+                  }
+                : {
+                    fanData: fanMessage,
+                    recentActivity: contentDescription || undefined,
+                  },
+            ),
           })
           break
           
@@ -623,9 +653,11 @@ export function AIToolsSelector({
         }
       }
       
-      if (!response.ok) throw new Error('Failed to run tool')
-      
-      const data = await response.json()
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Failed to run tool')
+      }
+
       setResult(data)
     } catch (error) {
       console.error('Tool error:', error)
@@ -647,6 +679,7 @@ export function AIToolsSelector({
     setCurrentPrice('')
     setNiche('')
     setAttractionImage(null)
+    setChurnFanId('manual')
   }
   
   // Render tool-specific input form
@@ -947,18 +980,48 @@ export function AIToolsSelector({
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Fan Information</Label>
-              <Textarea 
-                placeholder="Describe the fan: subscription length, spending history, recent activity..."
-                value={fanMessage}
-                onChange={(e) => setFanMessage(e.target.value)}
-                className="min-h-[100px]"
-              />
+              <Label>Fan from CRM (uses spend + stored thread snapshot)</Label>
+              <Select value={churnFanId} onValueChange={setChurnFanId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose fan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual entry only</SelectItem>
+                  {churnFans.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      @{f.username}
+                      {f.display_name ? ` (${f.display_name})` : ''} · {Number(f.total_spent ?? 0).toFixed(0)}{' '}
+                      spend
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            {churnFanId === 'manual' ? (
+              <div className="space-y-2">
+                <Label>Fan information</Label>
+                <Textarea
+                  placeholder="Subscription length, spending, patterns…"
+                  value={fanMessage}
+                  onChange={(e) => setFanMessage(e.target.value)}
+                  className="min-h-[100px]"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Optional: extra spending / trend notes</Label>
+                <Textarea
+                  placeholder="e.g. tips dropped this month vs last…"
+                  value={fanMessage}
+                  onChange={(e) => setFanMessage(e.target.value)}
+                  className="min-h-[80px]"
+                />
+              </div>
+            )}
             <div className="space-y-2">
-              <Label>Recent Behavior Changes (optional)</Label>
-              <Textarea 
-                placeholder="Any recent changes in their engagement patterns..."
+              <Label>Recent behavior or context (optional)</Label>
+              <Textarea
+                placeholder="Anything that changed lately in DMs or purchases…"
                 value={contentDescription}
                 onChange={(e) => setContentDescription(e.target.value)}
                 className="min-h-[80px]"

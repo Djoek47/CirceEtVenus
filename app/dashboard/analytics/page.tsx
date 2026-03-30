@@ -50,9 +50,9 @@ export default async function AnalyticsPage() {
             variant="outline"
             className="hidden sm:inline-flex border-circe/40 text-circe-light hover:bg-circe/10"
           >
-            <Link href="/dashboard/ai-studio?ai=circe">
+            <Link href="/dashboard/ai-studio/tools/churn-predictor">
               <Moon className="mr-1 h-4 w-4" />
-              Circe Retention Lab
+              Churn Predictor
             </Link>
           </Button>
         </div>

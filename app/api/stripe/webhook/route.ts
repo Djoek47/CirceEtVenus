@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
+import { insertDivineAppNotification } from '@/lib/notifications/divine-app-notification'
 
 // Stripe endpoint to register: https://www.circeetvenus.com/api/stripe/webhook
 // During phased cutover, keep https://www.cetv.app/api/stripe/webhook active temporarily.
@@ -51,13 +52,12 @@ async function notifyPlanChange(
   planId: string | undefined,
 ) {
   if (!planId || !PRO_PLANS.includes(planId.toLowerCase())) return
-  await supabase.from('notifications').insert({
-    user_id: userId,
+  await insertDivineAppNotification(supabase, userId, {
     type: 'system',
     title: 'Plan upgraded',
     description: 'Your Pro plan is now active. You have full access to Circe & Venus tools.',
     link: '/dashboard/ai-studio',
-    read: false,
+    metadata: { kind: 'billing' },
   })
 }
 

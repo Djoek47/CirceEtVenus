@@ -139,7 +139,7 @@ export function ReputationBriefingCard({
         {!isPro && (
           <p className="text-sm text-muted-foreground">
             Upgrade to Venus Pro for aggregate reputation intelligence.{' '}
-            <Link href="/dashboard/ai-studio?ai=venus" className="text-venus underline-offset-4 hover:underline">
+            <Link href="/dashboard/ai-studio/tools/venus-attraction" className="text-venus underline-offset-4 hover:underline">
               Open Venus Pro
             </Link>
           </p>

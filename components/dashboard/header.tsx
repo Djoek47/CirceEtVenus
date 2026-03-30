@@ -23,6 +23,7 @@ import { Notifications } from '@/components/notifications'
 import { StartTourButton } from '@/components/tour/start-tour-button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { MobileSidebar } from '@/components/dashboard/mobile-sidebar'
+import { DashboardRefreshButton } from '@/components/dashboard/dashboard-refresh-button'
 
 interface HeaderProps {
   user: SupabaseUser
@@ -36,6 +37,10 @@ const pageNames: Record<string, string> = {
   '/dashboard/fans': 'Fan Management',
   '/dashboard/content': 'Cosmic Content Calendar',
   '/dashboard/messages': 'Messages',
+  '/dashboard/messages/mass': 'Mass messages',
+  '/dashboard/community': 'Community',
+  '/dashboard/social': 'Social',
+  '/dashboard/content-library': 'Content library',
   '/dashboard/analytics': 'Analytics',
   '/dashboard/protection': "Circe's Protection",
   '/dashboard/mentions': "Venus' Watch",
@@ -53,7 +58,8 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
   }, [])
 
   const getPageName = () => {
-    for (const [path, name] of Object.entries(pageNames)) {
+    const entries = Object.entries(pageNames).sort((a, b) => b[0].length - a[0].length)
+    for (const [path, name] of entries) {
       if (pathname === path || pathname.startsWith(path + '/')) {
         return name
       }
@@ -126,6 +132,8 @@ export function DashboardHeader({ user, profile }: HeaderProps) {
 
         {/* Theme Toggle */}
         <ThemeToggle />
+
+        <DashboardRefreshButton />
 
         {/* Notifications */}
         <Notifications />

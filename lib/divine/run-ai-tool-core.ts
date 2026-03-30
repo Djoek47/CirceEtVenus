@@ -235,19 +235,24 @@ export async function runDivineAiToolServer(
         return { success: true, result: data }
       }
       case 'churn-predictor': {
-        const prompt =
-          [
-            params.fanData && `Fan data: ${params.fanData}`,
-            params.recentActivity && `Recent activity: ${params.recentActivity}`,
-            params.subscriptionLength && `Subscription length: ${params.subscriptionLength}`,
-            params.spendingHistory && `Spending history: ${params.spendingHistory}`,
-          ]
-            .filter(Boolean)
-            .join('. ') || 'General subscriber churn risk analysis.'
-        const res = await fetch(`${base}/tool-run`, {
+        const fanId = typeof params.fanId === 'string' ? params.fanId.trim() : ''
+        const res = await fetch(`${base}/churn-predictor`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ toolId: 'churn-predictor', prompt }),
+          body: JSON.stringify(
+            fanId
+              ? {
+                  fanId,
+                  recentActivity: params.recentActivity,
+                  spendingHistory: params.spendingHistory,
+                }
+              : {
+                  fanData: params.fanData,
+                  recentActivity: params.recentActivity,
+                  subscriptionLength: params.subscriptionLength,
+                  spendingHistory: params.spendingHistory,
+                },
+          ),
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) return { success: false, error: (data as { error?: string }).error || 'Tool failed' }

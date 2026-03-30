@@ -10,6 +10,7 @@ export async function maybeCreateWhaleTipUrgentTask(
   userId: string,
   tipAmount: number,
   fromUser: { id: string; username: string; name: string },
+  platform: 'onlyfans' | 'fansly' = 'onlyfans',
 ): Promise<void> {
   const { data: row } = await supabase
     .from('divine_manager_settings')
@@ -34,7 +35,7 @@ export async function maybeCreateWhaleTipUrgentTask(
     payload: {
       summary: `Large tip: $${tipAmount.toFixed(2)} from ${fromUser.name} (@${fromUser.username})`,
       targetFans: [fromUser.id],
-      platform: 'onlyfans',
+      platform,
       tipAmount,
     },
     source: 'webhook',

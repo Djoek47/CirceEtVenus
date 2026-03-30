@@ -233,7 +233,14 @@ const CHAT_TOOLS: Array<{
         'Latest stored DM thread snapshot, merged personality profile_json, iteration, and OnlyFans fan AI summary for a fan. Background refresh updates snapshots after new messages; use refresh_fan_thread_scan for a forced rescan.',
       parameters: {
         type: 'object',
-        properties: { fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' } },
+        properties: {
+          fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' },
+          platform: {
+            type: 'string',
+            enum: ['onlyfans', 'fansly'],
+            description: 'Platform for stored thread snapshot (default onlyfans)',
+          },
+        },
         required: ['fanId'],
       },
     },
@@ -243,12 +250,17 @@ const CHAT_TOOLS: Array<{
     function: {
       name: 'refresh_fan_thread_scan',
       description:
-        'Re-fetch the DM thread from OnlyFans, update the stored snapshot, and merge/refine the structured fan personality profile. Use when the creator asks to refresh or rescan a fan’s thread.',
+        'Re-fetch the DM thread from the platform API (OnlyFans) or from in-app chat history (Fansly), update the stored snapshot, and merge/refine the structured fan personality profile.',
       parameters: {
         type: 'object',
         properties: {
           fanId: { type: 'string', description: 'Fan ID from get_dm_conversations' },
           force: { type: 'boolean', description: 'If true, bypass debounce and run profile merge' },
+          platform: {
+            type: 'string',
+            enum: ['onlyfans', 'fansly'],
+            description: 'Default onlyfans; use fansly for Fansly chats',
+          },
         },
         required: ['fanId'],
       },

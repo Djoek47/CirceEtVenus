@@ -477,179 +477,7 @@ export default function DivineManagerPage() {
       await voiceSession.startVoiceCall()
       return
     }
-    if (realtimeStatus === 'connecting' || realtimeStatus === 'connected') return
-    setRealtimeError(null)
-    setLastAIToolResult(null)
-    setLastToolName(null)
-    setLastToolResult(null)
-    setRealtimeStatus('connecting')
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      realtimeStreamRef.current = stream
-      const pc = new RTCPeerConnection()
-      realtimePcRef.current = pc
-
-      const audioEl = document.createElement('audio')
-      audioEl.autoplay = true
-      audioEl.setAttribute('playsinline', 'true')
-      realtimeAudioRef.current = audioEl
-      pc.ontrack = (e) => {
-        if (e.streams[0]) {
-          audioEl.srcObject = e.streams[0]
-          setRemoteVoiceStream(e.streams[0])
-        }
-      }
-
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
-      const dc = pc.createDataChannel('oai-events')
-      dc.onmessage = async (event) => {
-        resetIdleRef.current?.()
-        try {
-          const payload = JSON.parse(event.data as string) as {
-            type?: string
-            tool_calls?: Array<{ name?: string; arguments?: string }>
-            response?: { output?: Array<{ type?: string; name?: string; arguments?: string }> }
-          }
-          const runTool = async (name: string, args: Record<string, unknown>) => {
-            if (!name) return
-            if (name === 'end_call') {
-              // Don't end immediately; give the assistant a moment to finish speaking
-              // (especially the "anything else?" question) before we close the session.
-              if (closeAfterActionRef.current) clearTimeout(closeAfterActionRef.current)
-              closeAfterActionRef.current = setTimeout(() => endRealtimeVoice(), 2000)
-              return
-            }
-            if (name === 'analyze_content' || name === 'generate_caption' || name === 'predict_viral' || name === 'get_retention_insights' || name === 'get_whale_advice') {
-              runAITool(name, args)
-            } else if (name === 'get_dm_conversations' || name === 'get_dm_thread' || name === 'get_reply_suggestions' || name === 'list_content') {
-              // When tools are invoked via tool_calls without a response output item id,
-              // we still run them for side-effects/UI but do not send a function_call_output
-              // back to the model (no call_id to attach to).
-              void runDivineDataTool(name, args)
-            } else if (name === 'content_publish' && sessionPhotoRef.current) {
-              const platforms = (Array.isArray(args.platforms) ? args.platforms : args.platform ? [args.platform] : ['onlyfans', 'fansly']) as string[]
-              const params = { ...args, platforms }
-              if (platforms.includes('onlyfans')) {
-                try {
-                  const res = await fetch(sessionPhotoRef.current)
-                  const blob = await res.blob()
-                  const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' })
-                  const form = new FormData()
-                  form.append('file', file)
-                  const up = await fetch('/api/onlyfans/media/upload', { method: 'POST', body: form })
-                  const data = (await up.json()) as { id?: string; error?: string }
-                  if (data.id) params.mediaIds = [data.id]
-                } catch {
-                  // continue without media
-                }
-              }
-              runDivineIntent(name, params)
-            } else {
-              runDivineIntent(name, args)
-            }
-          }
-          // Format 1: direct tool_calls array
-          const toolCalls =
-            payload?.tool_calls ??
-            (payload as { tool_calls?: Array<{ name?: string; arguments?: string }> })?.tool_calls
-          if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-            for (const tc of toolCalls) {
-              const name = tc.name
-              const args =
-                typeof tc.arguments === 'string'
-                  ? (() => {
-                      try {
-                        return JSON.parse(tc.arguments!)
-                      } catch {
-                        return {}
-                      }
-                    })()
-                  : (tc.arguments ?? {}) as Record<string, unknown>
-              await runTool(name!, args)
-            }
-            return
-          }
-          // Format 2: response.done with output items of type function_call
-          if (payload?.type === 'response.done' && Array.isArray(payload.response?.output)) {
-            let sentDmFunctionOutput = false
-            for (const item of payload.response.output) {
-              if (item?.type === 'function_call' && item.name) {
-                const args =
-                  typeof item.arguments === 'string'
-                    ? (() => {
-                        try {
-                          return JSON.parse(item.arguments!)
-                        } catch {
-                          return {}
-                        }
-                      })()
-                    : {}
-                if (
-                  item.name === 'get_dm_conversations' ||
-                  item.name === 'get_dm_thread' ||
-                  item.name === 'get_reply_suggestions' ||
-                  item.name === 'list_content'
-                ) {
-                  const summary = await runDivineDataTool(
-                    item.name,
-                    args as Record<string, unknown>,
-                  )
-                  if (summary) {
-                    const callId =
-                      (item as { call_id?: string; id?: string }).call_id ?? (item as { id?: string }).id
-                    if (callId) {
-                      const eventPayload = {
-                        type: 'conversation.item.create',
-                        item: {
-                          type: 'function_call_output',
-                          call_id: callId,
-                          output: summary,
-                        },
-                      }
-                      dc.send(JSON.stringify(eventPayload))
-                      sentDmFunctionOutput = true
-                    }
-                  }
-                } else {
-                  await runTool(item.name, args as Record<string, unknown>)
-                }
-              }
-            }
-            if (sentDmFunctionOutput) {
-              dc.send(
-                JSON.stringify({
-                  type: 'response.create',
-                  response: { modalities: ['audio'] },
-                }),
-              )
-            }
-          }
-        } catch {
-          // ignore non-JSON or unexpected format
-        }
-      }
-
-      const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
-
-      const res = await fetch('/api/ai/divine-manager-realtime', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/sdp' },
-        body: offer.sdp ?? '',
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error((err as { error?: string }).error || `Session failed ${res.status}`)
-      }
-      const answerSdp = await res.text()
-      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
-      setRealtimeStatus('connected')
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to start voice call'
-      setRealtimeError(msg)
-      setRealtimeStatus('error')
-      endRealtimeVoice()
-    }
+    console.error('Voice session unavailable: wrap the app in VoiceSessionProvider')
   }
 
   const endRealtimeVoice = useCallback(() => {
@@ -756,7 +584,7 @@ export default function DivineManagerPage() {
         const data = await res.json().catch(() => ({}))
         if ((data as { error?: string }).error && !res.ok) {
           const msg = (data as { error?: string }).error
-          setLastAIToolResult(msg)
+          setLastAIToolResult(msg ?? null)
           return msg ? `Error loading conversations: ${msg}` : 'Failed to load conversations.'
         }
         setLastToolName(toolName)
@@ -783,7 +611,7 @@ export default function DivineManagerPage() {
         const data = await res.json().catch(() => ({}))
         if ((data as { error?: string }).error && !res.ok) {
           const msg = (data as { error?: string }).error
-          setLastAIToolResult(msg)
+          setLastAIToolResult(msg ?? null)
           return msg ? `Error loading thread: ${msg}` : 'Failed to load thread.'
         }
         setLastToolName(toolName)
@@ -804,7 +632,7 @@ export default function DivineManagerPage() {
         const data = await res.json().catch(() => ({}))
         if ((data as { error?: string }).error && !res.ok) {
           const msg = (data as { error?: string }).error
-          setLastAIToolResult(msg)
+          setLastAIToolResult(msg ?? null)
           return msg
             ? `Error loading reply suggestions: ${msg}`
             : 'Failed to load reply suggestions.'
@@ -857,7 +685,7 @@ export default function DivineManagerPage() {
         const data = await res.json().catch(() => ({}))
         if ((data as { error?: string }).error && !res.ok) {
           const msg = (data as { error?: string }).error
-          setLastAIToolResult(msg)
+          setLastAIToolResult(msg ?? null)
           return msg ? `Error loading content list: ${msg}` : 'Failed to load content list.'
         }
         setLastToolName(toolName)
@@ -1923,9 +1751,9 @@ export default function DivineManagerPage() {
                           </span>
                           <span className="text-xs text-muted-foreground">/10</span>
                         </div>
-                        {lastToolResult.verdict && (
+                        {typeof lastToolResult.verdict === 'string' && lastToolResult.verdict.trim().length > 0 && (
                           <Badge variant="secondary" className="text-xs font-normal">
-                            {String(lastToolResult.verdict)}
+                            {lastToolResult.verdict}
                           </Badge>
                         )}
                       </div>
@@ -2001,15 +1829,20 @@ export default function DivineManagerPage() {
                   )}
                   {lastToolName === 'get_reply_suggestions' && (
                     <>
-                      {lastToolResult.recommendation && (
+                      {lastToolResult.recommendation != null && String(lastToolResult.recommendation).length > 0 && (
                         <p className="text-xs font-medium text-foreground">
                           Recommendation: {String(lastToolResult.recommendation).toUpperCase()}
-                          {lastToolResult.recommendationReason && ` — ${String(lastToolResult.recommendationReason)}`}
+                          {lastToolResult.recommendationReason != null && String(lastToolResult.recommendationReason).length > 0
+                            ? ` — ${String(lastToolResult.recommendationReason)}`
+                            : ''}
                         </p>
                       )}
-                      {lastToolResult.scan?.insights?.length > 0 && (
-                        <p className="text-xs text-muted-foreground">Scan: {(lastToolResult.scan.insights as string[]).slice(0, 2).join('; ')}</p>
-                      )}
+                      {(() => {
+                        const insights = (lastToolResult.scan as { insights?: string[] } | undefined)?.insights
+                        return Array.isArray(insights) && insights.length > 0 ? (
+                          <p className="text-xs text-muted-foreground">Scan: {insights.slice(0, 2).join('; ')}</p>
+                        ) : null
+                      })()}
                       <p className="text-[11px] text-muted-foreground mb-2">Choose a reply style while Divine reads the proposal (click to copy):</p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {['circe', 'venus', 'flirt'].map((persona) => {

@@ -24,7 +24,6 @@ import {
   Gift,
   Flame,
   BarChart3,
-  Calendar,
   Shield,
   Scroll,
   Music,
@@ -53,7 +52,6 @@ const ICON_MAP: Record<string, React.ElementType> = {
   'price-optimizer': Target,
   'viral-predictor': Flame,
   'churn-predictor': BarChart3,
-  'cosmic-calendar': Calendar,
   'leak-scanner': Shield,
   'dmca-automator': Scroll,
   'voice-cloning': Music,
@@ -221,14 +219,12 @@ export function AIToolsLibrary({ showBackButton = false, compact = false }: AITo
                   ? '/dashboard/settings?tab=billing#pricing-plans'
                   : `/dashboard/ai-studio/tools/${tool.id}`
               return (
+                <Link key={tool.id} href={href} className="block">
                 <Card
-                  key={tool.id}
                   className={`group relative cursor-pointer overflow-hidden transition-all hover:shadow-lg ${
                     tool.isPro ? 'border-gold/30 hover:border-gold/50' : 'border-border hover:border-primary/50'
                   }`}
-                  asChild
                 >
-                  <Link href={href}>
                     {tool.isPro && !isPro && (
                       <div className="absolute right-2 top-2">
                         <Lock className="h-4 w-4 text-gold" />
@@ -291,8 +287,8 @@ export function AIToolsLibrary({ showBackButton = false, compact = false }: AITo
                         </span>
                       )}
                     </div>
-                  </Link>
                 </Card>
+                </Link>
               )
             })}
           </div>

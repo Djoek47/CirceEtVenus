@@ -5,6 +5,7 @@ import { detectCreatorLikelyFromText, type CreatorDetectorSignal } from '@/lib/d
 export type UnifiedFanProfilePayload = {
   fanId: string
   platform: string
+  creatorClassification: string | null
   core: {
     username: string | null
     displayName: string | null
@@ -43,19 +44,29 @@ export async function buildUnifiedFanProfile(
       }
     : null
 
-  const [{ data: ins }, { data: sum }] = await Promise.all([
+  const [{ data: ins }, { data: sum }, { data: fanCrm }] = await Promise.all([
     supabase
       .from('fan_thread_insights')
       .select(
         'thread_snapshot_text, profile_json, updated_at, iteration, last_thread_refresh_at',
       )
       .eq('user_id', userId)
+      .eq('platform', platform)
       .eq('platform_fan_id', fanId)
       .maybeSingle(),
+    platform === 'onlyfans'
+      ? supabase
+          .from('fan_ai_summaries')
+          .select('summary_json, status, last_analyzed_at, updated_at')
+          .eq('user_id', userId)
+          .eq('platform_fan_id', fanId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase
-      .from('fan_ai_summaries')
-      .select('summary_json, status, last_analyzed_at, updated_at')
+      .from('fans')
+      .select('creator_classification')
       .eq('user_id', userId)
+      .eq('platform', platform)
       .eq('platform_fan_id', fanId)
       .maybeSingle(),
   ])
@@ -108,9 +119,14 @@ export async function buildUnifiedFanProfile(
 
   const creatorDetector = detectCreatorLikelyFromText(hay)
 
+  const ccRaw = (fanCrm as { creator_classification?: string | null } | null)?.creator_classification
+  const creatorClassification =
+    typeof ccRaw === 'string' && ccRaw.trim() ? ccRaw.trim().slice(0, 2000) : null
+
   return {
     fanId,
     platform,
+    creatorClassification,
     core,
     threadInsight,
     aiSummary,

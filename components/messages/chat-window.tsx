@@ -102,18 +102,61 @@ interface ChatWindowProps {
   onMessageSent?: () => void
 }
 
+function buildMediaSrcChain(pres: ReturnType<typeof getProxiedMediaPresentation>): string[] {
+  const o: string[] = []
+  const push = (u: string | undefined) => {
+    if (u && !o.includes(u)) o.push(u)
+  }
+  push(pres.displaySrc)
+  push(pres.altSrc)
+  push(pres.directSrc)
+  push(pres.directAltSrc)
+  return o
+}
+
 function ChatMediaItem({ media }: { media: OnlyFansMedia }) {
-  const pres = getProxiedMediaPresentation(media as RawOnlyFansMedia)
-  const [imgSrc, setImgSrc] = useState(pres.displaySrc)
-  const [videoSrc, setVideoSrc] = useState(pres.displaySrc)
+  const pres = useMemo(() => getProxiedMediaPresentation(media as RawOnlyFansMedia), [
+    media.id,
+    media.type,
+    media.canView,
+    media.files?.full?.url,
+    media.files?.thumb?.url,
+    media.files?.preview?.url,
+    media.files?.squarePreview?.url,
+    media.url,
+    media.preview,
+  ])
+  const imgChain = useMemo(() => buildMediaSrcChain(pres), [pres])
+  const videoChain = useMemo(() => buildMediaSrcChain(pres), [pres])
+  const posterChain = useMemo(() => {
+    const o: string[] = []
+    const push = (u: string | undefined) => {
+      if (u && !o.includes(u)) o.push(u)
+    }
+    push(pres.poster)
+    push(pres.directPoster)
+    return o
+  }, [pres])
+
+  const [imgIdx, setImgIdx] = useState(0)
+  const [videoIdx, setVideoIdx] = useState(0)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    const p = getProxiedMediaPresentation(media as RawOnlyFansMedia)
-    setImgSrc(p.displaySrc)
-    setVideoSrc(p.displaySrc)
+    setImgIdx(0)
+    setVideoIdx(0)
     setFailed(false)
-  }, [media.id])
+  }, [imgChain.join('\0'), videoChain.join('\0')])
+
+  const imgSrc = imgChain[imgIdx]
+  const videoSrc = videoChain[videoIdx]
+  const videoPoster = posterChain[Math.min(videoIdx, Math.max(0, posterChain.length - 1))] ?? undefined
+  const openOriginalHref =
+    pres.directSrc ||
+    pres.directAltSrc ||
+    (media as RawOnlyFansMedia).files?.full?.url ||
+    (media as RawOnlyFansMedia).url ||
+    undefined
 
   if (!media.canView && media.canView !== undefined) {
     return (
@@ -125,8 +168,13 @@ function ChatMediaItem({ media }: { media: OnlyFansMedia }) {
 
   if (failed) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-muted/40 p-3 text-center">
+      <div className="rounded-lg border border-dashed border-border bg-muted/40 p-3 text-center space-y-2">
         <p className="text-sm text-muted-foreground">Could not load media</p>
+        {openOriginalHref && /^https?:\/\//i.test(openOriginalHref) && (
+          <a href={openOriginalHref} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
+            Open original
+          </a>
+        )}
       </div>
     )
   }
@@ -134,7 +182,7 @@ function ChatMediaItem({ media }: { media: OnlyFansMedia }) {
   const video = isVideoMedia(media as RawOnlyFansMedia)
 
   if (video) {
-    const src = videoSrc || pres.displaySrc
+    const src = videoSrc
     if (!src) {
       return (
         <div className="rounded-lg bg-muted/50 p-4 text-center">
@@ -145,13 +193,14 @@ function ChatMediaItem({ media }: { media: OnlyFansMedia }) {
     return (
       <video
         src={src}
-        poster={pres.poster || undefined}
+        poster={videoPoster}
         controls
+        playsInline
         className="rounded-lg max-w-full"
         referrerPolicy="no-referrer"
         onError={() => {
-          if (pres.altSrc && videoSrc !== pres.altSrc) {
-            setVideoSrc(pres.altSrc)
+          if (videoIdx < videoChain.length - 1) {
+            setVideoIdx((i) => i + 1)
           } else {
             setFailed(true)
           }
@@ -172,14 +221,51 @@ function ChatMediaItem({ media }: { media: OnlyFansMedia }) {
     <img
       src={imgSrc}
       alt="Media"
-      className="rounded-lg max-w-full"
+      className="rounded-lg max-w-full h-auto"
       referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
       onError={() => {
-        if (pres.altSrc && imgSrc !== pres.altSrc) {
-          setImgSrc(pres.altSrc)
+        if (imgIdx < imgChain.length - 1) {
+          setImgIdx((i) => i + 1)
         } else {
           setFailed(true)
         }
+      }}
+    />
+  )
+}
+
+function ChatPreviewImage({ rawUrl }: { rawUrl: string }) {
+  const chain = useMemo(() => {
+    const proxied = proxyImageUrl(rawUrl) || rawUrl
+    const o: string[] = []
+    if (proxied) o.push(proxied)
+    if (rawUrl && rawUrl !== proxied) o.push(rawUrl)
+    return o
+  }, [rawUrl])
+  const [idx, setIdx] = useState(0)
+  const [hidden, setHidden] = useState(false)
+
+  useEffect(() => {
+    setIdx(0)
+    setHidden(false)
+  }, [chain.join('\0')])
+
+  const src = chain[idx]
+  if (hidden || !src) return null
+
+  return (
+    <img
+      src={src}
+      alt="Preview"
+      className="rounded-lg max-w-full h-auto"
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
+      onError={() => {
+        if (idx < chain.length - 1) setIdx((i) => i + 1)
+        else setHidden(true)
       }}
     />
   )
@@ -225,9 +311,11 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
   const voiceSession = useVoiceSession()
   const [profileOpen, setProfileOpen] = useState(false)
   const [divineMessageIds, setDivineMessageIds] = useState<Set<string>>(() => new Set())
+  const [divineTyping, setDivineTyping] = useState(false)
   const handleSendMessageRef = useRef<() => Promise<void>>(async () => {})
   const messageRef = useRef('')
   messageRef.current = message
+  const composerTypeAbortRef = useRef<AbortController | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -302,6 +390,49 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
     }
     loadNiches()
   }, [conversationPlatform, conversationUserId, supabase])
+
+  useEffect(() => {
+    composerTypeAbortRef.current?.abort()
+    composerTypeAbortRef.current = null
+    setDivineTyping(false)
+  }, [conversation?.user?.id])
+
+  const applyComposerTextAnimated = useCallback(
+    async (fullText: string, replace: boolean, opts?: { skipAnimation?: boolean }) => {
+      composerTypeAbortRef.current?.abort()
+      const ac = new AbortController()
+      composerTypeAbortRef.current = ac
+
+      if (opts?.skipAnimation === true) {
+        setMessage((prev) => (replace ? fullText : prev + fullText))
+        composerTypeAbortRef.current = null
+        return
+      }
+
+      setDivineTyping(true)
+      const prefix = replace ? '' : messageRef.current
+      if (replace) setMessage('')
+
+      const total = fullText.length
+      const chunk = total > 160 ? 3 : total > 70 ? 2 : 1
+      const delayMs = total > 280 ? 10 : total > 120 ? 15 : 22
+
+      try {
+        for (let i = 0; i < total; i += chunk) {
+          if (ac.signal.aborted) return
+          const end = Math.min(i + chunk, total)
+          setMessage(prefix + fullText.slice(0, end))
+          await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+        }
+      } finally {
+        if (composerTypeAbortRef.current === ac) {
+          setDivineTyping(false)
+          composerTypeAbortRef.current = null
+        }
+      }
+    },
+    [],
+  )
 
   const buildNormalizedMessages = (): NormalizedChatMessage[] => {
     return messages.slice(-30).map((m) => ({
@@ -581,6 +712,7 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
       setComposerText: (text, replace) => {
         setMessage((prev) => (replace === false ? prev + text : text))
       },
+      applyComposerTextAnimated,
       getComposerText: () => messageRef.current,
       setComposerPrice: (p) => setPpvPrice(p),
       setComposerMediaIds: (ids) => setAttachedMediaIds(ids),
@@ -588,7 +720,7 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
         await handleSendMessageRef.current()
       },
     })
-  }, [divinePanel, conversation?.user?.id, conversation?.platform])
+  }, [divinePanel, conversation?.user?.id, conversation?.platform, applyComposerTextAnimated])
 
   const handleChatFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -613,6 +745,10 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
 
   const handleSendMessage = useCallback(async () => {
     if ((!message.trim() && attachedMediaIds.length === 0) || !conversation || sending) return
+
+    composerTypeAbortRef.current?.abort()
+    composerTypeAbortRef.current = null
+    setDivineTyping(false)
 
     setSending(true)
     const messageText = message
@@ -663,13 +799,14 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
           }).catch(() => undefined)
         }
       }
-      if (conversation.platform === 'onlyfans') {
-        void fetch('/api/divine/refresh-thread-insight', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fanId: String(conversation.user.id) }),
-        }).catch(() => undefined)
-      }
+      void fetch('/api/divine/refresh-thread-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fanId: String(conversation.user.id),
+          platform: conversation.platform === 'fansly' ? 'fansly' : 'onlyfans',
+        }),
+      }).catch(() => undefined)
       onMessageSent?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message')
@@ -714,7 +851,11 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
       <CardHeader className="flex flex-row items-center justify-between border-b border-border p-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={proxyImageUrl(fan.avatar) || fan.avatar} />
+            <AvatarImage
+              src={proxyImageUrl(fan.avatar) || fan.avatar}
+              referrerPolicy="no-referrer"
+              className="object-cover"
+            />
             <AvatarFallback className="bg-primary/10 text-primary">
               {fan.name?.[0]?.toUpperCase() || fan.username?.[0]?.toUpperCase() || '?'}
             </AvatarFallback>
@@ -912,16 +1053,7 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
                     {(!msg.media || msg.media.length === 0) && msg.previews && msg.previews.length > 0 && (
                       <div className="mb-2 space-y-2">
                         {msg.previews.map((p, idx) => (
-                          <img 
-                            key={idx}
-                            src={proxyImageUrl(p.url) || p.url} 
-                            alt="Preview" 
-                            className="rounded-lg max-w-full"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none'
-                            }}
-                          />
+                          <ChatPreviewImage key={idx} rawUrl={p.url} />
                         ))}
                       </div>
                     )}
@@ -1088,8 +1220,8 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
                     type="button"
                     className="w-full rounded border border-border bg-background px-2 py-1 text-left text-xs hover:border-primary hover:bg-primary/5"
                     onClick={() => {
-                      setMessage(text)
                       setActivePanel(null)
+                      void applyComposerTextAnimated(text, true, { skipAnimation: false })
                     }}
                   >
                     {text}
@@ -1153,11 +1285,31 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
             />
           </div>
           <div className="relative flex-1">
+            {divineTyping && (
+              <div className="pointer-events-none absolute inset-x-0 -top-5 z-10 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                <span className="inline-flex gap-0.5">
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:300ms]" />
+                </span>
+                <span className="tracking-tight">Divine is typing…</span>
+              </div>
+            )}
             <Input
               placeholder="Type a message..."
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              className="bg-input pr-10"
+              onChange={(e) => {
+                if (divineTyping) {
+                  composerTypeAbortRef.current?.abort()
+                  composerTypeAbortRef.current = null
+                  setDivineTyping(false)
+                }
+                setMessage(e.target.value)
+              }}
+              className={cn(
+                'bg-input pr-10 transition-[box-shadow] duration-300',
+                divineTyping && 'ring-2 ring-primary/45 ring-offset-0',
+              )}
               disabled={sending}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && (message.trim() || attachedMediaIds.length > 0)) {
@@ -1168,7 +1320,14 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
             />
             <div className="absolute right-1 top-1/2 -translate-y-1/2">
               <VoiceInputButton
-                onTranscript={(text) => setMessage(prev => prev + (prev ? ' ' : '') + text)}
+                onTranscript={(text) => {
+                  if (divineTyping) {
+                    composerTypeAbortRef.current?.abort()
+                    composerTypeAbortRef.current = null
+                    setDivineTyping(false)
+                  }
+                  setMessage((prev) => prev + (prev ? ' ' : '') + text)
+                }}
                 size="sm"
                 variant="ghost"
               />

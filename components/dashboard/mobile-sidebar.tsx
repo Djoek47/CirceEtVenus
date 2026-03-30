@@ -17,6 +17,9 @@ import {
   Sun,
   Star,
   Crown,
+  Share2,
+  UsersRound,
+  Library,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import type { Profile } from '@/lib/types'
@@ -42,6 +45,9 @@ const silverNavigation = [
   { name: 'Divine Manager', href: '/dashboard/divine-manager', icon: Crown },
   { name: 'Content', href: '/dashboard/content', icon: Calendar },
   { name: 'Messages', href: '/dashboard/messages', icon: MessageSquare },
+  { name: 'Community', href: '/dashboard/community', icon: UsersRound },
+  { name: 'Social', href: '/dashboard/social', icon: Share2 },
+  { name: 'Content library', href: '/dashboard/content-library', icon: Library },
 ]
 
 const aiStudioNavigation = [

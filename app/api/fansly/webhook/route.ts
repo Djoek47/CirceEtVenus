@@ -1,7 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { getPrefsForWebhook } from '@/lib/notification-preferences'
+import { loadAutomationRules } from '@/lib/divine/automation-rules-load'
+import {
+  buildNotificationMetadataFromSnapshot,
+  getFanNotifySnapshot,
+} from '@/lib/divine/notification-fan-context'
+import {
+  isHousekeepingWhaleTier,
+  resolveMessageNotificationTitle,
+  resolveTipNotificationTitles,
+} from '@/lib/divine/notification-priority'
+import { insertDivineAppNotification } from '@/lib/notifications/divine-app-notification'
+import { maybeCreateWhaleTipUrgentTask } from '@/lib/divine/urgent-alerts'
+import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
 
 // Fansly Webhook – register URL in Fansly API Console: https://www.circeetvenus.com/api/fansly/webhook
 // During phased cutover, keep https://www.cetv.app/api/fansly/webhook active temporarily.
@@ -85,7 +98,7 @@ export async function POST(request: NextRequest) {
 
 // Handler functions for different event types
 
-async function handleNewSubscription(supabase: ReturnType<typeof createClient>, payload: any) {
+async function handleNewSubscription(supabase: SupabaseClient, payload: any) {
   const { account_id, subscriber } = payload.data
   
   const { data: connection } = await supabase
@@ -124,11 +137,14 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient>, 
       read: false,
       platform: 'fansly',
       avatar_url: subscriber.avatar || undefined,
+      origin: 'platform_webhook',
+      platform_fan_id: String(subscriber.id),
+      metadata: { kind: 'new_subscriber' },
     })
   }
 }
 
-async function handleSubscriptionRenewed(supabase: ReturnType<typeof createClient>, payload: any) {
+async function handleSubscriptionRenewed(supabase: SupabaseClient, payload: any) {
   const { account_id, subscriber } = payload.data
   
   const { data: connection } = await supabase
@@ -151,7 +167,7 @@ async function handleSubscriptionRenewed(supabase: ReturnType<typeof createClien
     .eq('platform_fan_id', subscriber.id)
 }
 
-async function handleSubscriptionExpired(supabase: ReturnType<typeof createClient>, payload: any) {
+async function handleSubscriptionExpired(supabase: SupabaseClient, payload: any) {
   const { account_id, subscriber } = payload.data
   
   const { data: connection } = await supabase
@@ -179,11 +195,15 @@ async function handleSubscriptionExpired(supabase: ReturnType<typeof createClien
       description: `${name} subscription expired on Fansly`,
       link: '/dashboard/fans',
       read: false,
+      platform: 'fansly',
+      origin: 'platform_webhook',
+      platform_fan_id: String(subscriber.id),
+      metadata: { kind: 'subscription_expired' },
     })
   }
 }
 
-async function handleNewMessage(supabase: ReturnType<typeof createClient>, payload: any) {
+async function handleNewMessage(supabase: SupabaseClient, payload: any) {
   const { account_id, message, sender } = payload.data
 
   const { data: connection } = await supabase
@@ -262,23 +282,65 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient>, paylo
     .eq('id', conversationId);
 
   const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  const displayName =
+    sender.display_name?.trim() ||
+    (sender.username ? `@${sender.username}` : 'a fan')
+  const preview = (message.text || '').trim().slice(0, 140)
+  const [rules, snap] = await Promise.all([
+    loadAutomationRules(supabase, connection.user_id),
+    getFanNotifySnapshot(supabase, connection.user_id, 'fansly', String(sender.id)),
+  ])
+  const { title, whaleBoost } = resolveMessageNotificationTitle({
+    displayName,
+    snap,
+    rules,
+  })
+  const meta = buildNotificationMetadataFromSnapshot(snap, {
+    kind: 'message',
+    whale_boost: whaleBoost,
+  })
+
   if (prefs.notify_new_message) {
-    const displayName = sender.display_name || sender.username ? `@${sender.username}` : 'a fan'
-    const preview = (message.text || '').trim().slice(0, 140)
     await supabase.from('notifications').insert({
       user_id: connection.user_id,
       type: 'message',
-      title: `New message from ${displayName}`,
+      title,
       description: preview || 'Sent you a new message',
       link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
       read: false,
       platform: 'fansly',
       avatar_url: sender.avatar || undefined,
+      origin: 'platform_webhook',
+      platform_fan_id: String(sender.id),
+      metadata: meta,
     })
   }
+
+  if (prefs.notify_new_message && isHousekeepingWhaleTier(snap.tier)) {
+    await insertDivineAppNotification(supabase, connection.user_id, {
+      type: 'fan',
+      title: `Whale watch: ${displayName}`,
+      description: preview || 'Sent you a new message',
+      link: `/dashboard/messages?fanId=${encodeURIComponent(sender.id)}`,
+      platform: 'fansly',
+      platform_fan_id: String(sender.id),
+      avatar_url: sender.avatar || undefined,
+      metadata: { kind: 'whale_watch', housekeeping_tier: snap.tier },
+    })
+  }
+
+  const uid = connection.user_id
+  const platformFanId = String(sender.id)
+  after(async () => {
+    try {
+      await refreshFanThreadInsight(supabase, uid, platformFanId, { platform: 'fansly' })
+    } catch (e) {
+      console.warn('[fan_thread_insights fansly webhook]', e)
+    }
+  })
 }
 
-async function handleNewTip(supabase: ReturnType<typeof createClient>, payload: any) {
+async function handleNewTip(supabase: SupabaseClient, payload: any) {
   const { account_id, tip, sender } = payload.data
   
   const { data: connection } = await supabase
@@ -305,21 +367,49 @@ async function handleNewTip(supabase: ReturnType<typeof createClient>, payload: 
     .eq('platform_fan_id', sender.id)
 
   const prefs = await getPrefsForWebhook(supabase, connection.user_id)
-  if (prefs.notify_new_tip && tip.amount >= 50) {
+  const [rules, snap] = await Promise.all([
+    loadAutomationRules(supabase, connection.user_id),
+    getFanNotifySnapshot(supabase, connection.user_id, 'fansly', String(sender.id)),
+  ])
+  const { title: tipTitle, notify: shouldNotifyTip } = resolveTipNotificationTitles({
+    amount: Number(tip?.amount ?? 0),
+    snap,
+    rules,
+  })
+  if (prefs.notify_new_tip && shouldNotifyTip) {
+    const meta = buildNotificationMetadataFromSnapshot(snap, {
+      kind: 'tip',
+      amount: Number(tip?.amount ?? 0),
+    })
     await supabase.from('notifications').insert({
       user_id: connection.user_id,
       type: 'fan',
-      title: tip.amount >= 100 ? 'Whale Alert!' : 'Big Tip Received',
+      title: tipTitle,
       description: `${sender.display_name || sender.username} tipped $${tip.amount} on Fansly`,
       link: '/dashboard/messages?fanId=' + encodeURIComponent(sender.id),
       read: false,
       platform: 'fansly',
       avatar_url: sender.avatar || undefined,
+      origin: 'platform_webhook',
+      platform_fan_id: String(sender.id),
+      metadata: meta,
     })
   }
+
+  await maybeCreateWhaleTipUrgentTask(
+    supabase,
+    connection.user_id,
+    Number(tip?.amount ?? 0),
+    {
+      id: String(sender.id),
+      username: String(sender.username ?? ''),
+      name: String(sender.display_name || sender.username || 'Fan'),
+    },
+    'fansly',
+  ).catch(() => undefined)
 }
 
-async function handleNewFollower(supabase: ReturnType<typeof createClient>, payload: any) {
+async function handleNewFollower(supabase: SupabaseClient, payload: any) {
   const { account_id, follower } = payload.data
   
   const { data: connection } = await supabase

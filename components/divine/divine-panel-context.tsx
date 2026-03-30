@@ -14,6 +14,8 @@ import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import {
   applyDivineUiActions as applyDivineUiActionsBase,
+  DIVINE_COMPOSER_MEDIA_MAX,
+  DIVINE_TRANSCRIPT_MAX,
   type DivineUiAction,
   type DmSuggestionBridgePayload,
 } from '@/lib/divine/divine-ui-actions'
@@ -36,6 +38,15 @@ export type DivineComposerBridge = {
   fanId: string
   platform: 'onlyfans' | 'fansly'
   setComposerText: (text: string, replace?: boolean) => void
+  /**
+   * Visible typewriter into the composer; resolves when done (or skipped).
+   * Used so scheduled auto-send starts only after typing finishes.
+   */
+  applyComposerTextAnimated?: (
+    text: string,
+    replace: boolean,
+    opts?: { skipAnimation?: boolean },
+  ) => Promise<void>
   getComposerText: () => string
   setComposerPrice: (price: string) => void
   setComposerMediaIds: (ids: string[]) => void
@@ -244,42 +255,129 @@ export function DivinePanelProvider({
     return Math.max(0, scheduledDm.endAt - Date.now())
   }, [scheduledDm, scheduleUiTick])
 
+  const scheduleDmCountdown = useCallback((fanId: string, delayMs: number) => {
+    if (delayMs <= 0) return
+    const endAt = Date.now() + delayMs
+    scheduledEndRef.current = endAt
+    scheduledFanRef.current = fanId
+    setScheduledDm({ fanId, endAt })
+  }, [])
+
+  const runAnimatedComposerAndMaybeSchedule = useCallback(
+    async (
+      composer: Extract<DivineUiAction, { type: 'set_dm_composer' }>,
+      schedule: Extract<DivineUiAction, { type: 'schedule_dm_send' }> | null,
+    ) => {
+      const fanId = String(composer.fanId ?? '').trim()
+      if (!/^[a-z0-9_-]{1,64}$/i.test(fanId)) return
+
+      const text =
+        typeof composer.text === 'string'
+          ? composer.text.replace(/\u0000/g, '').trim().slice(0, DIVINE_TRANSCRIPT_MAX)
+          : ''
+      const mediaIds = Array.isArray(composer.mediaIds)
+        ? composer.mediaIds.map((x) => String(x)).filter(Boolean).slice(0, DIVINE_COMPOSER_MEDIA_MAX)
+        : undefined
+      const price =
+        typeof composer.price === 'number' && !Number.isNaN(composer.price)
+          ? composer.price
+          : composer.price === null
+            ? null
+            : undefined
+
+      dmSendSourceRef.current = 'divine'
+      const b = findBridgeForFan(fanId)
+      if (!b) return
+
+      if (mediaIds?.length) b.setComposerMediaIds(mediaIds)
+      if (price != null && !Number.isNaN(price)) b.setComposerPrice(String(price))
+      if (price === null) b.setComposerPrice('')
+
+      const replace = composer.replace !== false
+      const animate = composer.animateTyping !== false
+      const willSchedule = schedule != null && schedule.delayMs > 0
+      /** Occasional instant fill before auto-send so it does not always feel identical. */
+      const instantVariety = willSchedule && animate && Math.random() < 0.17
+
+      const hasText = text.length > 0
+      if (hasText && b.applyComposerTextAnimated) {
+        await b.applyComposerTextAnimated(text, replace, {
+          skipAnimation: !animate || instantVariety,
+        })
+      } else {
+        b.setComposerText(text, replace)
+      }
+
+      if (willSchedule && schedule && (hasText || (mediaIds?.length ?? 0) > 0)) {
+        const delayMs = Math.max(0, Math.min(120_000, Math.floor(Number(schedule.delayMs) || 0)))
+        scheduleDmCountdown(String(schedule.fanId).trim(), delayMs)
+      }
+    },
+    [findBridgeForFan, scheduleDmCountdown],
+  )
+
   const applyDivineUiActionsWithBridge = useCallback(
     (actions: DivineUiAction[] | undefined) => {
-      applyDivineUiActionsBase(actions, router, setFocusedFan, {
-        onShowDmReplySuggestions: (payload) => setDmSuggestionBridge(payload),
-        onFocusFanOverlay: (fanId) => {
+      if (!actions?.length) return
+
+      const bridgeOpts = {
+        onShowDmReplySuggestions: (payload: DmSuggestionBridgePayload) => setDmSuggestionBridge(payload),
+        onFocusFanOverlay: (fanId: string) => {
           setDmOverlayFanIds((prev) => (prev.includes(fanId) ? prev : [...prev, fanId]))
           setDmOverlayActiveFanIdState(fanId)
           setDmOverlayCollapsed(false)
         },
         currentFocusedFanId: focusedFanIdRef.current,
-        onShowDivineTranscript: (payload) => setDivineTranscript(payload),
-        onSetDmComposer: ({ fanId, text, replace, mediaIds, price }) => {
+        onShowDivineTranscript: (payload: { text: string; title?: string }) => setDivineTranscript(payload),
+        onSetDmComposer: (payload: {
+          fanId: string
+          text: string
+          replace?: boolean
+          mediaIds?: string[]
+          price?: number | null
+          animateTyping?: boolean
+        }) => {
           dmSendSourceRef.current = 'divine'
-          const b = findBridgeForFan(fanId)
+          const b = findBridgeForFan(payload.fanId)
           if (b) {
-            b.setComposerText(text, replace !== false)
-            if (mediaIds?.length) b.setComposerMediaIds(mediaIds)
-            if (price != null && !Number.isNaN(price)) b.setComposerPrice(String(price))
-            if (price === null) b.setComposerPrice('')
+            b.setComposerText(payload.text, payload.replace !== false)
+            if (payload.mediaIds?.length) b.setComposerMediaIds(payload.mediaIds)
+            if (payload.price != null && !Number.isNaN(payload.price)) b.setComposerPrice(String(payload.price))
+            if (payload.price === null) b.setComposerPrice('')
           }
         },
-        onScheduleDmSend: ({ fanId, delayMs }) => {
-          if (delayMs <= 0) return
-          const endAt = Date.now() + delayMs
-          scheduledEndRef.current = endAt
-          scheduledFanRef.current = fanId
-          setScheduledDm({ fanId, endAt })
+        onScheduleDmSend: ({ fanId, delayMs }: { fanId: string; delayMs: number }) => {
+          scheduleDmCountdown(fanId, delayMs)
         },
         onCancelScheduledDm: cancelScheduledDm,
-        onSwitchOverlayFan: (fanId) => {
+        onSwitchOverlayFan: (fanId: string) => {
           setDmOverlayFanIds((prev) => (prev.includes(fanId) ? prev : [...prev, fanId]))
           setDmOverlayActiveFanIdState(fanId)
         },
-      })
+      }
+
+      const idx = actions.findIndex((a) => a.type === 'set_dm_composer')
+      if (idx === -1) {
+        applyDivineUiActionsBase(actions, router, setFocusedFan, bridgeOpts)
+        return
+      }
+
+      const composer = actions[idx] as Extract<DivineUiAction, { type: 'set_dm_composer' }>
+      const after = actions.slice(idx + 1)
+      const firstAfter = after[0]
+      const pairedSchedule =
+        firstAfter?.type === 'schedule_dm_send' &&
+        String(firstAfter.fanId) === String(composer.fanId)
+          ? firstAfter
+          : null
+      const afterTail = pairedSchedule ? after.slice(1) : after
+
+      const pre = actions.slice(0, idx)
+      applyDivineUiActionsBase([...pre, ...afterTail], router, setFocusedFan, bridgeOpts)
+
+      void runAnimatedComposerAndMaybeSchedule(composer, pairedSchedule)
     },
-    [router, findBridgeForFan, cancelScheduledDm],
+    [router, findBridgeForFan, cancelScheduledDm, scheduleDmCountdown, runAnimatedComposerAndMaybeSchedule],
   )
 
   useEffect(() => {

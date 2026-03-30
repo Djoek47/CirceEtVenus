@@ -120,7 +120,7 @@ export function MentionsHeader() {
             asChild
             className="border-venus/40 text-venus hover:bg-venus/10"
           >
-            <Link href="/dashboard/ai-studio?ai=venus">Open Venus Pro</Link>
+            <Link href="/dashboard/ai-studio/tools/venus-attraction">Open Venus Pro</Link>
           </Button>
           <Button
             variant="outline"

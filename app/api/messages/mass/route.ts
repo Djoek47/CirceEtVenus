@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
 
           const result = await api.sendMassMessage(accountId, {
             content: trimmed || '',
-            mediaIds,
+            mediaIds: mediaIds?.map((id) => String(id)),
             price,
             subscriberFilter: filter,
           })

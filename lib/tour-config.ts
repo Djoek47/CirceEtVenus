@@ -57,8 +57,8 @@ const TOURS: Record<string, TourConfig> = {
   '/dashboard/ai-studio': {
     tourId: 'ai-studio',
     steps: [
-      { id: 'tools', title: 'AI Studio', description: 'Circe and Venus power these tools: captions, flirty replies, content ideas, mass DM composer, and more.' },
-      { id: 'pick', title: 'Pick a tool', description: 'Choose a tool from the list or grid. Each tool has a short description and uses your connected data when relevant.' },
+      { id: 'vault', title: 'Media & Vault', description: 'Tag and describe content for Divine Manager PPV recommendations, link OnlyFans posts, and run safe photo touch-ups (blur, lighting, emoji).' },
+      { id: 'tools', title: 'AI tools', description: 'Open the Tools tab for captions, churn analysis, growth tools, and more—each uses credits where noted.' },
     ],
   },
   '/dashboard/ai-studio/tools': {

@@ -2,6 +2,7 @@
  * Server-side reputation briefing generation (shared by HTTP route and Divine tools).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { insertDivineAppNotification } from '@/lib/notifications/divine-app-notification'
 import {
   compileReputationBriefing,
   type ReputationBriefingIdentity,
@@ -168,6 +169,16 @@ export async function runReputationBriefingCore(
     })
     if (histErr) {
       console.warn('[reputation briefing history]', histErr.message)
+    }
+
+    if (list.length > 0) {
+      await insertDivineAppNotification(supabase, userId, {
+        type: 'mention',
+        title: 'Reputation briefing updated',
+        description: `Based on ${list.length} recent mention${list.length > 1 ? 's' : ''}. Open Mentions for the full briefing.`,
+        link: '/dashboard/mentions',
+        metadata: { kind: 'reputation_briefing', mention_count: list.length },
+      })
     }
 
     return {

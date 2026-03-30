@@ -1,13 +1,14 @@
 'use client'
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { ConversationList, conversationRowKey, type Conversation } from './conversation-list'
 import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
 import { MessageEngagementInsights } from './message-engagement-insights'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Loader2, ArrowLeft, BarChart3, MessageSquare } from 'lucide-react'
+import { RefreshCw, Loader2, ArrowLeft, BarChart3, MessageSquare, Megaphone } from 'lucide-react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 
 type MessagesView = 'conversations' | 'insights'
@@ -169,10 +170,13 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
   useEffect(() => {
     const conv = selectedConversation
     let id: string | null = null
+    let platform: 'onlyfans' | 'fansly' = 'onlyfans'
     if (conv?.platform === 'onlyfans') {
       id = String(conv.user.id)
+      platform = 'onlyfans'
     } else if (conv?.platform === 'fansly') {
-      return
+      id = String(conv.user.id)
+      platform = 'fansly'
     } else if (!conv && fanIdFromUrl) {
       // Deep link (?fanId=) while conversations still loading — same debounced refresh as overlay/Divine focus
       id = String(fanIdFromUrl)
@@ -184,7 +188,7 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ fanId: id }),
+        body: JSON.stringify({ fanId: id, platform }),
       }).catch(() => undefined)
     }, 25_000)
     return () => {
@@ -301,6 +305,12 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
                 disabled={refreshing}
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button variant="outline" size="sm" className="hidden gap-1.5 sm:inline-flex" asChild>
+                <Link href="/dashboard/messages/mass">
+                  <Megaphone className="h-4 w-4" />
+                  Mass page
+                </Link>
               </Button>
               <MassMessageDialog />
             </>

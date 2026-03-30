@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, ChevronLeft, ChevronRight, Check, Sparkles } from 'lucide-react'
+import { Loader2, ChevronLeft, ChevronRight, Check, Sparkles, Wand2 } from 'lucide-react'
 import {
   type MimicProfileV1,
   DEFAULT_MIMIC_PROFILE,
@@ -37,6 +37,43 @@ export function MimicTestWizard() {
   const [exemplarPaste, setExemplarPaste] = useState('')
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
 
+  const [aiGreet, setAiGreet] = useState('')
+  const [aiTaboos, setAiTaboos] = useState('')
+  const [aiEmoji, setAiEmoji] = useState('')
+  const [aiPpv, setAiPpv] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiErr, setAiErr] = useState<string | null>(null)
+  const [aiPreview, setAiPreview] = useState<string | null>(null)
+  const [pendingPatch, setPendingPatch] = useState<Partial<MimicProfileV1> | null>(null)
+  const [pendingTranscript, setPendingTranscript] = useState<{ q: string; a: string }[] | null>(null)
+  const [sessionQs, setSessionQs] = useState<string[]>([])
+  const [sessionAnswers, setSessionAnswers] = useState<string[]>([])
+  const [adaptiveLoading, setAdaptiveLoading] = useState(false)
+  const sessionQsRef = useRef<string[]>([])
+  const sessionAnswersRef = useRef<string[]>([])
+  sessionQsRef.current = sessionQs
+  sessionAnswersRef.current = sessionAnswers
+
+  const loadSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/divine/mimic-session')
+      if (!res.ok) return
+      const data = (await res.json()) as {
+        answers_json?: { adaptiveQuestions?: string[]; adaptiveAnswers?: string[] }
+      }
+      const aj = data.answers_json
+      if (aj?.adaptiveQuestions?.length) {
+        setSessionQs(aj.adaptiveQuestions)
+        const ans = aj.adaptiveAnswers ?? []
+        setSessionAnswers(
+          aj.adaptiveQuestions.map((_, i) => (typeof ans[i] === 'string' ? ans[i] : '')),
+        )
+      }
+    } catch {
+      // ignore missing table or network
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -55,7 +92,101 @@ export function MimicTestWizard() {
 
   useEffect(() => {
     load()
-  }, [load])
+    void loadSession()
+  }, [load, loadSession])
+
+  const saveMimicSession = async (profileSnap: MimicProfileV1) => {
+    const qs = sessionQsRef.current
+    const ans = sessionAnswersRef.current
+    try {
+      await fetch('/api/divine/mimic-session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile_json: profileSnap,
+          answers_json: {
+            adaptiveQuestions: qs,
+            adaptiveAnswers: qs.map((_, i) => ans[i] ?? ''),
+            updatedAt: new Date().toISOString(),
+          },
+        }),
+      })
+    } catch {
+      // ignore
+    }
+  }
+
+  const runMimicInterview = async (payload: { messages?: { role: 'user' | 'assistant'; content: string }[]; answers?: Record<string, string> }) => {
+    setAiBusy(true)
+    setAiErr(null)
+    setAiPreview(null)
+    setPendingPatch(null)
+    setPendingTranscript(null)
+    try {
+      const res = await fetch('/api/divine/mimic-interview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentProfile: profile, ...payload }),
+      })
+      const data = (await res.json()) as {
+        error?: string
+        mimic_profile_patch?: Partial<MimicProfileV1>
+        aiInterviewSummary?: string
+        interviewTranscript?: { q: string; a: string }[]
+      }
+      if (!res.ok) throw new Error(data.error || 'Interview failed')
+      setPendingPatch(data.mimic_profile_patch ?? null)
+      setPendingTranscript(data.interviewTranscript ?? null)
+      setAiPreview(data.aiInterviewSummary ?? 'Suggestions ready — apply to update your draft profile.')
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : 'Could not run AI tune')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const applyPendingInterview = () => {
+    if (!pendingPatch) return
+    const merged: MimicProfileV1 = {
+      ...profile,
+      ...pendingPatch,
+      version: 1,
+      aiInterviewSummary: aiPreview ?? profile.aiInterviewSummary,
+      aiInterviewAt: new Date().toISOString(),
+      interviewTranscript: pendingTranscript ?? profile.interviewTranscript,
+    }
+    setProfile(merged)
+    if (merged.tabooTopics?.length) setTabooInput(merged.tabooTopics.join('\n'))
+    if (merged.bannedPhrases?.length) setBannedInput(merged.bannedPhrases.join('\n'))
+    if (merged.signaturePhrases?.length) setSigInput(merged.signaturePhrases.join('\n'))
+    if (merged.escalateOnKeywords?.length) setEscalateKwInput(merged.escalateOnKeywords.join('\n'))
+    if (merged.exemplarReplies?.length) setExemplarPaste(merged.exemplarReplies.join('\n\n---\n\n'))
+    setPendingPatch(null)
+    setPendingTranscript(null)
+    setSavedMsg('Applied AI tune to draft — use Next/Save to persist to SQL.')
+  }
+
+  const generateAdaptive = async () => {
+    setAdaptiveLoading(true)
+    setSavedMsg(null)
+    try {
+      const res = await fetch('/api/divine/mimic-adaptive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftProfile: profile }),
+      })
+      const data = (await res.json()) as { questions?: string[]; error?: string }
+      if (!res.ok) throw new Error(data.error || 'request failed')
+      const qs = Array.isArray(data.questions) ? data.questions : []
+      setSessionQs(qs)
+      setSessionAnswers(qs.map(() => ''))
+      setSavedMsg('New questions ready—answer and save with your profile.')
+    } catch {
+      setSavedMsg('Could not load AI questions. Check API key and try again.')
+    } finally {
+      setAdaptiveLoading(false)
+    }
+  }
 
   const persist = async (next: MimicProfileV1, stepsDone?: number[]) => {
     setSaving(true)
@@ -73,6 +204,7 @@ export function MimicTestWizard() {
       const data = (await res.json()) as { mimic_profile?: MimicProfileV1 }
       if (data.mimic_profile) setProfile(parseMimicProfile(data.mimic_profile) ?? next)
       setSavedMsg('Saved.')
+      await saveMimicSession(parseMimicProfile(data.mimic_profile) ?? next)
     } catch {
       setSavedMsg('Could not save. Try again.')
     } finally {
@@ -156,6 +288,116 @@ export function MimicTestWizard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">Adaptive AI questions</p>
+              <p className="text-xs text-muted-foreground">
+                Optional follow-ups based on your mimic settings; saved with your profile to SQL.
+              </p>
+            </div>
+            <Button type="button" variant="secondary" size="sm" disabled={adaptiveLoading} onClick={() => void generateAdaptive()}>
+              {adaptiveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <span className="ml-1.5">Generate questions</span>
+            </Button>
+          </div>
+          {sessionQs.length > 0 && (
+            <div className="space-y-2">
+              {sessionQs.map((q, i) => (
+                <div key={i} className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">{q}</Label>
+                  <Textarea
+                    rows={2}
+                    value={sessionAnswers[i] ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setSessionAnswers((prev) => {
+                        const next = [...prev]
+                        while (next.length < sessionQs.length) next.push('')
+                        next[i] = v
+                        return next
+                      })
+                    }}
+                  />
+                </div>
+              ))}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={aiBusy || !sessionAnswers.some((a) => a.trim())}
+                onClick={() => {
+                  const messages: { role: 'user' | 'assistant'; content: string }[] = []
+                  sessionQs.forEach((q, i) => {
+                    const a = (sessionAnswers[i] ?? '').trim()
+                    if (!a) return
+                    messages.push({ role: 'assistant', content: q })
+                    messages.push({ role: 'user', content: a })
+                  })
+                  void runMimicInterview({ messages })
+                }}
+              >
+                {aiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                <span className="ml-1.5">Tune profile from these answers</span>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-3 space-y-3">
+          <p className="text-sm font-medium flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-violet-600 dark:text-violet-300" />
+            Scripted AI tune
+          </p>
+          <p className="text-xs text-muted-foreground">Short answers; we suggest slider and list updates. Apply, then save your wizard.</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <Label className="text-xs">How do you usually greet fans?</Label>
+              <Textarea value={aiGreet} onChange={(e) => setAiGreet(e.target.value)} rows={2} className="text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">Topics you avoid in DMs</Label>
+              <Textarea value={aiTaboos} onChange={(e) => setAiTaboos(e.target.value)} rows={2} className="text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">Emoji / punctuation vibe</Label>
+              <Textarea value={aiEmoji} onChange={(e) => setAiEmoji(e.target.value)} rows={2} className="text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">PPV / tips — how direct?</Label>
+              <Textarea value={aiPpv} onChange={(e) => setAiPpv(e.target.value)} rows={2} className="text-sm" />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={aiBusy || (!aiGreet.trim() && !aiTaboos.trim() && !aiEmoji.trim() && !aiPpv.trim())}
+              onClick={() =>
+                void runMimicInterview({
+                  answers: {
+                    greet: aiGreet,
+                    taboos: aiTaboos,
+                    emoji_style: aiEmoji,
+                    ppv_tone: aiPpv,
+                  },
+                })
+              }
+            >
+              {aiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              Generate suggestions
+            </Button>
+            {pendingPatch && (
+              <Button type="button" size="sm" onClick={applyPendingInterview}>
+                Apply to profile
+              </Button>
+            )}
+          </div>
+          {aiErr && <p className="text-xs text-destructive">{aiErr}</p>}
+          {aiPreview && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{aiPreview}</p>}
+        </div>
+
         {step === 1 && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">

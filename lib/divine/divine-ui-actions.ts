@@ -62,6 +62,8 @@ export type DivineUiAction =
       replace?: boolean
       mediaIds?: string[]
       price?: number | null
+      /** Default true: type into the composer with a visible animation. False = instant fill. */
+      animateTyping?: boolean
     }
   /** Start countdown then auto-send via registered composer bridge (0 = composer only). */
   | { type: 'schedule_dm_send'; fanId: string; delayMs: number }
@@ -82,6 +84,7 @@ export type ApplyDivineUiOptions = {
     replace?: boolean
     mediaIds?: string[]
     price?: number | null
+    animateTyping?: boolean
   }) => void
   onScheduleDmSend?: (payload: { fanId: string; delayMs: number }) => void
   onCancelScheduledDm?: () => void
@@ -202,6 +205,7 @@ export function applyDivineUiActions(
         replace: a.replace !== false,
         mediaIds,
         price,
+        animateTyping: a.animateTyping !== false,
       })
     }
     if (a.type === 'schedule_dm_send' && options?.onScheduleDmSend) {

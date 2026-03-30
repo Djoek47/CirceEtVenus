@@ -123,7 +123,12 @@ export function isAllowedUiNavigatePath(path: string): boolean {
         if (k !== 'tab' && k !== 'ai') return false
       }
       const tab = params.get('tab')
-      if (tab && !['overview', 'circe', 'venus', 'cosmic', 'tools', 'chatter'].includes(tab)) return false
+      if (
+        tab &&
+        !['library', 'vault', 'tools', 'overview', 'circe', 'venus', 'cosmic', 'chatter'].includes(tab)
+      ) {
+        return false
+      }
       const ai = params.get('ai')
       if (ai && !['circe', 'venus'].includes(ai)) return false
       return true
@@ -821,6 +826,8 @@ export async function runContextTool(
       if (!ctx) return 'Context unavailable.'
       const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
       if (!fanId) return 'fanId is required.'
+      const plat =
+        args.platform === 'fansly' ? 'fansly' : ('onlyfans' as const)
       const [{ data: ins }, { data: sum }] = await Promise.all([
         ctx.supabase
           .from('fan_thread_insights')
@@ -828,14 +835,17 @@ export async function runContextTool(
             'thread_snapshot_text, reply_package_hash, updated_at, profile_json, iteration, last_thread_refresh_at, profile_history',
           )
           .eq('user_id', ctx.userId)
+          .eq('platform', plat)
           .eq('platform_fan_id', fanId)
           .maybeSingle(),
-        ctx.supabase
-          .from('fan_ai_summaries')
-          .select('summary_json, status, last_analyzed_at, updated_at')
-          .eq('user_id', ctx.userId)
-          .eq('platform_fan_id', fanId)
-          .maybeSingle(),
+        plat === 'onlyfans'
+          ? ctx.supabase
+              .from('fan_ai_summaries')
+              .select('summary_json, status, last_analyzed_at, updated_at')
+              .eq('user_id', ctx.userId)
+              .eq('platform_fan_id', fanId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
       ])
       const lines: string[] = []
       const row = ins as {
@@ -864,9 +874,12 @@ export async function runContextTool(
       const fanId = typeof args.fanId === 'string' ? args.fanId.trim() : ''
       if (!fanId) return 'fanId is required.'
       const force = args.force === true
+      const plat =
+        args.platform === 'fansly' ? 'fansly' : ('onlyfans' as const)
       const r = await refreshFanThreadInsight(ctx.supabase, ctx.userId, fanId, {
         force,
         skipDebounce: true,
+        platform: plat,
       })
       if (!r.ok) return r.error
       return r.skipped

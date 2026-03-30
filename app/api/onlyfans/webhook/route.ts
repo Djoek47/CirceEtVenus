@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { getPrefsForWebhook } from '@/lib/notification-preferences'
+import { loadAutomationRules } from '@/lib/divine/automation-rules-load'
+import {
+  buildNotificationMetadataFromSnapshot,
+  getFanNotifySnapshot,
+} from '@/lib/divine/notification-fan-context'
+import {
+  isHousekeepingWhaleTier,
+  resolveMessageNotificationTitle,
+  resolveTipNotificationTitles,
+} from '@/lib/divine/notification-priority'
+import { insertDivineAppNotification } from '@/lib/notifications/divine-app-notification'
 import { maybeCreateWhaleTipUrgentTask } from '@/lib/divine/urgent-alerts'
 import { refreshFanThreadInsight } from '@/lib/divine/fan-thread-insight'
 
@@ -128,7 +139,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Handle new subscription
-async function handleNewSubscription(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleNewSubscription(supabase: SupabaseClient, data: {
   accountId: string
   fan: {
     id: string
@@ -177,12 +188,15 @@ async function handleNewSubscription(supabase: ReturnType<typeof createClient> e
       read: false,
       platform: 'onlyfans',
       avatar_url: data.fan.avatar || undefined,
+      origin: 'platform_webhook',
+      platform_fan_id: data.fan.id,
+      metadata: { kind: 'new_subscriber' },
     })
   }
 }
 
 // Handle subscription renewal
-async function handleRenewal(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleRenewal(supabase: SupabaseClient, data: {
   accountId: string
   fan: { id: string; totalSpent: number }
 }) {
@@ -210,7 +224,7 @@ async function handleRenewal(supabase: ReturnType<typeof createClient> extends P
 }
 
 // Handle subscription expiration
-async function handleExpiration(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleExpiration(supabase: SupabaseClient, data: {
   accountId: string
   fan: { id: string; username: string; name: string }
 }) {
@@ -240,12 +254,16 @@ async function handleExpiration(supabase: ReturnType<typeof createClient> extend
       description: `${data.fan.name} (@${data.fan.username}) subscription expired`,
       link: '/dashboard/fans',
       read: false,
+      platform: 'onlyfans',
+      origin: 'platform_webhook',
+      platform_fan_id: data.fan.id,
+      metadata: { kind: 'subscription_expired' },
     })
   }
 }
 
 // Handle new message
-async function handleNewMessage(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleNewMessage(supabase: SupabaseClient, data: {
   accountId: string
   message: {
     id: string
@@ -302,13 +320,29 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
         ? trimmedText.slice(0, maxLength - 1) + '…'
         : trimmedText
 
-  const totalSpent = fan?.total_spent != null ? Number(fan.total_spent) : 0
-  const isWhale = totalSpent >= 100
-  const title = isWhale ? `Whale wrote back` : `New message from ${displayName}`
   const avatarUrl =
     data.message.fromUser.avatar || (fan?.avatar_url ?? null)
 
   const prefs = await getPrefsForWebhook(supabase, connection.user_id)
+  const [rules, snap] = await Promise.all([
+    loadAutomationRules(supabase, connection.user_id),
+    getFanNotifySnapshot(
+      supabase,
+      connection.user_id,
+      'onlyfans',
+      String(data.message.fromUser.id),
+    ),
+  ])
+  const { title, whaleBoost } = resolveMessageNotificationTitle({
+    displayName,
+    snap,
+    rules,
+  })
+  const meta = buildNotificationMetadataFromSnapshot(snap, {
+    kind: 'message',
+    whale_boost: whaleBoost,
+  })
+
   if (prefs.notify_new_message) {
     await supabase.from('notifications').insert({
       user_id: connection.user_id,
@@ -319,6 +353,25 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
       read: false,
       platform: 'onlyfans',
       avatar_url: avatarUrl || undefined,
+      origin: 'platform_webhook',
+      platform_fan_id: String(data.message.fromUser.id),
+      metadata: meta,
+    })
+  }
+
+  if (prefs.notify_new_message && isHousekeepingWhaleTier(snap.tier)) {
+    await insertDivineAppNotification(supabase, connection.user_id, {
+      type: 'fan',
+      title: `Whale watch: ${displayName}`,
+      description: preview,
+      link: `/dashboard/messages?fanId=${encodeURIComponent(data.message.fromUser.id)}`,
+      platform: 'onlyfans',
+      platform_fan_id: String(data.message.fromUser.id),
+      avatar_url: avatarUrl || undefined,
+      metadata: {
+        kind: 'whale_watch',
+        housekeeping_tier: snap.tier,
+      },
     })
   }
 
@@ -326,7 +379,7 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
   const fanId = String(data.message.fromUser.id)
   after(async () => {
     try {
-      await refreshFanThreadInsight(supabase, uid, fanId)
+      await refreshFanThreadInsight(supabase, uid, fanId, { platform: 'onlyfans' })
     } catch (e) {
       console.warn('[fan_thread_insights webhook]', e)
     }
@@ -334,7 +387,7 @@ async function handleNewMessage(supabase: ReturnType<typeof createClient> extend
 }
 
 // Handle tip
-async function handleTip(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleTip(supabase: SupabaseClient, data: {
   accountId: string
   tip: {
     amount: number
@@ -358,25 +411,47 @@ async function handleTip(supabase: ReturnType<typeof createClient> extends Promi
   })
 
   const prefs = await getPrefsForWebhook(supabase, connection.user_id)
-  if (prefs.notify_new_tip && data.tip.amount >= 50) {
+  const [rules, snap] = await Promise.all([
+    loadAutomationRules(supabase, connection.user_id),
+    getFanNotifySnapshot(supabase, connection.user_id, 'onlyfans', data.tip.fromUser.id),
+  ])
+  const { title: tipTitle, notify: shouldNotifyTip } = resolveTipNotificationTitles({
+    amount: data.tip.amount,
+    snap,
+    rules,
+  })
+  if (prefs.notify_new_tip && shouldNotifyTip) {
     const fromUser = data.tip.fromUser as { id: string; username: string; name: string; avatar?: string }
+    const meta = buildNotificationMetadataFromSnapshot(snap, {
+      kind: 'tip',
+      amount: data.tip.amount,
+    })
     await supabase.from('notifications').insert({
       user_id: connection.user_id,
       type: 'fan',
-      title: data.tip.amount >= 100 ? 'Whale Alert!' : 'Big Tip Received',
+      title: tipTitle,
       description: `${fromUser.name} tipped $${data.tip.amount}`,
       link: '/dashboard/messages?fanId=' + encodeURIComponent(fromUser.id),
       read: false,
       platform: 'onlyfans',
       avatar_url: fromUser.avatar || undefined,
+      origin: 'platform_webhook',
+      platform_fan_id: fromUser.id,
+      metadata: meta,
     })
   }
 
-  await maybeCreateWhaleTipUrgentTask(supabase, connection.user_id, data.tip.amount, data.tip.fromUser).catch(() => undefined)
+  await maybeCreateWhaleTipUrgentTask(
+    supabase,
+    connection.user_id,
+    data.tip.amount,
+    data.tip.fromUser,
+    'onlyfans',
+  ).catch(() => undefined)
 }
 
 // Handle purchase (PPV, etc.)
-async function handlePurchase(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handlePurchase(supabase: SupabaseClient, data: {
   accountId: string
   purchase: {
     amount: number
@@ -402,7 +477,7 @@ async function handlePurchase(supabase: ReturnType<typeof createClient> extends 
 }
 
 // Handle comment events
-async function handleComment(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleComment(supabase: SupabaseClient, data: {
   accountId: string
   comment: {
     fromUser: { id: string; username: string; name: string }
@@ -427,7 +502,7 @@ async function handleComment(supabase: ReturnType<typeof createClient> extends P
 }
 
 // Handle like events
-async function handleLike(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleLike(supabase: SupabaseClient, data: {
   accountId: string
   like: {
     fromUser: { id: string; username: string; name: string }
@@ -451,7 +526,7 @@ async function handleLike(supabase: ReturnType<typeof createClient> extends Prom
 }
 
 // Handle user spending event
-async function handleUserSpent(supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never, data: {
+async function handleUserSpent(supabase: SupabaseClient, data: {
   accountId: string
   user: { id: string; username: string; name: string }
   amount: number
@@ -506,10 +581,7 @@ function normalizeTipPayload(data: unknown): {
   }
 }
 
-async function handleFanSummaryCompleted(
-  supabase: ReturnType<typeof createClient>,
-  data: unknown,
-) {
+async function handleFanSummaryCompleted(supabase: SupabaseClient, data: unknown) {
   if (!data || typeof data !== 'object') return
   const d = data as Record<string, unknown>
   const accountId = String(d.accountId ?? d.account_id ?? '')
@@ -540,7 +612,7 @@ async function handleFanSummaryCompleted(
   )
 }
 
-async function handleTransactionNew(supabase: ReturnType<typeof createClient>, data: unknown) {
+async function handleTransactionNew(supabase: SupabaseClient, data: unknown) {
   if (!data || typeof data !== 'object') return
   const d = data as Record<string, unknown>
   const accountId = String(d.accountId ?? d.account_id ?? '')
@@ -558,20 +630,18 @@ async function handleTransactionNew(supabase: ReturnType<typeof createClient>, d
 
   if (!connection) return
 
-  await supabase
-    .rpc('increment_fan_spending', {
+  try {
+    await supabase.rpc('increment_fan_spending', {
       p_user_id: connection.user_id,
       p_fan_id: uid,
       p_amount: amount,
     })
-    .catch(() => undefined)
+  } catch {
+    // ignore rpc errors (e.g. fan row missing)
+  }
 }
 
-async function handleChatQueueEvent(
-  supabase: ReturnType<typeof createClient>,
-  data: unknown,
-  eventType: string,
-) {
+async function handleChatQueueEvent(supabase: SupabaseClient, data: unknown, eventType: string) {
   if (!data || typeof data !== 'object') return
   const d = data as Record<string, unknown>
   const accountId = String(d.accountId ?? d.account_id ?? '')
@@ -600,10 +670,12 @@ async function handleChatQueueEvent(
     link: '/dashboard/messages',
     read: false,
     platform: 'onlyfans',
+    origin: 'platform_webhook',
+    metadata: { kind: 'chat_queue', event_type: eventType },
   })
 }
 
-async function handleMessageDeleted(supabase: ReturnType<typeof createClient>, data: unknown) {
+async function handleMessageDeleted(supabase: SupabaseClient, data: unknown) {
   if (!data || typeof data !== 'object') return
   const d = data as Record<string, unknown>
   const messageId = d.messageId ?? d.message_id ?? d.id

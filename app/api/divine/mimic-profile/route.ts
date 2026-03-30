@@ -32,6 +32,21 @@ function sanitizeStringArray(arr: unknown, maxItems: number, maxLen: number): st
   return out
 }
 
+function sanitizeInterviewTranscript(raw: unknown): { q: string; a: string }[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: { q: string; a: string }[] = []
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue
+    const r = row as Record<string, unknown>
+    const q = typeof r.q === 'string' ? clampStr(r.q, 2000) : ''
+    const a = typeof r.a === 'string' ? clampStr(r.a, 2000) : ''
+    if (!q && !a) continue
+    out.push({ q, a })
+    if (out.length >= 40) break
+  }
+  return out.length ? out : undefined
+}
+
 function sanitizeBody(body: Record<string, unknown>): MimicProfileV1 {
   const n = (v: unknown, d: number, min: number, max: number) => {
     const x = typeof v === 'number' ? v : Number(v)
@@ -67,6 +82,10 @@ function sanitizeBody(body: Record<string, unknown>): MimicProfileV1 {
     escalateFirstTimeDm: b.escalateFirstTimeDm !== false,
     escalateWhale: b.escalateWhale !== false,
     notes: typeof b.notes === 'string' ? clampStr(b.notes, 2000) : undefined,
+    aiInterviewSummary:
+      typeof b.aiInterviewSummary === 'string' ? clampStr(b.aiInterviewSummary, 4000) : undefined,
+    aiInterviewAt: typeof b.aiInterviewAt === 'string' ? clampStr(b.aiInterviewAt, 40) : undefined,
+    interviewTranscript: sanitizeInterviewTranscript(b.interviewTranscript),
     updatedAt: new Date().toISOString(),
   }
 }

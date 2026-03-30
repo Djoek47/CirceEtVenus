@@ -11,6 +11,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { proxyImageUrl } from '@/lib/proxy-image-url'
 import type { UnifiedFanProfilePayload } from '@/lib/divine/fan-profile-server'
@@ -66,6 +68,8 @@ export function FanProfileModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<UnifiedFanProfilePayload | null>(null)
+  const [classificationDraft, setClassificationDraft] = useState('')
+  const [savingClass, setSavingClass] = useState(false)
 
   const load = useCallback(async () => {
     if (!fanId) return
@@ -79,6 +83,7 @@ export function FanProfileModal({
       const json = (await res.json().catch(() => ({}))) as UnifiedFanProfilePayload & { error?: string }
       if (!res.ok) throw new Error(json.error || 'Failed to load profile')
       setData(json)
+      setClassificationDraft(json.creatorClassification ?? '')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
       setData(null)
@@ -150,6 +155,60 @@ export function FanProfileModal({
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
 
+          <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+            <Label htmlFor="fan-creator-classification" className="text-xs font-medium">
+              Your label (optional)
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              Private note for notifications and Divine — e.g. &quot;VIP&quot;, &quot;follow up Friday&quot;.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                id="fan-creator-classification"
+                value={classificationDraft}
+                onChange={(e) => setClassificationDraft(e.target.value)}
+                placeholder="Empty by default"
+                className="text-sm"
+                disabled={savingClass || loading}
+                maxLength={2000}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={savingClass || loading || !fanId}
+                onClick={async () => {
+                  setSavingClass(true)
+                  setError(null)
+                  try {
+                    const res = await fetch('/api/divine/fan-profile', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({
+                        fanId,
+                        platform,
+                        creator_classification: classificationDraft.trim() || null,
+                      }),
+                    })
+                    const json = (await res.json().catch(() => ({}))) as UnifiedFanProfilePayload & {
+                      error?: string
+                    }
+                    if (!res.ok) throw new Error(json.error || 'Save failed')
+                    setData(json)
+                    setClassificationDraft(json.creatorClassification ?? '')
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Save failed')
+                  } finally {
+                    setSavingClass(false)
+                  }
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+
           {data?.creatorDetector && (
             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
               <p className="font-medium">Creator likelihood</p>
@@ -168,7 +227,8 @@ export function FanProfileModal({
             </div>
           )}
 
-          {data?.threadInsight?.profileJson && formatProfileSection(data.threadInsight.profileJson).length > 0 && (
+          {data?.threadInsight?.profileJson != null &&
+            formatProfileSection(data.threadInsight.profileJson).length > 0 && (
             <div className="space-y-4">
               <p className="text-sm font-semibold">Thread profile</p>
               {formatProfileSection(data.threadInsight.profileJson).map((block) => (

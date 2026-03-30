@@ -21,7 +21,11 @@ export type ProxiedMediaPresentation = {
   displaySrc: string | undefined
   /** Second URL if display fails (e.g. thumb after full). */
   altSrc: string | undefined
+  /** Same as displaySrc/altSrc but never proxied — browser fallback when `/api/proxy/image` fails. */
+  directSrc: string | undefined
+  directAltSrc: string | undefined
   poster: string | undefined
+  directPoster: string | undefined
 }
 
 /**
@@ -39,11 +43,16 @@ export function getProxiedMediaPresentation(m: RawOnlyFansMedia): ProxiedMediaPr
   const isVideo = m.type === 'video'
 
   if (isVideo) {
+    const vMain = full || thumb
+    const vAlt = thumb && thumb !== full ? thumb : undefined
     return {
       kind: 'video',
-      displaySrc: proxyImageUrl(full || thumb),
-      altSrc: proxyImageUrl(thumb && thumb !== full ? thumb : undefined),
+      displaySrc: proxyImageUrl(vMain),
+      altSrc: proxyImageUrl(vAlt),
+      directSrc: vMain || undefined,
+      directAltSrc: vAlt,
       poster: proxyImageUrl(thumb || m.preview),
+      directPoster: thumb || m.preview || undefined,
     }
   }
 
@@ -53,7 +62,10 @@ export function getProxiedMediaPresentation(m: RawOnlyFansMedia): ProxiedMediaPr
     kind: 'photo',
     displaySrc: proxyImageUrl(primary),
     altSrc: proxyImageUrl(secondary),
+    directSrc: primary,
+    directAltSrc: secondary,
     poster: undefined,
+    directPoster: undefined,
   }
 }
 

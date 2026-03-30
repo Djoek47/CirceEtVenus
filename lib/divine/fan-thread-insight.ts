@@ -3,11 +3,15 @@
  */
 import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
+
+type LooseSb = SupabaseClient<any, 'public', any, any>
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 import {
   formatThreadTextForAi,
   normalizeSortedRawOfMessages,
 } from '@/lib/divine/of-thread-text'
+
+export type FanThreadInsightPlatform = 'onlyfans' | 'fansly'
 
 const DEBOUNCE_MS = 90_000
 const PROFILE_EVERY_N_ITERATIONS = 5
@@ -17,11 +21,63 @@ export type RefreshFanThreadResult =
   | { ok: true; skipped: boolean; iteration?: number; profileUpdated?: boolean }
   | { ok: false; error: string }
 
+async function fetchFanslyThreadSnapshotFromDb(
+  supabase: LooseSb,
+  userId: string,
+  platformFanId: string,
+): Promise<{ text: string } | { error: string }> {
+  const { data: fan, error: fanErr } = await supabase
+    .from('fans')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('platform', 'fansly')
+    .eq('platform_fan_id', platformFanId)
+    .maybeSingle()
+
+  if (fanErr) return { error: fanErr.message }
+  if (!fan?.id) return { text: '' }
+
+  const { data: conv, error: convErr } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('platform', 'fansly')
+    .eq('fan_id', fan.id)
+    .maybeSingle()
+
+  if (convErr) return { error: convErr.message }
+  if (!conv?.id) return { text: '' }
+
+  const { data: rows, error: msgErr } = await supabase
+    .from('messages')
+    .select('sender_type, content, sent_at')
+    .eq('conversation_id', conv.id)
+    .order('sent_at', { ascending: false })
+    .limit(80)
+
+  if (msgErr) return { error: msgErr.message }
+
+  const chron = [...(rows ?? [])].reverse()
+  const lines = chron.map((m: { sender_type?: string; content?: string | null }) => {
+    const role = m.sender_type === 'creator' ? 'Creator' : 'Fan'
+    const c = String(m.content || '')
+      .trim()
+      .replace(/\s+/g, ' ')
+    return `${role}: ${c}`.slice(0, 400)
+  })
+  return { text: lines.join('\n').slice(0, 12000) }
+}
+
 async function fetchThreadSnapshotText(
-  supabase: SupabaseClient,
+  supabase: LooseSb,
   userId: string,
   fanId: string,
+  platform: FanThreadInsightPlatform,
 ): Promise<{ text: string } | { error: string }> {
+  if (platform === 'fansly') {
+    return fetchFanslyThreadSnapshotFromDb(supabase, userId, fanId)
+  }
+
   const { data: connection } = await supabase
     .from('platform_connections')
     .select('access_token')
@@ -87,7 +143,7 @@ async function mergeFanProfileWithLlm(opts: {
     const { text } = await generateText({
       model: gateway('openai/gpt-4o-mini'),
       temperature: 0.2,
-      maxTokens: 900,
+      maxOutputTokens: 900,
       prompt: `You merge a fan personality profile for an adult creator CRM. Output VALID JSON ONLY, no markdown.
 
 Schema (all keys optional; use arrays of short strings; stay respectful and legal—no minors, no illegal content; skip explicit sexual detail, use tasteful labels if needed):
@@ -130,12 +186,13 @@ ${opts.threadExcerpt.slice(0, 8000)}`,
  * Upsert thread snapshot + hash (shared with dm-reply-package).
  */
 export async function upsertFanThreadInsightSnapshot(
-  supabase: SupabaseClient,
+  supabase: LooseSb,
   userId: string,
   platformFanId: string,
   snapshotText: string,
-  opts?: { bumpIteration?: boolean },
+  opts?: { bumpIteration?: boolean; platform?: FanThreadInsightPlatform },
 ): Promise<{ error?: string }> {
+  const platform = opts?.platform ?? 'onlyfans'
   const trimmed = snapshotText.trim()
   if (!trimmed) return {}
   const reply_package_hash = createHash('sha256').update(trimmed).digest('hex').slice(0, 48)
@@ -145,6 +202,7 @@ export async function upsertFanThreadInsightSnapshot(
     .from('fan_thread_insights')
     .select('iteration')
     .eq('user_id', userId)
+    .eq('platform', platform)
     .eq('platform_fan_id', platformFanId)
     .maybeSingle()
 
@@ -154,6 +212,7 @@ export async function upsertFanThreadInsightSnapshot(
 
   const patch: Record<string, unknown> = {
     user_id: userId,
+    platform,
     platform_fan_id: platformFanId,
     thread_snapshot_text: trimmed.slice(0, 50000),
     reply_package_hash,
@@ -164,7 +223,7 @@ export async function upsertFanThreadInsightSnapshot(
   }
 
   const { error } = await supabase.from('fan_thread_insights').upsert(patch, {
-    onConflict: 'user_id,platform_fan_id',
+    onConflict: 'user_id,platform,platform_fan_id',
   })
   return error ? { error: error.message } : {}
 }
@@ -173,11 +232,12 @@ export async function upsertFanThreadInsightSnapshot(
  * Refresh stored thread + optionally merged profile (debounced for webhooks unless force).
  */
 export async function refreshFanThreadInsight(
-  supabase: SupabaseClient,
+  supabase: LooseSb,
   userId: string,
   fanId: string,
-  options?: { force?: boolean; skipDebounce?: boolean },
+  options?: { force?: boolean; skipDebounce?: boolean; platform?: FanThreadInsightPlatform },
 ): Promise<RefreshFanThreadResult> {
+  const platform = options?.platform ?? 'onlyfans'
   const force = options?.force === true
   const skipDebounce = options?.skipDebounce === true
 
@@ -186,6 +246,7 @@ export async function refreshFanThreadInsight(
       .from('fan_thread_insights')
       .select('last_thread_refresh_at')
       .eq('user_id', userId)
+      .eq('platform', platform)
       .eq('platform_fan_id', fanId)
       .maybeSingle()
     const at = (row as { last_thread_refresh_at?: string | null } | null)?.last_thread_refresh_at
@@ -197,7 +258,7 @@ export async function refreshFanThreadInsight(
     }
   }
 
-  const snap = await fetchThreadSnapshotText(supabase, userId, fanId)
+  const snap = await fetchThreadSnapshotText(supabase, userId, fanId, platform)
   if ('error' in snap) {
     return { ok: false, error: snap.error }
   }
@@ -206,12 +267,13 @@ export async function refreshFanThreadInsight(
     const { error } = await supabase.from('fan_thread_insights').upsert(
       {
         user_id: userId,
+        platform,
         platform_fan_id: fanId,
         thread_snapshot_text: '',
         updated_at: new Date().toISOString(),
         last_thread_refresh_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,platform_fan_id' },
+      { onConflict: 'user_id,platform,platform_fan_id' },
     )
     if (error) return { ok: false, error: error.message }
     return { ok: true, skipped: false, iteration: 0, profileUpdated: false }
@@ -219,6 +281,7 @@ export async function refreshFanThreadInsight(
 
   const up = await upsertFanThreadInsightSnapshot(supabase, userId, fanId, snap.text, {
     bumpIteration: true,
+    platform,
   })
   if (up.error) return { ok: false, error: up.error }
 
@@ -226,6 +289,7 @@ export async function refreshFanThreadInsight(
     .from('fan_thread_insights')
     .select('iteration, profile_json, profile_history')
     .eq('user_id', userId)
+    .eq('platform', platform)
     .eq('platform_fan_id', fanId)
     .maybeSingle()
 
@@ -238,17 +302,20 @@ export async function refreshFanThreadInsight(
     !hadProfile ||
     iteration % PROFILE_EVERY_N_ITERATIONS === 0
   if (runProfile) {
-    const { data: sumRow } = await supabase
-      .from('fan_ai_summaries')
-      .select('summary_json')
-      .eq('user_id', userId)
-      .eq('platform_fan_id', fanId)
-      .maybeSingle()
+    const { data: sumRow } =
+      platform === 'onlyfans'
+        ? await supabase
+            .from('fan_ai_summaries')
+            .select('summary_json')
+            .eq('user_id', userId)
+            .eq('platform_fan_id', fanId)
+            .maybeSingle()
+        : { data: null }
 
     const merged = await mergeFanProfileWithLlm({
       threadExcerpt: snap.text,
       previousProfile: (ins as { profile_json?: unknown })?.profile_json ?? {},
-      ofSummary: (sumRow as { summary_json?: unknown })?.summary_json ?? null,
+      ofSummary: (sumRow as { summary_json?: unknown } | null)?.summary_json ?? null,
     })
 
     if (merged) {
@@ -266,6 +333,7 @@ export async function refreshFanThreadInsight(
           updated_at: nowIso,
         })
         .eq('user_id', userId)
+        .eq('platform', platform)
         .eq('platform_fan_id', fanId)
       profileUpdated = true
     }

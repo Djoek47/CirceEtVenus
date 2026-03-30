@@ -13,14 +13,20 @@ export async function POST(req: NextRequest) {
     } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = (await req.json().catch(() => ({}))) as { fanId?: string; force?: boolean }
+    const body = (await req.json().catch(() => ({}))) as {
+      fanId?: string
+      force?: boolean
+      platform?: string
+    }
     const fanId = typeof body.fanId === 'string' ? body.fanId.trim() : ''
     if (!fanId) return NextResponse.json({ error: 'fanId required' }, { status: 400 })
+    const platform = body.platform === 'fansly' ? 'fansly' : 'onlyfans'
 
     const result = await refreshFanThreadInsight(supabase, user.id, fanId, {
       force: body.force === true,
       // Respect 90s debounce unless force — avoids a second getMessages right after ChatWindow loads (rate limits).
       skipDebounce: body.force === true,
+      platform,
     })
 
     if (!result.ok) {

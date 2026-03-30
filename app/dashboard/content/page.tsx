@@ -2,16 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { ContentHeader } from '@/components/content/content-header'
 import { ContentCalendar } from '@/components/content/content-calendar'
 import { ContentList } from '@/components/content/content-list'
-import { CosmicCalendar } from '@/components/content/cosmic-calendar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Calendar, List, Stars, Heart } from 'lucide-react'
+import { Calendar, List, Heart } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 export default async function ContentPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   if (!user) return null
 
@@ -41,22 +42,16 @@ export default async function ContentPage() {
             size="sm"
             className="bg-gradient-to-r from-circe to-venus text-white hover:opacity-90"
           >
-            <Link href="/dashboard/ai-studio/tools/standard-of-attraction">
-              Open Pro Tool
-            </Link>
+            <Link href="/dashboard/ai-studio/tools/standard-of-attraction">Open Pro Tool</Link>
           </Button>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground">
           Use this before scheduling big drops to compare old vs new photos and choose the highest-earning look.
         </CardContent>
       </Card>
-      
-      <Tabs defaultValue="cosmic" className="w-full">
+
+      <Tabs defaultValue="calendar" className="w-full">
         <TabsList className="bg-secondary">
-          <TabsTrigger value="cosmic" className="gap-2">
-            <Stars className="h-4 w-4" />
-            Cosmic Calendar
-          </TabsTrigger>
           <TabsTrigger value="calendar" className="gap-2">
             <Calendar className="h-4 w-4" />
             Schedule
@@ -66,10 +61,6 @@ export default async function ContentPage() {
             List View
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="cosmic" className="mt-6">
-          <CosmicCalendar />
-        </TabsContent>
 
         <TabsContent value="calendar" className="mt-6">
           <ContentCalendar content={content || []} />

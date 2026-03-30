@@ -182,7 +182,7 @@ export default function GuidePage() {
               <p>Venus helps you attract new admirers and grow your reputation. Use her for: growth strategies, optimal posting times, content performance predictions, reputation and sentiment monitoring, and fan acquisition. Access her from the dashboard or via <Link href="/dashboard/fans" className="text-primary underline hover:no-underline">Fans</Link> and <Link href="/dashboard/mentions" className="text-primary underline hover:no-underline">Mentions</Link>.</p>
             </div>
             <p>
-              <Link href="/dashboard/ai-studio" className="inline-flex items-center gap-1 text-primary underline hover:no-underline">AI Studio</Link> lets you chat with Circe and Venus and use specialized tools (caption generation, mood detection, suggestions, etc.) in one place.
+              <Link href="/dashboard/ai-studio" className="inline-flex items-center gap-1 text-primary underline hover:no-underline">AI Studio</Link> is your media vault (describe content for Divine), safe photo touch-ups, and the full AI tools library (captions, churn, growth, and more).
             </p>
           </CardContent>
         </Card>

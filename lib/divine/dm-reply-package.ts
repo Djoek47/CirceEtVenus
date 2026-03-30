@@ -127,6 +127,7 @@ export async function fetchDmReplySuggestionsPackage(
       .from('fan_thread_insights')
       .select('thread_snapshot_text, updated_at')
       .eq('user_id', userId)
+      .eq('platform', 'onlyfans')
       .eq('platform_fan_id', String(fanId))
       .maybeSingle(),
     supabase
@@ -255,7 +256,9 @@ Flirt reply sample: ${flirtSample || 'none'}`,
 
   const snapshotText = threadPreview.trim()
   if (snapshotText.length > 0) {
-    const err = await upsertFanThreadInsightSnapshot(supabase, userId, String(fanId), snapshotText)
+    const err = await upsertFanThreadInsightSnapshot(supabase, userId, String(fanId), snapshotText, {
+      platform: 'onlyfans',
+    })
     if (err.error) console.warn('[fan_thread_insights]', err.error)
   }
 

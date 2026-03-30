@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { insertDivineAppNotification } from '@/lib/notifications/divine-app-notification'
 import { normalizeScanHandle } from '@/lib/scan-identity'
 import { buildQueries, buildTitleQueries, sanitizeTitleForSearch } from '@/lib/leaks/build-queries'
 import { SerperProvider } from '@/lib/leaks/search-providers'
@@ -457,6 +458,17 @@ export async function runLeakScan(
         grokEnrichment: isPro && Boolean(process.env.XAI_API_KEY),
         fetchVerified: fetchVerifyTopN > 0 ? fetchVerified : undefined,
       }
+    }
+
+    if (insertedRows && insertedRows.length > 0) {
+      await insertDivineAppNotification(supabase, userId, {
+        type: 'protection',
+        title: `Circe: ${insertedRows.length} new leak signal${insertedRows.length > 1 ? 's' : ''}`,
+        description:
+          'Review detections in Protection. Start DMCA when you confirm a match.',
+        link: '/dashboard/protection',
+        metadata: { kind: 'leak_scan', count: insertedRows.length },
+      })
     }
 
     if (needPostGrok && grokKey && insertedRows && insertedRows.length > 0) {

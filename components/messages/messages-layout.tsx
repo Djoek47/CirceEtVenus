@@ -250,9 +250,9 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] min-h-0">
+    <div className="flex min-h-0 flex-col h-[calc(100dvh-7rem)] max-h-[calc(100dvh-7rem)] sm:h-[calc(100vh-8rem)] sm:max-h-none">
       {/* Header: back on mobile when chat open, title, view toggle, actions */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 flex-shrink-0">
+      <div className="mb-2 flex flex-shrink-0 flex-wrap items-center justify-between gap-2 sm:mb-4">
         <div className="flex items-center gap-2 min-w-0">
           {selectedConversation && view === 'conversations' && (
             <Button

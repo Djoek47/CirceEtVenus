@@ -38,7 +38,7 @@ const pageNames: Record<string, string> = {
   '/dashboard/content': 'Cosmic Content Calendar',
   '/dashboard/messages': 'Messages',
   '/dashboard/messages/mass': 'Mass messages',
-  '/dashboard/community': 'Community',
+  '/dashboard/community': 'Community tips',
   '/dashboard/social': 'Social',
   '/dashboard/content-library': 'Content library',
   '/dashboard/analytics': 'Analytics',

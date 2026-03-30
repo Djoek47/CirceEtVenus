@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +31,8 @@ import {
   CheckCheck,
   Mail,
   Trash2,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
@@ -316,6 +320,23 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
   const messageRef = useRef('')
   messageRef.current = message
   const composerTypeAbortRef = useRef<AbortController | null>(null)
+  /** Collapsed on small screens so the thread stays visible; expanded on md+. */
+  const [aiSectionOpen, setAiSectionOpen] = useState(true)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setAiSectionOpen(window.matchMedia('(min-width: 768px)').matches)
+  }, [])
+
+  useEffect(() => {
+    const hasAiContent =
+      scanInsights ||
+      activePanel ||
+      (circeSuggestions && circeSuggestions.length > 0) ||
+      (venusSuggestions && venusSuggestions.length > 0) ||
+      (flirtSuggestions && flirtSuggestions.length > 0)
+    if (hasAiContent) setAiSectionOpen(true)
+  }, [scanInsights, activePanel, circeSuggestions, venusSuggestions, flirtSuggestions])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -846,7 +867,7 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
   const fan = conversation.user
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col border-border bg-card">
+    <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border-border bg-card">
       {/* Chat Header */}
       <CardHeader className="flex flex-row items-center justify-between border-b border-border p-4">
         <div className="flex items-center gap-3">
@@ -979,8 +1000,8 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
       </CardHeader>
 
       {/* Messages Area — live thread with the fan */}
-      <CardContent ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <CardContent ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:mb-3">
           Fan conversation
         </p>
         {loading ? (
@@ -1088,162 +1109,189 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
         )}
       </CardContent>
 
-      {/* Divine AI helpers + composer (local only until you send) */}
-      <div className="border-t border-border bg-muted/20 p-4 space-y-3">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Divine AI — suggestions (not sent)
-        </p>
-        {error && (
-          <p className="text-xs text-destructive mb-1">{error}</p>
-        )}
+      {/* Composer stays visible; Divine AI tools collapse on small screens so the thread keeps space */}
+      <div className="flex flex-shrink-0 flex-col border-t border-border bg-card">
+        <Collapsible open={aiSectionOpen} onOpenChange={setAiSectionOpen}>
+          <div className="flex items-center gap-2 border-b border-border/60 px-2 py-1 sm:px-3">
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 min-w-0 flex-1 justify-start gap-2 px-2 text-left text-xs font-medium sm:flex-none"
+              >
+                {aiSectionOpen ? (
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0 opacity-60" />
+                )}
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate">Divine AI — scan & suggestions</span>
+              </Button>
+            </CollapsibleTrigger>
+            <span className="hidden shrink-0 text-[10px] text-muted-foreground md:inline">Not sent to fan</span>
+          </div>
+          <CollapsibleContent>
+            <div className="max-h-[min(40vh,280px)] space-y-3 overflow-y-auto border-b border-border/50 bg-muted/15 px-3 py-3 sm:max-h-[min(45vh,360px)] sm:px-4">
+              {scanInsights && (
+                <div className="space-y-1 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1 font-medium text-primary">
+                      <Sparkles className="h-3 w-3" />
+                      Thread scan insights
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[10px] text-primary/70 hover:underline"
+                      onClick={() => setScanInsights(null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {scanInsights.insights?.length > 0 && (
+                    <ul className="list-disc pl-4">
+                      {scanInsights.insights.slice(0, 3).map((i, idx) => (
+                        <li key={idx}>{i}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {scanInsights.riskFlags?.length > 0 && (
+                    <p className="text-destructive/80">
+                      Risks: {scanInsights.riskFlags.slice(0, 3).join('; ')}
+                    </p>
+                  )}
+                </div>
+              )}
 
-        {scanInsights && (
-          <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-xs space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1 font-medium text-primary">
-                <Sparkles className="h-3 w-3" />
-                Thread scan insights
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs"
+                  disabled={suggestionsLoading === 'scan' || messages.length === 0}
+                  onClick={() => callSuggestionApi('scan')}
+                >
+                  {suggestionsLoading === 'scan' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  Scan
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 border-circe/40 text-xs text-circe-light"
+                  disabled={suggestionsLoading === 'circe' || messages.length === 0}
+                  onClick={() => callSuggestionApi('circe')}
+                >
+                  {suggestionsLoading === 'circe' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Moon className="h-3 w-3" />
+                  )}
+                  Circe
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 border-gold/50 text-xs text-gold"
+                  disabled={suggestionsLoading === 'venus' || messages.length === 0}
+                  onClick={() => callSuggestionApi('venus')}
+                >
+                  {suggestionsLoading === 'venus' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sun className="h-3 w-3" />
+                  )}
+                  Venus
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 border-pink-500/50 text-xs text-pink-500"
+                  disabled={suggestionsLoading === 'flirt' || messages.length === 0}
+                  onClick={() => callSuggestionApi('flirt')}
+                >
+                  {suggestionsLoading === 'flirt' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Heart className="h-3 w-3" />
+                  )}
+                  Flirt
+                </Button>
               </div>
-              <button
-                type="button"
-                className="text-[10px] text-primary/70 hover:underline"
-                onClick={() => setScanInsights(null)}
-              >
-                Clear
-              </button>
-            </div>
-            {scanInsights.insights?.length > 0 && (
-              <ul className="list-disc pl-4">
-                {scanInsights.insights.slice(0, 3).map((i, idx) => (
-                  <li key={idx}>{i}</li>
-                ))}
-              </ul>
-            )}
-            {scanInsights.riskFlags?.length > 0 && (
-              <p className="text-destructive/80">
-                Risks: {scanInsights.riskFlags.slice(0, 3).join('; ')}
+
+              {(activePanel === 'circe' && circeSuggestions) ||
+              (activePanel === 'venus' && venusSuggestions) ||
+              (activePanel === 'flirt' && flirtSuggestions) ? (
+                <div className="space-y-2 rounded-md border border-border bg-secondary/40 p-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium">
+                      {activePanel === 'circe'
+                        ? 'Circe suggestions'
+                        : activePanel === 'venus'
+                          ? 'Venus suggestions'
+                          : 'Flirt suggestions'}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-[10px] text-muted-foreground hover:underline"
+                      onClick={() => setActivePanel(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    {(activePanel === 'circe'
+                      ? circeSuggestions
+                      : activePanel === 'venus'
+                        ? venusSuggestions
+                        : flirtSuggestions
+                    )
+                      ?.slice(0, 3)
+                      .map((text, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          className="w-full rounded border border-border bg-background px-2 py-1.5 text-left text-xs leading-snug hover:border-primary hover:bg-primary/5"
+                          onClick={() => {
+                            setActivePanel(null)
+                            void applyComposerTextAnimated(text, true, { skipAnimation: false })
+                          }}
+                        >
+                          {text}
+                        </button>
+                      ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Tap to insert — edit before sending.
+                  </p>
+                </div>
+              ) : null}
+
+              <p className="text-[10px] leading-snug text-muted-foreground/90">
+                Only the fan thread above is visible to fans. Scan & suggestions stay in Creatix until you send.
               </p>
-            )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {error && messages.length > 0 && (
+          <div className="border-b border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive sm:px-4">
+            {error}
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 text-xs"
-            disabled={suggestionsLoading === 'scan' || messages.length === 0}
-            onClick={() => callSuggestionApi('scan')}
-          >
-            {suggestionsLoading === 'scan' ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Sparkles className="h-3 w-3" />
-            )}
-            Scan Thread
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 text-xs border-circe/40 text-circe-light"
-            disabled={suggestionsLoading === 'circe' || messages.length === 0}
-            onClick={() => callSuggestionApi('circe')}
-          >
-            {suggestionsLoading === 'circe' ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Moon className="h-3 w-3" />
-            )}
-            Circe Reply
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 text-xs border-gold/50 text-gold"
-            disabled={suggestionsLoading === 'venus' || messages.length === 0}
-            onClick={() => callSuggestionApi('venus')}
-          >
-            {suggestionsLoading === 'venus' ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Sun className="h-3 w-3" />
-            )}
-            Venus Reply
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 text-xs border-pink-500/50 text-pink-500"
-            disabled={suggestionsLoading === 'flirt' || messages.length === 0}
-            onClick={() => callSuggestionApi('flirt')}
-          >
-            {suggestionsLoading === 'flirt' ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Heart className="h-3 w-3" />
-            )}
-            Flirt Reply
-          </Button>
-        </div>
-
-        {(activePanel === 'circe' && circeSuggestions) ||
-        (activePanel === 'venus' && venusSuggestions) ||
-        (activePanel === 'flirt' && flirtSuggestions) ? (
-          <div className="rounded-md border border-border bg-secondary/40 p-2 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-medium">
-                {activePanel === 'circe'
-                  ? 'Circe spell suggestions'
-                  : activePanel === 'venus'
-                    ? 'Venus charm suggestions'
-                    : 'Flirt mode suggestions'}
-              </span>
-              <button
-                type="button"
-                className="text-[10px] text-muted-foreground hover:underline"
-                onClick={() => setActivePanel(null)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-1">
-              {(activePanel === 'circe'
-                ? circeSuggestions
-                : activePanel === 'venus'
-                  ? venusSuggestions
-                  : flirtSuggestions
-              )
-                ?.slice(0, 3)
-                .map((text, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="w-full rounded border border-border bg-background px-2 py-1 text-left text-xs hover:border-primary hover:bg-primary/5"
-                    onClick={() => {
-                      setActivePanel(null)
-                      void applyComposerTextAnimated(text, true, { skipAnimation: false })
-                    }}
-                  >
-                    {text}
-                  </button>
-                ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              Tap to insert, then edit before sending. Generated by{' '}
-              {activePanel === 'circe' ? 'Circe' : activePanel === 'venus' ? 'Venus' : 'Flirt'}.
-            </p>
-          </div>
-        ) : null}
-
-        <input
-          ref={chatFileInputRef}
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          className="hidden"
-          onChange={handleChatFileUpload}
-        />
-        <div className="flex flex-col gap-1.5 w-full">
+        <div className="space-y-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-4">
+          <input
+            ref={chatFileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            className="hidden"
+            onChange={handleChatFileUpload}
+          />
           {(attachedMediaIds.length > 0 || ppvPrice) && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {attachedMediaIds.length > 0 && (
@@ -1258,100 +1306,106 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
                 </Badge>
               )}
             </div>
-        )}
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="flex-shrink-0"
-            disabled={conversation?.platform !== 'onlyfans' || uploadingMedia}
-            onClick={() => chatFileInputRef.current?.click()}
-            title={conversation?.platform === 'onlyfans' ? 'Attach photo or video (PPV)' : 'Media only for OnlyFans'}
-          >
-            {uploadingMedia ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
-          </Button>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-            <Input
-              type="number"
-              min={0}
-              step={0.01}
-              placeholder="PPV $"
-              value={ppvPrice}
-              onChange={(e) => setPpvPrice(e.target.value)}
-              className="w-16 h-8 text-xs"
-              title="Optional price for paid content"
-            />
-          </div>
-          <div className="relative flex-1">
-            {divineTyping && (
-              <div className="pointer-events-none absolute inset-x-0 -top-5 z-10 flex items-center gap-1.5 text-[11px] font-medium text-primary">
-                <span className="inline-flex gap-0.5">
-                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
-                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
-                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:300ms]" />
-                </span>
-                <span className="tracking-tight">Divine is typing…</span>
+          )}
+
+          <div className="flex min-w-0 items-end gap-2">
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+                disabled={conversation?.platform !== 'onlyfans' || uploadingMedia}
+                onClick={() => chatFileInputRef.current?.click()}
+                title={
+                  conversation?.platform === 'onlyfans'
+                    ? 'Attach photo or video (PPV)'
+                    : 'Media only for OnlyFans'
+                }
+              >
+                {uploadingMedia ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
+              </Button>
+              <div className="flex items-center gap-0.5">
+                <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="PPV"
+                  value={ppvPrice}
+                  onChange={(e) => setPpvPrice(e.target.value)}
+                  className="h-8 w-[3.25rem] px-1.5 text-xs"
+                  title="Optional PPV price"
+                />
               </div>
-            )}
-            <Input
-              placeholder="Type a message..."
-              value={message}
-              onChange={(e) => {
-                if (divineTyping) {
-                  composerTypeAbortRef.current?.abort()
-                  composerTypeAbortRef.current = null
-                  setDivineTyping(false)
-                }
-                setMessage(e.target.value)
-              }}
-              className={cn(
-                'bg-input pr-10 transition-[box-shadow] duration-300',
-                divineTyping && 'ring-2 ring-primary/45 ring-offset-0',
+            </div>
+
+            <div className="relative min-w-0 flex-1">
+              {divineTyping && (
+                <div className="pointer-events-none absolute inset-x-0 -top-5 z-10 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                  <span className="inline-flex gap-0.5">
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:300ms]" />
+                  </span>
+                  <span className="tracking-tight">Divine is typing…</span>
+                </div>
               )}
-              disabled={sending}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && (message.trim() || attachedMediaIds.length > 0)) {
-                  e.preventDefault()
-                  handleSendMessage()
-                }
-              }}
-            />
-            <div className="absolute right-1 top-1/2 -translate-y-1/2">
-              <VoiceInputButton
-                onTranscript={(text) => {
+              <Textarea
+                placeholder="Message… (Shift+Enter for new line)"
+                value={message}
+                onChange={(e) => {
                   if (divineTyping) {
                     composerTypeAbortRef.current?.abort()
                     composerTypeAbortRef.current = null
                     setDivineTyping(false)
                   }
-                  setMessage((prev) => prev + (prev ? ' ' : '') + text)
+                  setMessage(e.target.value)
                 }}
-                size="sm"
-                variant="ghost"
+                rows={3}
+                className={cn(
+                  'min-h-[5.25rem] resize-y bg-input pr-10 text-base leading-relaxed sm:min-h-[3.5rem] sm:text-sm',
+                  divineTyping && 'ring-2 ring-primary/45 ring-offset-0',
+                )}
+                disabled={sending}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    if (message.trim() || attachedMediaIds.length > 0) handleSendMessage()
+                  }
+                }}
               />
+              <div className="absolute bottom-2 right-2">
+                <VoiceInputButton
+                  onTranscript={(text) => {
+                    if (divineTyping) {
+                      composerTypeAbortRef.current?.abort()
+                      composerTypeAbortRef.current = null
+                      setDivineTyping(false)
+                    }
+                    setMessage((prev) => prev + (prev ? ' ' : '') + text)
+                  }}
+                  size="sm"
+                  variant="ghost"
+                />
+              </div>
             </div>
+
+            <Button
+              size="icon"
+              className="h-11 w-11 shrink-0"
+              disabled={(!message.trim() && attachedMediaIds.length === 0) || sending}
+              onClick={handleSendMessage}
+            >
+              {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            </Button>
           </div>
-          <Button 
-            size="icon" 
-            disabled={(!message.trim() && attachedMediaIds.length === 0) || sending}
-            onClick={handleSendMessage}
-          >
-            {sending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </Button>
+
+          <p className="hidden text-[10px] text-muted-foreground sm:block">
+            PPV: set price and/or attach media. Fan only sees the conversation above.
+          </p>
+          <p className="text-[10px] text-muted-foreground sm:hidden">Tip: collapse Divine AI above to see more of the thread.</p>
         </div>
-        </div>
-        <p className="text-[10px] text-muted-foreground">
-          You can send paid (PPV) content: set a price and/or attach media so the fan pays to unlock.
-        </p>
-        <p className="text-[10px] text-muted-foreground/90">
-          Only the fan conversation above is visible to fans. Scan and suggestion cards stay in Creatix until you send a message.
-        </p>
       </div>
       <FanProfileModal
         open={profileOpen}

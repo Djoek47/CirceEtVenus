@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { theme } from '@/constants/theme'
 import { useAuth } from '@/contexts/auth'
+import { formatApiScreenError } from '@/lib/api-errors'
 import { apiFetch } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
@@ -34,8 +35,8 @@ export default function AnalyticsScreen() {
     if (revRes.ok) {
       setRevenue((await revRes.json()) as RevenueResponse)
     } else {
-      const j = await revRes.json().catch(() => ({}))
-      setError((j as { error?: string }).error ?? revRes.statusText)
+      const j = (await revRes.json().catch(() => ({}))) as { error?: string }
+      setError(formatApiScreenError(revRes.status, j.error))
     }
     if (session?.user?.id) {
       const { count } = await supabase
@@ -54,6 +55,7 @@ export default function AnalyticsScreen() {
 
   async function onRefresh() {
     setRefreshing(true)
+    await supabase.auth.refreshSession()
     await load()
     setRefreshing(false)
   }

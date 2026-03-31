@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router'
+import FontAwesome from '@expo/vector-icons/FontAwesome'
 import {
   ActivityIndicator,
   Pressable,
@@ -13,6 +14,7 @@ import { BrandLogo } from '@/components/brand-logo'
 import { motion } from '@/constants/motion'
 import { theme } from '@/constants/theme'
 import { useAuth } from '@/contexts/auth'
+import { useDivineQuick } from '@/contexts/divine-quick'
 import { useDashboardStats } from '@/hooks/use-dashboard-stats'
 import { useResponsive } from '@/hooks/use-responsive'
 
@@ -25,8 +27,16 @@ function fmtMoney(n: number) {
 export default function HomeScreen() {
   const { session } = useAuth()
   const router = useRouter()
+  const { openDivinePopup } = useDivineQuick()
   const { stats, loading } = useDashboardStats()
   const r = useResponsive()
+
+  const navButtons = [
+    { label: 'Messages', icon: 'envelope' as const, onPress: () => router.push('/(main)/messages') },
+    { label: 'AI Studio', icon: 'star' as const, onPress: () => router.push('/(main)/ai-studio') },
+    { label: 'Analytics', icon: 'bar-chart' as const, onPress: () => router.push('/(main)/analytics') },
+    { label: 'Divine', icon: 'bolt' as const, onPress: openDivinePopup, accent: true },
+  ]
 
   const shortcuts = [
     { title: 'Community tips', sub: 'Approved tips via Bearer API', href: '/(main)/community' as const },
@@ -53,6 +63,45 @@ export default function HomeScreen() {
             </Text>
           </View>
         </Animated.View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.navRow,
+            { gap: r.scaleSpace(10), paddingVertical: r.scaleSpace(4), marginBottom: r.scaleSpace(10) },
+          ]}
+        >
+          {navButtons.map((b) => (
+            <Pressable
+              key={b.label}
+              accessibilityRole="button"
+              accessibilityLabel={b.label}
+              onPress={b.onPress}
+              style={({ pressed }) => [
+                styles.navPill,
+                b.accent && styles.navPillAccent,
+                { paddingVertical: r.scaleSpace(10), paddingHorizontal: r.scaleSpace(14) },
+                pressed && styles.cardPressed,
+              ]}
+            >
+              <FontAwesome
+                name={b.icon}
+                size={r.scaleFont(14)}
+                color={b.accent ? theme.bg : theme.gold}
+              />
+              <Text
+                style={[
+                  styles.navPillText,
+                  b.accent && styles.navPillTextAccent,
+                  { fontSize: r.scaleFont(13) },
+                ]}
+              >
+                {b.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         {loading ? (
           <ActivityIndicator size="large" color={theme.gold} style={styles.loader} />
@@ -119,7 +168,23 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.bg },
   scroll: { flexGrow: 1 },
-  brandRow: { alignItems: 'flex-start', marginBottom: 16 },
+  brandRow: { alignItems: 'flex-start', marginBottom: 8 },
+  navRow: { flexDirection: 'row', alignItems: 'center' },
+  navPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 999,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  navPillAccent: {
+    backgroundColor: theme.gold,
+    borderColor: theme.goldMuted,
+  },
+  navPillText: { fontWeight: '600', color: theme.text },
+  navPillTextAccent: { color: theme.bg },
   kicker: {
     fontWeight: '700',
     letterSpacing: 1.2,

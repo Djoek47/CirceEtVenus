@@ -9,7 +9,9 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { theme } from '@/constants/theme'
+import { formatApiScreenError } from '@/lib/api-errors'
 import { apiFetch } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 type Conv = {
   id?: string
@@ -29,7 +31,7 @@ export default function MessagesScreen() {
     const res = await apiFetch('/api/onlyfans/conversations?limit=50')
     const json = (await res.json()) as { conversations?: Conv[]; error?: string; code?: string }
     if (!res.ok) {
-      setError(json.error ?? res.statusText)
+      setError(formatApiScreenError(res.status, json.error))
       setItems([])
       return
     }
@@ -42,6 +44,7 @@ export default function MessagesScreen() {
 
   async function onRefresh() {
     setRefreshing(true)
+    await supabase.auth.refreshSession()
     await load()
     setRefreshing(false)
   }

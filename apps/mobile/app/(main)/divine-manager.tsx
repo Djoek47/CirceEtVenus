@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +11,9 @@ import Animated, { FadeIn } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { motion } from '@/constants/motion'
 import { theme } from '@/constants/theme'
+import { formatApiScreenError } from '@/lib/api-errors'
 import { apiFetch } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { useResponsive } from '@/hooks/use-responsive'
 
 type DivineSettings = {
@@ -23,6 +26,7 @@ type DivineSettings = {
 export default function DivineManagerScreen() {
   const [settings, setSettings] = useState<DivineSettings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const r = useResponsive()
 
@@ -31,7 +35,7 @@ export default function DivineManagerScreen() {
     const res = await apiFetch('/api/divine/manager-settings')
     const json = (await res.json()) as DivineSettings & { error?: string }
     if (!res.ok) {
-      setError(json.error ?? res.statusText)
+      setError(formatApiScreenError(res.status, json.error))
       setSettings(null)
       return
     }
@@ -41,6 +45,13 @@ export default function DivineManagerScreen() {
   useEffect(() => {
     load().finally(() => setLoading(false))
   }, [load])
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await supabase.auth.refreshSession()
+    await load()
+    setRefreshing(false)
+  }
 
   const pad = r.scaleSpace(16)
 
@@ -54,7 +65,12 @@ export default function DivineManagerScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-      <ScrollView contentContainerStyle={{ padding: pad, paddingBottom: r.scaleSpace(32) }}>
+      <ScrollView
+        contentContainerStyle={{ padding: pad, paddingBottom: r.scaleSpace(32) }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.gold} />
+        }
+      >
         <Animated.View entering={FadeIn.duration(motion.durationSlow)}>
           <Text style={[styles.heading, { fontSize: r.scaleFont(22) }]}>Divine Manager</Text>
           <Text style={[styles.sub, { fontSize: r.scaleFont(13), marginBottom: r.scaleSpace(12) }]}>

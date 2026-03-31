@@ -91,9 +91,18 @@ export default function SettingsScreen() {
       const res = await apiFetch('/api/onlyfans/disconnect', { method: 'POST' })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        throw new Error((j as { error?: string }).error ?? res.statusText)
+        const msg = (j as { error?: string }).error ?? res.statusText
+        Alert.alert(
+          'OnlyFans',
+          res.status === 401
+            ? 'Session expired or not signed in. Sign out and sign in again, and confirm EXPO_PUBLIC_API_URL matches your live site.'
+            : msg,
+        )
+        return
       }
       await loadConnections()
+    } catch (e) {
+      Alert.alert('OnlyFans', e instanceof Error ? e.message : 'Disconnect failed')
     } finally {
       setOfBusy(false)
     }

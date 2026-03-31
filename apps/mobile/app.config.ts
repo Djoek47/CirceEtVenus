@@ -2,6 +2,10 @@ import type { ExpoConfig } from 'expo/config'
 
 const BG = '#0a0a0a'
 
+/** Set via `eas init` / EAS dashboard, or `EXPO_PUBLIC_EAS_PROJECT_ID` in `.env` for local dev. */
+const easProjectId =
+  process.env.EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? undefined
+
 export default (): ExpoConfig => ({
   name: 'Circe et Venus',
   slug: 'creatix-mobile',
@@ -60,5 +64,8 @@ export default (): ExpoConfig => ({
   ],
   experiments: {
     typedRoutes: true,
+  },
+  extra: {
+    eas: easProjectId ? { projectId: easProjectId } : {},
   },
 })

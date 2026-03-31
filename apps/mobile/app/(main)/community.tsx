@@ -11,7 +11,9 @@ import Animated, { FadeInDown } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { motion } from '@/constants/motion'
 import { theme } from '@/constants/theme'
+import { formatApiScreenError } from '@/lib/api-errors'
 import { apiFetch } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { useResponsive } from '@/hooks/use-responsive'
 
 type TipRow = {
@@ -37,9 +39,9 @@ export default function CommunityScreen() {
   const load = useCallback(async () => {
     setError(null)
     const res = await apiFetch('/api/community/tips')
-    const json = (await res.json()) as TipsResponse
+    const json = (await res.json()) as TipsResponse & { error?: string }
     if (!res.ok) {
-      setError((json as { error?: string }).error ?? res.statusText)
+      setError(formatApiScreenError(res.status, json.error))
       setItems([])
       return
     }
@@ -52,6 +54,7 @@ export default function CommunityScreen() {
 
   async function onRefresh() {
     setRefreshing(true)
+    await supabase.auth.refreshSession()
     await load()
     setRefreshing(false)
   }
@@ -83,7 +86,7 @@ export default function CommunityScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <Text style={[styles.empty, { fontSize: r.scaleFont(14), padding: r.scaleSpace(24) }]}>
-            No tips yet (check EXPO_PUBLIC_API_URL and sign-in).
+            No tips yet. Pull to refresh after sign-in, or check EXPO_PUBLIC_API_URL in `.env`.
           </Text>
         }
         renderItem={({ item, index }) => (

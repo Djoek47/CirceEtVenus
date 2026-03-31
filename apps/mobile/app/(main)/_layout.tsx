@@ -2,11 +2,13 @@ import React from 'react'
 import FontAwesome from '@expo/vector-icons/FontAwesome'
 import { Redirect } from 'expo-router'
 import { Drawer } from 'expo-router/drawer'
+import { DrawerToggleButton } from '@react-navigation/drawer'
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
-import { BrandLogo } from '@/components/brand-logo'
+import { MainHeaderNav } from '@/components/main-header-nav'
 import { useAuth } from '@/contexts/auth'
+import { DivineQuickProvider } from '@/contexts/divine-quick'
 import { theme } from '@/constants/theme'
 
 function drawerIcon(name: React.ComponentProps<typeof FontAwesome>['name']) {
@@ -15,10 +17,10 @@ function drawerIcon(name: React.ComponentProps<typeof FontAwesome>['name']) {
   )
 }
 
-function headerTitleWithLogo({ children }: { children: string }) {
+/** Screen title only — logo lives on the dashboard body to avoid truncation with drawer + nav icons. */
+function headerTitleOnly({ children }: { children: string }) {
   return (
-    <View style={styles.headerTitleRow}>
-      <BrandLogo size={28} />
+    <View style={styles.headerTitleWrap}>
       <Text style={styles.headerTitleText} numberOfLines={1}>
         {children}
       </Text>
@@ -43,19 +45,23 @@ export default function MainDrawerLayout() {
 
   return (
     <GestureHandlerRootView style={styles.flex}>
-      <Drawer
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.bg },
-          headerTintColor: theme.text,
-          headerShadowVisible: false,
-          drawerStyle: { backgroundColor: theme.bg },
-          drawerActiveTintColor: theme.gold,
-          drawerInactiveTintColor: theme.textDim,
-          drawerLabelStyle: { fontSize: 15 },
-          drawerType: Platform.OS === 'web' ? 'front' : 'slide',
-          headerTitle: (props) => headerTitleWithLogo({ children: props.children as string }),
-        }}
-      >
+      <DivineQuickProvider>
+        <Drawer
+          screenOptions={{
+            headerStyle: { backgroundColor: theme.bg },
+            headerTintColor: theme.text,
+            headerShadowVisible: false,
+            drawerStyle: { backgroundColor: theme.bg },
+            drawerActiveTintColor: theme.gold,
+            drawerInactiveTintColor: theme.textDim,
+            drawerLabelStyle: { fontSize: 15 },
+            drawerType: Platform.OS === 'web' ? 'front' : 'slide',
+            headerTitle: (props) => headerTitleOnly({ children: props.children as string }),
+            headerTitleContainerStyle: styles.headerTitleContainer,
+            headerLeft: (props) => <DrawerToggleButton {...props} />,
+            headerRight: () => <MainHeaderNav />,
+          }}
+        >
         <Drawer.Screen
           name="index"
           options={{ title: 'Dashboard', drawerLabel: 'Dashboard', drawerIcon: drawerIcon('home') }}
@@ -112,7 +118,8 @@ export default function MainDrawerLayout() {
           name="settings"
           options={{ title: 'Settings', drawerLabel: 'Settings', drawerIcon: drawerIcon('cog') }}
         />
-      </Drawer>
+        </Drawer>
+      </DivineQuickProvider>
     </GestureHandlerRootView>
   )
 }
@@ -125,16 +132,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.bg,
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    maxWidth: '85%',
+  headerTitleContainer: {
+    flex: 1,
+    maxWidth: '100%',
+  },
+  headerTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   headerTitleText: {
     color: theme.text,
     fontSize: 17,
     fontWeight: '600',
-    flexShrink: 1,
   },
 })

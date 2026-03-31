@@ -18,11 +18,21 @@ From the **monorepo root**: `npm run mobile` (if defined in root `package.json`)
 
 - Config: [`app.config.ts`](./app.config.ts) — display name, `slug`, `version`, iOS `bundleIdentifier` / `buildNumber`, Android `package` / `versionCode`, dark splash (`#0a0a0a`).
 - Profiles: [`eas.json`](./eas.json) — `development` (dev client), `preview` (internal), `production` (`autoIncrement` for store builds).
-- Link a project: `npx eas-cli login` then `eas init` (adds `extra.eas.projectId` — optional until you ship).
+- Link a project: `npx eas-cli login` then `eas init`. Set `EAS_PROJECT_ID` or `EXPO_PUBLIC_EAS_PROJECT_ID` (see [`.env.example`](./.env.example)) so `extra.eas.projectId` is populated — required for **Expo push tokens** / `getExpoPushTokenAsync` if you add `expo-notifications`. Helper: [`lib/push-helpers.ts`](./lib/push-helpers.ts).
 
 ```bash
 npx eas-cli build --profile production --platform all
 ```
+
+### Build checklist (auth + UI updates)
+
+1. **EAS / local env:** `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_API_URL` must match your deployed Next app and Supabase project (Vercel env does **not** apply to the native app — set secrets in EAS or `.env` before `eas build` / `expo start`).
+2. **Rebuild** the dev client or reinstall after changing `EXPO_PUBLIC_*` (values are inlined at bundle time).
+3. Reload the app so drawer header (`MainHeaderNav`) and `apiFetch` Bearer refresh changes are picked up.
+
+### Push notifications (optional)
+
+If you add `expo-notifications`, guard `getExpoPushTokenAsync` with `hasEasProjectIdForPush()` from [`lib/push-helpers.ts`](./lib/push-helpers.ts) so dev builds without a project id do not crash.
 
 ## Dual-repo workflow
 

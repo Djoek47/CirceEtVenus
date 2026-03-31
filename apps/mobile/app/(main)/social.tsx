@@ -26,9 +26,9 @@ export default function SocialScreen() {
   const load = useCallback(async () => {
     setError(null)
     const res = await apiFetch('/api/profile/community-links')
-    const json = (await res.json()) as { links?: CommunityLink[]; error?: string }
+    const json = (await res.json()) as { links?: CommunityLink[]; error?: string; message?: string }
     if (!res.ok) {
-      setError(formatApiScreenError(res.status, json.error))
+      setError(formatApiScreenError(res.status, json.error, json.message))
       setLinks([])
       return
     }

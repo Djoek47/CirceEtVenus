@@ -29,9 +29,14 @@ export default function MessagesScreen() {
   const load = useCallback(async () => {
     setError(null)
     const res = await apiFetch('/api/onlyfans/conversations?limit=50')
-    const json = (await res.json()) as { conversations?: Conv[]; error?: string; code?: string }
+    const json = (await res.json()) as {
+      conversations?: Conv[]
+      error?: string
+      message?: string
+      code?: string
+    }
     if (!res.ok) {
-      setError(formatApiScreenError(res.status, json.error))
+      setError(formatApiScreenError(res.status, json.error, json.message))
       setItems([])
       return
     }

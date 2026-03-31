@@ -39,9 +39,9 @@ export default function CommunityScreen() {
   const load = useCallback(async () => {
     setError(null)
     const res = await apiFetch('/api/community/tips')
-    const json = (await res.json()) as TipsResponse & { error?: string }
+    const json = (await res.json()) as TipsResponse & { error?: string; message?: string }
     if (!res.ok) {
-      setError(formatApiScreenError(res.status, json.error))
+      setError(formatApiScreenError(res.status, json.error, json.message))
       setItems([])
       return
     }

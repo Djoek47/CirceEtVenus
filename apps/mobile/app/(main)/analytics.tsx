@@ -35,8 +35,8 @@ export default function AnalyticsScreen() {
     if (revRes.ok) {
       setRevenue((await revRes.json()) as RevenueResponse)
     } else {
-      const j = (await revRes.json().catch(() => ({}))) as { error?: string }
-      setError(formatApiScreenError(revRes.status, j.error))
+      const j = (await revRes.json().catch(() => ({}))) as { error?: string; message?: string }
+      setError(formatApiScreenError(revRes.status, j.error, j.message))
     }
     if (session?.user?.id) {
       const { count } = await supabase

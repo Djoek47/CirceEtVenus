@@ -33,9 +33,9 @@ export default function DivineManagerScreen() {
   const load = useCallback(async () => {
     setError(null)
     const res = await apiFetch('/api/divine/manager-settings')
-    const json = (await res.json()) as DivineSettings & { error?: string }
+    const json = (await res.json()) as DivineSettings & { error?: string; message?: string }
     if (!res.ok) {
-      setError(formatApiScreenError(res.status, json.error))
+      setError(formatApiScreenError(res.status, json.error, json.message))
       setSettings(null)
       return
     }

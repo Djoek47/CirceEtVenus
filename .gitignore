@@ -20,6 +20,7 @@ dist/
 
 # IDE
 .idea/
+.cursor/
 *.swp
 
 # Capacitor / native shells (generated at repo root after `npx cap add ios android`)

@@ -20,7 +20,7 @@ export async function createRouteHandlerClient(
     : null
 
   if (token) {
-    return createSupabaseClient(
+    const client = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
@@ -29,6 +29,14 @@ export async function createRouteHandlerClient(
         },
       },
     )
+    // `auth.getUser()` without a JWT does not reliably use only global headers in Node
+    // route handlers — native clients send Bearer but call `getUser()`. Forward the token.
+    const originalGetUser = client.auth.getUser.bind(client.auth)
+    client.auth.getUser = async (jwt?: string) => {
+      if (jwt !== undefined) return originalGetUser(jwt)
+      return originalGetUser(token)
+    }
+    return client
   }
 
   return createClient()

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Linking,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,13 +11,16 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { theme } from '@/constants/theme'
+import { formatApiScreenError } from '@/lib/api-errors'
 import { apiFetch } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 type CommunityLink = { id: string; label: string; url: string }
 
 export default function SocialScreen() {
   const [links, setLinks] = useState<CommunityLink[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -24,7 +28,7 @@ export default function SocialScreen() {
     const res = await apiFetch('/api/profile/community-links')
     const json = (await res.json()) as { links?: CommunityLink[]; error?: string }
     if (!res.ok) {
-      setError(json.error ?? res.statusText)
+      setError(formatApiScreenError(res.status, json.error))
       setLinks([])
       return
     }
@@ -34,6 +38,13 @@ export default function SocialScreen() {
   useEffect(() => {
     load().finally(() => setLoading(false))
   }, [load])
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await supabase.auth.refreshSession()
+    await load()
+    setRefreshing(false)
+  }
 
   if (loading) {
     return (
@@ -45,9 +56,14 @@ export default function SocialScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.gold} />
+        }
+      >
         <Text style={styles.heading}>Social</Text>
-        <Text style={styles.sub}>Community links from your profile (GET /api/profile/community-links)</Text>
+        <Text style={styles.sub}>Community links from your profile (same as web dashboard → Social).</Text>
         {error ? <Text style={styles.err}>{error}</Text> : null}
         {links.map((l) => (
           <Pressable

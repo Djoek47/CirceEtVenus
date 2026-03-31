@@ -1,7 +1,9 @@
+import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -15,12 +17,14 @@ import { supabase } from '@/lib/supabase'
 
 type Conv = {
   id?: string
-  user?: { username?: string; name?: string }
+  chatId?: string
+  user?: { id?: string | number; username?: string; name?: string }
   lastMessage?: { text?: string; createdAt?: string }
   unreadCount?: number
 }
 
-export default function MessagesScreen() {
+export default function MessagesListScreen() {
+  const router = useRouter()
   const [items, setItems] = useState<Conv[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -54,6 +58,17 @@ export default function MessagesScreen() {
     setRefreshing(false)
   }
 
+  function openThread(item: Conv) {
+    const id = item.chatId ?? item.user?.id
+    if (id == null) return
+    const fanId = String(id)
+    const u = item.user?.username ?? item.user?.name ?? 'fan'
+    router.push({
+      pathname: '/(main)/messages/[fanId]',
+      params: { fanId, fanUsername: String(u) },
+    })
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -65,19 +80,22 @@ export default function MessagesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Text style={styles.heading}>Messages</Text>
-      <Text style={styles.sub}>OnlyFans conversations (requires OnlyFans connected)</Text>
+      <Text style={styles.sub}>OnlyFans conversations (tap to open). Requires OnlyFans in Settings.</Text>
       {error ? <Text style={styles.err}>{error}</Text> : null}
       <FlatList
         data={items}
-        keyExtractor={(item, i) => String(item.id ?? i)}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        keyExtractor={(item, i) => String(item.chatId ?? item.user?.id ?? item.id ?? i)}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.gold} />}
         ListEmptyComponent={
           <Text style={styles.empty}>
             {error ? 'Fix the error above or connect OnlyFans in Settings.' : 'No conversations yet.'}
           </Text>
         }
         renderItem={({ item }) => (
-          <View style={styles.card}>
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+            onPress={() => openThread(item)}
+          >
             <Text style={styles.cardTitle}>
               @{item.user?.username ?? item.user?.name ?? 'Fan'}
             </Text>
@@ -89,7 +107,7 @@ export default function MessagesScreen() {
             {item.unreadCount ? (
               <Text style={styles.unread}>{item.unreadCount} unread</Text>
             ) : null}
-          </View>
+          </Pressable>
         )}
       />
     </SafeAreaView>
@@ -112,6 +130,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
   },
+  cardPressed: { opacity: 0.9 },
   cardTitle: { fontSize: 16, fontWeight: '600', color: theme.text },
   body: { fontSize: 14, color: theme.textMuted, marginTop: 6 },
   unread: { fontSize: 12, color: theme.gold, marginTop: 6 },

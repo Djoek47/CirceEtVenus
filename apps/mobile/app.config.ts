@@ -29,6 +29,8 @@ export default (): ExpoConfig => ({
         'Circe et Venus uses the camera to capture photos for creator content and Divine workflows.',
       NSPhotoLibraryUsageDescription:
         'Circe et Venus accesses your photo library so you can attach images to creator content.',
+      NSMicrophoneUsageDescription:
+        'Circe et Venus uses the microphone for Divine Manager voice (OpenAI Realtime).',
     },
   },
   android: {
@@ -43,6 +45,7 @@ export default (): ExpoConfig => ({
     permissions: [
       'android.permission.CAMERA',
       'android.permission.READ_MEDIA_IMAGES',
+      'android.permission.RECORD_AUDIO',
     ],
   },
   web: {

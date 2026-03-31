@@ -15,7 +15,13 @@ export const creatixDeepLinks = {
           index: 'dashboard',
           community: 'community',
           guide: 'guide',
-          messages: 'messages',
+          messages: {
+            path: 'messages',
+            screens: {
+              index: '',
+              '[fanId]': ':fanId',
+            },
+          },
           'ai-studio': {
             path: 'ai-studio',
             screens: {

@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     // Surface OnlyFans session expiry and auto-disconnect so the user can reconnect
     if (message.includes('ONLYFANS_SESSION_EXPIRED')) {
       try {
-        const supabase = await createClient()
+        const supabase = await createRouteHandlerClient(request)
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
           await supabase

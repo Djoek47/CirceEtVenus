@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
 import { insertDivineAppNotification } from '@/lib/notifications/divine-app-notification'
 
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
+    event = getStripe().webhooks.constructEvent(rawBody, signature, webhookSecret)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid signature'
     return NextResponse.json({ error: message }, { status: 400 })

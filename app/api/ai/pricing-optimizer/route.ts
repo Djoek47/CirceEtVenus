@@ -1,8 +1,9 @@
+import { NextRequest } from 'next/server'
 import { streamText } from 'ai'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
-export async function POST(req: Request) {
-  const supabase = await createClient()
+export async function POST(req: NextRequest) {
+  const supabase = await createRouteHandlerClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) {

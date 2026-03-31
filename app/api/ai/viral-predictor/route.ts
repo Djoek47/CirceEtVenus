@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -19,7 +20,7 @@ const viralSchema = z.object({
   competitorComparison: z.string().describe('How this compares to trending content'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { contentDescription, contentType, platform } = await req.json()
 
   const systemPrompt = `You are an expert at predicting viral content on social media and adult content platforms.
@@ -54,7 +55,7 @@ Analyze and provide a viral score with detailed insights.`,
 
   // Count AI credit for this viral prediction
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

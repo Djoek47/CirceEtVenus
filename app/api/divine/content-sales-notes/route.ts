@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 /**
  * GET — read sales metadata for one content row (?content_id=). RLS: own rows only.
  */
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

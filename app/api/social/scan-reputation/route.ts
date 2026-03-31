@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { runReputationScanCore } from '@/lib/reputation/run-reputation-scan'
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

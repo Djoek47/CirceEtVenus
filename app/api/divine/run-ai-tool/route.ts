@@ -4,7 +4,7 @@
  * opening other screens. Core logic lives in lib/divine/run-ai-tool-core.ts.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import {
   DIVINE_AI_TOOL_IDS,
   isDivineAiToolId,
@@ -15,7 +15,7 @@ export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
@@ -15,7 +16,7 @@ const suggestionSchema = z.object({
   recommendedAction: z.string().describe('Brief recommendation on how to handle this conversation'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { fanMessage, conversationHistory, fanTier, creatorPersona } = await req.json()
 
   const systemPrompt = `You are an AI assistant helping content creators on platforms like OnlyFans, MYM, and Fansly craft engaging replies to their fans.

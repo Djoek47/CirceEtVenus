@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 // GET: Report if the current user has an OnlyFans connection. Does NOT assign accounts
 // from the OnlyFans API to the current user; new connections are only created in the callback.
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

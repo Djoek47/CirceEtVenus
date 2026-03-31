@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { runDivineManagerBrain } from '@/lib/divine-manager-orchestration'
 
 export const maxDuration = 60
 
 /** POST: Run the Divine Manager brain for the current user; creates suggested tasks. */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

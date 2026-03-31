@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 const MAX_LINKS = 12
 const MAX_LABEL = 80
@@ -32,8 +32,8 @@ function parseLinks(raw: unknown): CommunityLink[] {
   return out
 }
 
-export async function GET() {
-  const supabase = await createClient()
+export async function GET(request: NextRequest) {
+  const supabase = await createRouteHandlerClient(request)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -47,7 +47,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

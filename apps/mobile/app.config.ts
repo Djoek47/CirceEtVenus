@@ -20,6 +20,12 @@ export default (): ExpoConfig => ({
     supportsTablet: true,
     bundleIdentifier: 'com.circeetvenus.creatix',
     buildNumber: '1',
+    infoPlist: {
+      NSCameraUsageDescription:
+        'Circe et Venus uses the camera to capture photos for creator content and Divine workflows.',
+      NSPhotoLibraryUsageDescription:
+        'Circe et Venus accesses your photo library so you can attach images to creator content.',
+    },
   },
   android: {
     package: 'com.circeetvenus.creatix',
@@ -30,13 +36,28 @@ export default (): ExpoConfig => ({
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
+    permissions: [
+      'android.permission.CAMERA',
+      'android.permission.READ_MEDIA_IMAGES',
+    ],
   },
   web: {
     bundler: 'metro',
     output: 'static',
     favicon: './assets/images/favicon.png',
   },
-  plugins: ['expo-router'],
+  plugins: [
+    'expo-router',
+    [
+      'expo-image-picker',
+      {
+        photosPermission:
+          'Circe et Venus accesses your photos so you can attach images to creator workflows.',
+        cameraPermission:
+          'Circe et Venus uses the camera to capture photos for creator workflows.',
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
   },

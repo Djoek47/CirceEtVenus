@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { getSettings } from '@/lib/divine-manager'
 
 /**
  * GET — subset of Divine Manager settings for voice UI + client overlays (auth cookie).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const {
       data: { user },
     } = await supabase.auth.getUser()

@@ -7,9 +7,12 @@ import {
   Text,
   View,
 } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { apiFetch } from '@/lib/api'
+import { motion } from '@/constants/motion'
 import { theme } from '@/constants/theme'
+import { apiFetch } from '@/lib/api'
+import { useResponsive } from '@/hooks/use-responsive'
 
 type TipRow = {
   id: string
@@ -29,6 +32,7 @@ export default function CommunityScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const r = useResponsive()
 
   const load = useCallback(async () => {
     setError(null)
@@ -52,6 +56,8 @@ export default function CommunityScreen() {
     setRefreshing(false)
   }
 
+  const hPad = r.scaleSpace(16)
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -61,25 +67,39 @@ export default function CommunityScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Text style={styles.heading}>Community tips</Text>
-      <Text style={styles.sub}>Approved tips via Bearer-authenticated API</Text>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+      <Text style={[styles.heading, { fontSize: r.scaleFont(22), paddingHorizontal: hPad }]}>
+        Community tips
+      </Text>
+      <Text style={[styles.sub, { fontSize: r.scaleFont(13), paddingHorizontal: hPad }]}>
+        Approved tips via Bearer-authenticated API
+      </Text>
+      {error ? (
+        <Text style={[styles.error, { fontSize: r.scaleFont(14), paddingHorizontal: hPad }]}>{error}</Text>
+      ) : null}
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
-          <Text style={styles.empty}>No tips yet (check EXPO_PUBLIC_API_URL and sign-in).</Text>
+          <Text style={[styles.empty, { fontSize: r.scaleFont(14), padding: r.scaleSpace(24) }]}>
+            No tips yet (check EXPO_PUBLIC_API_URL and sign-in).
+          </Text>
         }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.meta}>
-              {item.author_name ?? 'Creator'} · {new Date(item.created_at).toLocaleDateString()}
-            </Text>
-            <Text style={styles.body}>{item.body}</Text>
-          </View>
+        renderItem={({ item, index }) => (
+          <Animated.View
+            entering={FadeInDown.delay(Math.min(index * 40, 320)).duration(motion.duration)}
+          >
+            <View style={[styles.card, { marginHorizontal: hPad, marginBottom: r.scaleSpace(12), padding: r.scaleSpace(14) }]}>
+              <Text style={[styles.cardTitle, { fontSize: r.scaleFont(17) }]}>{item.title}</Text>
+              <Text style={[styles.meta, { fontSize: r.scaleFont(12) }]}>
+                {item.author_name ?? 'Creator'} · {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+              <Text style={[styles.body, { fontSize: r.scaleFont(15), lineHeight: r.scaleFont(22) }]}>
+                {item.body}
+              </Text>
+            </View>
+          </Animated.View>
         )}
       />
     </SafeAreaView>
@@ -99,52 +119,38 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bg,
   },
   heading: {
-    fontSize: 22,
     fontWeight: '700',
     color: theme.text,
-    paddingHorizontal: 16,
     marginBottom: 4,
   },
   sub: {
-    fontSize: 13,
     color: theme.textMuted,
-    paddingHorizontal: 16,
     marginBottom: 12,
   },
   error: {
     color: theme.danger,
-    paddingHorizontal: 16,
     marginBottom: 8,
   },
   empty: {
     color: theme.textDim,
     textAlign: 'center',
-    padding: 24,
-    fontSize: 14,
   },
   card: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 14,
     borderRadius: 12,
     backgroundColor: theme.surface,
     borderWidth: 1,
     borderColor: theme.border,
   },
   cardTitle: {
-    fontSize: 17,
     fontWeight: '600',
     color: theme.text,
     marginBottom: 4,
   },
   meta: {
-    fontSize: 12,
     color: theme.textDim,
     marginBottom: 8,
   },
   body: {
-    fontSize: 15,
-    lineHeight: 22,
     color: theme.textMuted,
   },
 })

@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -19,7 +20,7 @@ const contentIdeasSchema = z.object({
   suggestions: z.array(z.string()).describe('Additional tips'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { niche, platform, currentTrends } = await req.json()
 
   const systemPrompt = `You are a content strategist for adult content creators on platforms like ${platform || 'OnlyFans'}.
@@ -53,7 +54,7 @@ Include a mix of content types and engagement levels.`,
 
   // Count AI credit for this content ideas run
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

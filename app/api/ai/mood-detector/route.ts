@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -17,7 +18,7 @@ const moodSchema = z.object({
   upsellOpportunity: z.number().min(0).max(100).describe('Likelihood of successful upsell'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { message } = await req.json()
 
   const systemPrompt = `You are an expert at analyzing fan messages for content creators on adult platforms.
@@ -50,7 +51,7 @@ Provide mood analysis, buying signals, and suggested responses.`,
 
   // Count AI credit for this mood analysis
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

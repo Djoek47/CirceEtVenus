@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import {
   type MimicProfileV1,
   parseMimicProfile,
@@ -90,8 +90,8 @@ function sanitizeBody(body: Record<string, unknown>): MimicProfileV1 {
   }
 }
 
-export async function GET() {
-  const supabase = await createClient()
+export async function GET(request: NextRequest) {
+  const supabase = await createRouteHandlerClient(request)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -110,7 +110,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

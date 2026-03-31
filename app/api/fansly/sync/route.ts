@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createFanslyAPI } from '@/lib/fansly-api'
 
 // POST: Sync Fansly data for a user
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {
@@ -126,9 +126,9 @@ export async function POST(request: NextRequest) {
 }
 
 // GET: Get Fansly sync status
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

@@ -8,8 +8,12 @@ import 'react-native-reanimated'
 
 import { useColorScheme } from '@/components/useColorScheme'
 import { AuthProvider } from '@/contexts/auth'
+import { creatixDeepLinks } from '@/lib/linking'
 
 export { ErrorBoundary } from 'expo-router'
+
+/** Deep link config for `creatix://` + dev URLs (mirrors drawer routes). */
+export const linking = creatixDeepLinks
 
 SplashScreen.preventAutoHideAsync()
 

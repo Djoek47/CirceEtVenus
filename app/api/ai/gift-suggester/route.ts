@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -17,7 +18,7 @@ const giftSchema = z.object({
   retentionStrategy: z.string().describe('Long-term retention strategy for this fan'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { fanInfo, budget } = await req.json()
 
   const systemPrompt = `You are an expert at fan relationship management for content creators.
@@ -52,7 +53,7 @@ Provide personalized suggestions that will strengthen the relationship.`,
 
   // Count AI credit for this gift strategy run
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

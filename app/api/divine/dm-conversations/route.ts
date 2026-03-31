@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { loadDivineDmConversations } from '@/lib/divine/divine-dm-conversations'
 
 /** Short-lived cache to reduce OnlyFans API churn (per user + query). */
@@ -14,9 +14,9 @@ const DM_CONV_CACHE_TTL_MS = 50_000
  * - limit: max conversations (default 30, max 50)
  * - query: optional substring to filter by username or name (case-insensitive)
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const {
       data: { user },
     } = await supabase.auth.getUser()

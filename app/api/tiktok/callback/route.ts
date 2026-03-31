@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { getAppUrl } from '@/lib/site-url'
 
 const TIKTOK_CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings?error=tiktok_invalid', request.url))
     }
 
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

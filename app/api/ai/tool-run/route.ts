@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateText } from 'ai'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { getToolMeta } from '@/lib/ai-tools-data'
 
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

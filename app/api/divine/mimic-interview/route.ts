@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateText } from 'ai'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import {
   type MimicProfileV1,
   parseMimicProfile,
@@ -37,7 +37,7 @@ function summarizeForPrompt(p: MimicProfileV1): string {
  * POST — LLM merges interview answers / chat into a MimicProfileV1 patch (client persists via PATCH mimic-profile).
  */
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

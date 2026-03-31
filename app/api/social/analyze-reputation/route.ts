@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { computeReputationScore } from '@/lib/reputation/score'
@@ -7,7 +7,7 @@ import { computeReputationScore } from '@/lib/reputation/score'
 // POST: Analyze reputation using AI web search
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

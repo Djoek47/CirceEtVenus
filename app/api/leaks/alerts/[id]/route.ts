@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import type { LeakDistributionIntent, LeakUserCaseStatus } from '@/lib/types'
 
 const USER_CASE_STATUSES: LeakUserCaseStatus[] = [
@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: 'Invalid alert id' }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

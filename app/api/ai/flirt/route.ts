@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { streamText, convertToModelMessages, UIMessage } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 60
 
@@ -38,7 +39,7 @@ Style requirements:
 - Match the emotional temperature of the fan’s last message (shy, bold, needy, playful, etc.) and dial it up or down according to explicitnessLevel.
 `
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
     const messages = (body.messages ?? (body.message != null ? [body.message] : [])) as UIMessage[]
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
     const level = Math.min(3, Math.max(1, Number.isFinite(Number(explicitnessLevel)) ? Number(explicitnessLevel) : 2))
     const keywords = String(inspirationKeywords || '').trim()
 
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const { data: { user } } = await supabase.auth.getUser()
 
     let identityLine = ''

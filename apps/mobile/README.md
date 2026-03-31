@@ -1,31 +1,39 @@
-# Creatix Mobile (`apps/mobile`)
+# Circe et Venus — Expo (`apps/mobile`)
 
-Expo (React Native) app in the **same repo** as the Next.js backend. Uses the **same Supabase project** and **`/api/*` routes** with **`Authorization: Bearer`** (see `lib/supabase/route-handler.ts` at the repo root).
+Native app in the **same repo** as the Next.js API. Uses the same **Supabase** project and **`/api/*`** with **`Authorization: Bearer`** (see root `lib/supabase/route-handler.ts`).
 
 ## Setup
 
 ```bash
 cd apps/mobile
 cp .env.example .env
-# Fill EXPO_PUBLIC_* — mirror NEXT_PUBLIC_* from the web app’s .env.local
+# Set EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, EXPO_PUBLIC_API_URL (HTTPS origin of the web app)
 npm install
 npm start
 ```
 
-From the **repository root**, after installing `apps/mobile` deps: `npm run mobile`.
+From the **monorepo root**: `npm run mobile` (if defined in root `package.json`).
 
-## Branching
+## Production build (EAS)
 
-Ship Expo work on a dedicated branch (e.g. `feat/expo-native`) until the MVP is stable; merge when ready.
+- Config: [`app.config.ts`](./app.config.ts) — display name, `slug`, `version`, iOS `bundleIdentifier` / `buildNumber`, Android `package` / `versionCode`, dark splash (`#0a0a0a`).
+- Profiles: [`eas.json`](./eas.json) — `development` (dev client), `preview` (internal), `production` (`autoIncrement` for store builds).
+- Link a project: `npx eas-cli login` then `eas init` (adds `extra.eas.projectId` — optional until you ship).
 
-## MVP slice (Phase 2b scope)
+```bash
+npx eas-cli build --profile production --platform all
+```
 
-Per [`docs/mobile-app.md`](../../docs/mobile-app.md): **only** one or two flows at first — not full dashboard parity.
+## Dual-repo workflow
 
-- Email/password auth (PKCE + SecureStore session storage)
-- Home shell + **Community tips** (`GET /api/community/tips`) as the first API-backed screen
-- Shared contract: [`docs/API_SURFACE.md`](../../docs/API_SURFACE.md); add types in `packages/shared` later if needed
+If you also maintain a **standalone** clone (e.g. `../creatix-mobile`), push both from the web repo with [`../../scripts/push-all.sh`](../../scripts/push-all.sh). See [`docs/MOBILE_APP_REPO.md`](../../docs/MOBILE_APP_REPO.md).
 
-## Expo Go vs EAS
+## Features (high level)
 
-**Expo Go** is fine for standard Expo modules. Use **EAS Dev Client** when you need custom native code.
+- **Responsive UI:** [`hooks/use-responsive.ts`](./hooks/use-responsive.ts) scales type/spacing from window width; **Reanimated** entry animations on dashboard, community, divine shell.
+- **Motion tokens:** [`constants/motion.ts`](./constants/motion.ts).
+- **Media:** [`expo-image-picker`](./hooks/use-image-pick.ts) — demo in **Settings → Media**; permissions declared in `app.config.ts` + plugin.
+
+## Contract
+
+[`docs/API_SURFACE.md`](../../docs/API_SURFACE.md)

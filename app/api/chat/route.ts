@@ -1,6 +1,6 @@
 import { streamText, convertToModelMessages, UIMessage } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 60
 
@@ -18,7 +18,7 @@ Important behavioral rules:
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

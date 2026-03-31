@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { streamText, convertToModelMessages, UIMessage } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 60
 
@@ -28,7 +29,7 @@ When analyzing fan data, think like an enchantress - what "spell" (strategy) wil
 
 Always provide actionable, data-driven advice while maintaining your mystical persona. Reference Greek mythology and magic subtly in your responses.`
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
     const messages = (body.messages ?? (body.message != null ? [body.message] : [])) as UIMessage[]
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
     })
 
     try {
-      const supabase = await createClient()
+      const supabase = await createRouteHandlerClient(req)
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: subscription } = await supabase

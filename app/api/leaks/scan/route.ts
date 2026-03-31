@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { runLeakScan } from '@/lib/leaks/run-scan'
 
 type ScanBody = {
@@ -18,7 +18,7 @@ type ScanBody = {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

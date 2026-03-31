@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createHmac, randomBytes } from 'crypto'
 
 const PREFIX = 'cev_live_sk_'
@@ -19,8 +19,8 @@ function generateKey(): { fullKey: string; prefix: string; hash: string } {
   return { fullKey, prefix, hash }
 }
 
-export async function GET() {
-  const supabase = await createClient()
+export async function GET(request: NextRequest) {
+  const supabase = await createRouteHandlerClient(request)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -39,7 +39,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

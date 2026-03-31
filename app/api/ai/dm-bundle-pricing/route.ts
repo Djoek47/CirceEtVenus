@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 45
 
@@ -7,8 +8,8 @@ export const maxDuration = 45
  * Server-side DM/PPV bundle pricing + copy hints for Divine Manager.
  * JSON body: goal, fan_context?, content_summary?, pricing_style?, platform?, current_price?
  */
-export async function POST(req: Request) {
-  const supabase = await createClient()
+export async function POST(req: NextRequest) {
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

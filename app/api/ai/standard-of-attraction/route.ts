@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateObject } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { callGrok, callGrokVision } from '@/lib/ai/grok-tools'
 
 export const maxDuration = 60
@@ -42,7 +42,7 @@ function parseGrokAttractionJson(raw: string): AttractionResult {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

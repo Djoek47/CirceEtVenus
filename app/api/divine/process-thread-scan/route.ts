@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { queueThreadScanBackgroundJob } from '@/lib/divine/thread-scan-async'
 
 export const maxDuration = 300
@@ -10,7 +10,7 @@ export const maxDuration = 300
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createFanslyAPI } from '@/lib/fansly-api'
 
 // POST: Connect Fansly account with username/password
 // Handles initial connection and 2FA verification
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

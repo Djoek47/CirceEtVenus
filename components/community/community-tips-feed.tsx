@@ -96,7 +96,7 @@ export function CommunityTipsFeed() {
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <Lightbulb className="h-8 w-8 text-amber-500" />
-          <h1 className="text-2xl font-semibold tracking-tight">Community tips</h1>
+          <h2 className="text-2xl font-semibold tracking-tight">Community tips</h2>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Share how you use Creatix—shortcuts, workflows, cool ideas, or things that clicked for you. Other creators see

@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -39,7 +40,7 @@ const revenueOptimizationSchema = z.object({
   })),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { creatorStats, contentHistory, fanDemographics, currentPricing } = await req.json()
 
   const systemPrompt = `You are a revenue optimization AI for adult content creators on OnlyFans, MYM, and Fansly.
@@ -98,7 +99,7 @@ Generate comprehensive revenue optimization recommendations.`,
 
   // Count AI credit for this revenue optimization analysis
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

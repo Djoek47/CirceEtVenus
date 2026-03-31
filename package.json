@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "mobile": "npm run start --prefix apps/mobile"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.66",

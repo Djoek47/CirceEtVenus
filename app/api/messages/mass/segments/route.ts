@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateText } from 'ai'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 60
 
@@ -54,7 +54,7 @@ export type MassSegmentSuggestion = {
  * POST — AI-suggested mass-message audience segments from CRM fans (classifications, tiers, spend).
  */
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

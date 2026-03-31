@@ -14,6 +14,7 @@ export const creatixDeepLinks = {
         screens: {
           index: 'dashboard',
           community: 'community',
+          guide: 'guide',
           messages: 'messages',
           'ai-studio': {
             path: 'ai-studio',

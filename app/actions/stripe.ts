@@ -1,6 +1,6 @@
 'use server'
 
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import { PRODUCTS } from '@/lib/products'
 import { createClient } from '@/lib/supabase/server'
 
@@ -58,6 +58,7 @@ async function findOrCreateStripeCustomer(params: { userId: string; email: strin
   if (existing?.stripe_customer_id) return existing.stripe_customer_id
 
   // Fall back to lookup by email, else create.
+  const stripe = getStripe()
   const customers = await stripe.customers.list({ email: params.email, limit: 1 })
   const customerId =
     customers.data[0]?.id ??
@@ -85,6 +86,7 @@ export async function startCheckoutSession(productId: string) {
 
   const customerId = await findOrCreateStripeCustomer({ userId: user.id, email: user.email })
 
+  const stripe = getStripe()
   const sessionConfig: Parameters<typeof stripe.checkout.sessions.create>[0] = {
     ui_mode: 'embedded',
     redirect_on_completion: 'never',
@@ -140,6 +142,7 @@ export async function createCustomerPortalSession() {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'https://circe-venus.vercel.app'
 
+  const stripe = getStripe()
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
     return_url: `${appUrl}/dashboard/settings?tab=billing`,
@@ -177,6 +180,7 @@ export async function createCustomerPortalSessionForFlow(flow: 'payment_method_u
         ? (subscriptionId ? { type: 'subscription_cancel' as const, subscription: subscriptionId } : undefined)
         : (subscriptionId ? { type: 'subscription_update' as const, subscription: subscriptionId } : undefined)
 
+  const stripe = getStripe()
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
     return_url,
@@ -223,11 +227,12 @@ export async function getSubscriptionStatus() {
       }
 
       if (customerId) {
+        const stripe = getStripe()
         const subs = await stripe.subscriptions.list({
           customer: customerId,
           status: 'all',
-    limit: 1,
-  })
+          limit: 1,
+        })
 
         const sub = subs.data[0]
         if (sub) {

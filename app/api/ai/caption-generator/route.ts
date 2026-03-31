@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -18,7 +19,7 @@ const captionSchema = z.object({
   contentTips: z.array(z.string()).describe('Tips to maximize engagement'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { contentType, contentDescription, platform, creatorNiche, creatorTone } = await req.json()
 
   const systemPrompt = `You are a social media expert specializing in adult content creator platforms (OnlyFans, MYM, Fansly).
@@ -58,7 +59,7 @@ Generate 3 caption variations, hashtags, teaser message, and PPV sales copy.`,
 
   // Best-effort AI credit accounting (no hard failure if this breaks)
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

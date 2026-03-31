@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import type { ReputationBriefingPayload } from '@/lib/reputation/briefing'
 import { runReputationBriefingCore } from '@/lib/reputation/briefing-server'
 
@@ -12,7 +12,7 @@ function isProPlan(planId: string | null | undefined): boolean {
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as { handles?: string[] }
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

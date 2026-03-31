@@ -1,13 +1,13 @@
 import { generateText } from 'ai'
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 60
 
 const PRO_PLANS = ['venus-pro', 'circe-elite', 'divine-duo']
 
-export async function POST(req: Request) {
-  const supabase = await createClient()
+export async function POST(req: NextRequest) {
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

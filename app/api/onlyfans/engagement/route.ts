@@ -4,7 +4,7 @@
  * Query: type=direct|mass, limit, startDate, endDate, period, messageId (for buyers).
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 /** OnlyFans engagement APIs often return 403 for non–performer / restricted accounts. */
@@ -21,7 +21,7 @@ function isEngagementAccessForbidden(message: string): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const {
       data: { user },
     } = await supabase.auth.getUser()

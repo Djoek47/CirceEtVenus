@@ -4,6 +4,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v
 
 **GitHub:** [github.com/Djoek47/CirceEtVenus](https://github.com/Djoek47/CirceEtVenus) (product: Circe et Venus / Creatix).
 
+**Mobile (Expo) + web:** from this repo, [`scripts/push-all.sh`](scripts/push-all.sh) pushes **this** repo and a sibling **`../creatix-mobile`** clone (override with `MOBILE_DIR`). See [`docs/MOBILE_APP_REPO.md`](docs/MOBILE_APP_REPO.md).
+
 To push this codebase to that repo (empty or new default branch), use:
 
 ```bash

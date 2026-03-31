@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import crypto from 'crypto'
 import { getAppUrl } from '@/lib/site-url'
 
@@ -7,9 +7,9 @@ import { getAppUrl } from '@/lib/site-url'
 const INSTAGRAM_CLIENT_ID = process.env.INSTAGRAM_CLIENT_ID
 const INSTAGRAM_REDIRECT_URI = `${getAppUrl()}/api/instagram/callback`
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

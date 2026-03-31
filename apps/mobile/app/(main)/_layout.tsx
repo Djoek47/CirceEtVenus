@@ -105,6 +105,10 @@ export default function MainDrawerLayout() {
           options={{ title: 'Community', drawerLabel: 'Community', drawerIcon: drawerIcon('lightbulb-o') }}
         />
         <Drawer.Screen
+          name="guide"
+          options={{ title: 'Guide', drawerLabel: 'Guide', drawerIcon: drawerIcon('book') }}
+        />
+        <Drawer.Screen
           name="settings"
           options={{ title: 'Settings', drawerLabel: 'Settings', drawerIcon: drawerIcon('cog') }}
         />

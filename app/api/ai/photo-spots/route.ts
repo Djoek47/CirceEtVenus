@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
@@ -19,7 +20,7 @@ const photoSpotSchema = z.object({
   weatherTip: z.string().describe('Weather-related tip for today'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const { lat, lng, city, country, userRequest, contentType, zodiacSign, moonPhase } = await req.json()
 

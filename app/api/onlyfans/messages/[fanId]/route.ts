@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 import { createOnlyFansAPI, isOnlyFansRateLimitError } from '@/lib/onlyfans-api'
 
 // GET - Fetch messages with a specific fan
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ fanId: string }> }
 ) {
   try {
     const { fanId } = await params
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
@@ -64,12 +64,12 @@ export async function GET(
 
 // POST - Send a message to a fan
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ fanId: string }> }
 ) {
   try {
     const { fanId } = await params
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

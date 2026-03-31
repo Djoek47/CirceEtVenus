@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
@@ -19,7 +20,7 @@ const fanPredictionSchema = z.object({
   insights: z.array(z.string()).describe('Key insights about this fan'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { fanData } = await req.json()
 
   const systemPrompt = `You are an AI analyst for a creator management platform. Analyze fan data to predict their value and recommend engagement strategies.

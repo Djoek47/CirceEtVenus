@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { requireOnlyFansApi, jsonOnlyFansError } from '@/lib/onlyfans-api-route'
 
-export async function POST(_request: Request, { params }: { params: Promise<{ chatId: string }> }) {
-  const supabase = await createClient()
+export async function POST(_request: NextRequest, { params }: { params: Promise<{ chatId: string }> }) {
+  const supabase = await createRouteHandlerClient(request)
   const gate = await requireOnlyFansApi(supabase)
   if (!gate.ok) return gate.response
   const { chatId } = await params

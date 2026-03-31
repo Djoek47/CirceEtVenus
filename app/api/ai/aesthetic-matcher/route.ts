@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -19,7 +20,7 @@ const aestheticSchema = z.object({
   editingTips: z.array(z.string()).describe('Photo/video editing tips'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { currentAesthetic, platform } = await req.json()
 
   const systemPrompt = `You are a visual aesthetics expert for content creators on adult platforms.
@@ -54,7 +55,7 @@ Provide trending style recommendations and practical improvement tips.`,
 
   // Count AI credit for this aesthetic analysis
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

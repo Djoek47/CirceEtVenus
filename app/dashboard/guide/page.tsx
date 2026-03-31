@@ -43,6 +43,7 @@ export default function GuidePage() {
           <a href="#onlyfans" className="text-primary hover:underline">OnlyFans (detailed)</a>
           <a href="#dashboard" className="text-primary hover:underline">Dashboard</a>
           <a href="#ai-guides" className="text-primary hover:underline">AI Guides (Circe & Venus)</a>
+          <a href="#circe-daily-tips" className="text-primary hover:underline">Daily tips (Circe)</a>
           <a href="#messages-fans" className="text-primary hover:underline">Messages &amp; Fans</a>
           <a href="#content" className="text-primary hover:underline">Content</a>
           <a href="#protection" className="text-primary hover:underline">Protection</a>
@@ -184,6 +185,33 @@ export default function GuidePage() {
             <p>
               <Link href="/dashboard/ai-studio" className="inline-flex items-center gap-1 text-primary underline hover:no-underline">AI Studio</Link> is your media vault (describe content for Divine), safe photo touch-ups, and the full AI tools library (captions, churn, growth, and more).
             </p>
+            <div
+              id="circe-daily-tips"
+              className="scroll-mt-24 rounded-lg border border-circe/35 bg-circe/5 p-4"
+            >
+              <h4 className="mb-2 flex items-center gap-2 font-medium text-circe-light">
+                <Moon className="h-4 w-4" />
+                Daily AI tips from Circe
+              </h4>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Curated, rotating tips for using Circe et Venus well — sync habits, vault notes, mass segments, Protection,
+                and more. Updated with a new &quot;tip of the day&quot; on the calendar; the full list lives on one page.
+              </p>
+              <Link
+                href="/dashboard/community/circe-daily"
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary underline hover:no-underline"
+              >
+                Open Daily AI tips from Circe (full page)
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Also linked from{' '}
+                <Link href="/dashboard/community" className="text-primary underline hover:no-underline">
+                  Community
+                </Link>{' '}
+                at the top of the screen.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </section>

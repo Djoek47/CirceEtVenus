@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 // DMCA claim template data
 interface DMCAClaimData {
@@ -29,7 +29,7 @@ interface DMCAClaimData {
 // POST: Generate a pre-filled DMCA claim
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {
@@ -131,9 +131,9 @@ export async function POST(request: NextRequest) {
 }
 
 // GET: Get user's DMCA claims history
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

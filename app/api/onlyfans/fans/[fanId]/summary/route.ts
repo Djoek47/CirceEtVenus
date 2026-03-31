@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { requireOnlyFansApi, jsonOnlyFansError } from '@/lib/onlyfans-api-route'
 
 function isSummaryReady(raw: unknown): boolean {
@@ -14,10 +14,10 @@ function isSummaryReady(raw: unknown): boolean {
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ fanId: string }> },
 ) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(request)
   const gate = await requireOnlyFansApi(supabase)
   if (!gate.ok) return gate.response
   const { fanId } = await params
@@ -74,10 +74,10 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ fanId: string }> },
 ) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(request)
   const gate = await requireOnlyFansApi(supabase)
   if (!gate.ok) return gate.response
   const { fanId } = await params

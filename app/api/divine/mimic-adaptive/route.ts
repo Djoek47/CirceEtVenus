@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateText } from 'ai'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import {
   type MimicProfileV1,
   parseMimicProfile,
@@ -26,7 +26,7 @@ function summarizeProfile(p: MimicProfileV1): string {
  * POST { draftProfile?: MimicProfileV1 } — generates 4–6 short adaptive follow-up questions from current mimic profile (DB + optional draft).
  */
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

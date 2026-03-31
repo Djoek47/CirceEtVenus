@@ -21,3 +21,10 @@ dist/
 # IDE
 .idea/
 *.swp
+
+# Capacitor / native shells (generated at repo root after `npx cap add ios android`)
+# Remove these lines if you intentionally version native projects.
+/ios/
+/android/
+.capacitor/
+

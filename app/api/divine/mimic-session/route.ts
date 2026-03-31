@@ -1,8 +1,14 @@
+/**
+ * Persisted Divine mimic interview session (profile + answers JSON) for the current user.
+ *
+ * **Consumers:** web dashboard, PWA, Capacitor WebView, native Expo.
+ * **Auth:** `createRouteHandlerClient` — cookies (web) or `Authorization: Bearer` (native); 401 if missing.
+ */
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
-export async function GET() {
-  const supabase = await createClient()
+export async function GET(request: NextRequest) {
+  const supabase = await createRouteHandlerClient(request)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -25,7 +31,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

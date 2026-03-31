@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import sharp from 'sharp'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 60
 
@@ -50,8 +50,8 @@ function parseDataUrl(dataUrl: string): { buffer: Buffer; mime: string } | { err
   }
 }
 
-export async function POST(req: Request) {
-  const supabase = await createClient()
+export async function POST(req: NextRequest) {
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

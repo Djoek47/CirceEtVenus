@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { isDivineFullAccess } from '@/lib/divine/divine-full-access'
 import { runToolCall } from '@/lib/divine/manager-chat-tools'
 
@@ -17,7 +17,7 @@ export const maxDuration = 120
  */
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

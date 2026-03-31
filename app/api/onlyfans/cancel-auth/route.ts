@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 // POST: Cancel OnlyFans auth for current user. Disconnect any OnlyFans API account that
 // belongs to this user except the one we have linked in our DB (so closing the modal
 // without completing the flow cleans up the API dashboard).
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

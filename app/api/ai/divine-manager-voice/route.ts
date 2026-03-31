@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateTextWithOpenAI } from '@/lib/divine-openai'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { getDivineVoice } from '@/lib/divine-manager'
 
 type VoiceMode = 'intro' | 'ongoing' | 'what_next'
@@ -9,7 +9,7 @@ export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

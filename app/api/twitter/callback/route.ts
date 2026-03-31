@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { getAppUrl } from '@/lib/site-url'
 
 const TWITTER_CLIENT_ID = process.env.TWITTER_CLIENT_ID
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings?error=twitter_invalid', request.url))
     }
 
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

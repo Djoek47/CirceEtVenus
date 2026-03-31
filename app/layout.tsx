@@ -25,6 +25,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(getAppUrl()),
+  applicationName: 'Creatix',
   title: 'Circe et Venus - Divine Creator Management',
   description:
     'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction. Manage fans, content, analytics with divine precision.',
@@ -57,16 +58,32 @@ export const metadata: Metadata = {
     description:
       'Mythological AI-powered platform for content creators. Circe for retention & protection, Venus for growth & seduction.',
   },
+  manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/icon.png',
-    apple: '/icon.png',
+    icon: [
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Creatix',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: {
+    telephone: false,
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#000000',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fafafa' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
+  ],
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({

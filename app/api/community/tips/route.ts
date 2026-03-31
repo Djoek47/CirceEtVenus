@@ -1,11 +1,19 @@
+/**
+ * Community tips feed and submissions (approved tips + current user's drafts).
+ *
+ * **Consumers:** web dashboard, PWA, Capacitor WebView, native Expo.
+ * **Auth:** `createRouteHandlerClient` — cookies (web) or `Authorization: Bearer` (native); 401 if missing.
+ */
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 
 const MAX_TITLE = 200
 const MAX_BODY = 8000
 
-export async function GET() {
-  const supabase = await createClient()
+export async function GET(request: NextRequest) {
+  const supabase = await createRouteHandlerClient(request)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -49,10 +57,7 @@ async function enrichWithProfiles(
   }))
 }
 
-async function loadMine(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-) {
+async function loadMine(supabase: SupabaseClient, userId: string) {
   const { data, error } = await supabase
     .from('community_tips')
     .select('id, title, body, status, created_at')
@@ -65,7 +70,7 @@ async function loadMine(
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(req)
   const {
     data: { user },
   } = await supabase.auth.getUser()

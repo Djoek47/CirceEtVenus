@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 
 export const maxDuration = 30
 
@@ -11,7 +12,7 @@ const fantasySchema = z.object({
   messageIdeas: z.array(z.string()).describe('Short message teasers to send to fans'),
 })
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const { scenario, tone, platform } = await req.json()
 
   const systemPrompt = `You are a creative writer specializing in romantic and fantasy content for adult content creators on platforms like ${platform || 'OnlyFans'}.
@@ -43,7 +44,7 @@ Generate an engaging story opening that can be used in fan interactions, along w
 
   // Count AI credit for this fantasy generation
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(req)
     const {
       data: { user },
     } = await supabase.auth.getUser()

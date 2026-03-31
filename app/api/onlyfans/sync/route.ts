@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 // POST: Manually trigger sync of OnlyFans data
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     // If the upstream OnlyFans session is expired, auto-disconnect and tell the user to reconnect
     if (message.includes('ONLYFANS_SESSION_EXPIRED')) {
       try {
-        const supabase = await createClient()
+        const supabase = await createRouteHandlerClient(request)
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
           await supabase
@@ -236,9 +236,9 @@ export async function POST(request: NextRequest) {
 }
 
 // GET: Get sync status
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

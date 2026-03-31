@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 import { assertPlatformAccountAvailable } from '@/lib/platform-connections'
 
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No account ID provided' }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     // Always use the current session user so connection and analytics are saved to the logged-in account
     const userId = user?.id ?? clientReferenceId
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
 
 async function syncOnlyFansData(userId: string, accountId: string) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const api = createOnlyFansAPI(accountId)
 
     const [stats, earningsResult, fansResult] = await Promise.all([

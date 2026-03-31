@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { requireOnlyFansApi, jsonOnlyFansError } from '@/lib/onlyfans-api-route'
 
 /** GET: query months (optional), account (optional; defaults to connected OF account id). */
 export async function GET(request: NextRequest) {
-  const supabase = await createClient()
+  const supabase = await createRouteHandlerClient(request)
   const gate = await requireOnlyFansApi(supabase)
   if (!gate.ok) return gate.response
   try {

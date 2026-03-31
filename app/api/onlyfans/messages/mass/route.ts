@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
 
 // POST - Send a mass message
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

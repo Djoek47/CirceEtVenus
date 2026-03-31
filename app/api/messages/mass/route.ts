@@ -1,5 +1,11 @@
+/**
+ * Mass messaging across platforms (Fansly / OnlyFans).
+ *
+ * **Consumers:** web dashboard, PWA, Capacitor WebView, future native clients — call this route with JSON; do not depend on RSC HTML.
+ * **Auth:** `createRouteHandlerClient` — cookies (web) or `Authorization: Bearer` (native); 401 if missing.
+ */
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createFanslyAPI } from '@/lib/fansly-api'
 import { validateChatMediaIdsForSend } from '@/lib/onlyfans-chat-media'
 import { createOnlyFansAPI } from '@/lib/onlyfans-api'
@@ -18,7 +24,7 @@ interface MassMessageRequest {
 // POST: Send mass message to all subscribers across platforms
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createRouteHandlerClient(request)
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {

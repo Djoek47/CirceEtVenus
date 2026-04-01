@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { theme } from '@/constants/theme'
 import { formatApiScreenError } from '@/lib/api-errors'
 import { apiFetch } from '@/lib/api'
+import { openUrlSafe } from '@/lib/open-url'
 import { supabase } from '@/lib/supabase'
 
 type Conv = {
@@ -77,6 +78,8 @@ export default function MessagesListScreen() {
     )
   }
 
+  const massDmUrl = `${(process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')}/dashboard/messages/mass`
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Text style={styles.heading}>Messages</Text>
@@ -109,6 +112,19 @@ export default function MessagesListScreen() {
             ) : null}
           </Pressable>
         )}
+        ListFooterComponent={
+          <View style={styles.footer}>
+            <Text style={styles.footerHint}>
+              Mass DM, AI segments, and advanced composer live on the web dashboard.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.footerBtn, pressed && styles.cardPressed]}
+              onPress={() => void openUrlSafe(massDmUrl)}
+            >
+              <Text style={styles.footerBtnText}>Open Mass DM (web)</Text>
+            </Pressable>
+          </View>
+        }
       />
     </SafeAreaView>
   )
@@ -134,4 +150,16 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '600', color: theme.text },
   body: { fontSize: 14, color: theme.textMuted, marginTop: 6 },
   unread: { fontSize: 12, color: theme.gold, marginTop: 6 },
+  footer: { paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 32 },
+  footerHint: { fontSize: 12, color: theme.textDim, marginBottom: 10, lineHeight: 18 },
+  footerBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.gold,
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+  },
+  footerBtnText: { color: theme.gold, fontWeight: '700', fontSize: 14 },
 })

@@ -33,6 +33,7 @@ export const creatixDeepLinks = {
           },
           'divine-manager': 'divine',
           content: 'content',
+          calendar: 'calendar',
           social: 'social',
           'content-library': 'library',
           analytics: 'analytics',

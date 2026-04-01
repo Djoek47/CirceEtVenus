@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase'
+import Constants from 'expo-constants'
+import { Platform } from 'react-native'
 
 /**
  * Calls the Creatix Next.js API with `Authorization: Bearer <access_token>`.
@@ -6,6 +8,7 @@ import { supabase } from '@/lib/supabase'
  *
  * Env (set in **Expo app** build — `.env` / EAS secrets, not only Vercel):
  * - `EXPO_PUBLIC_API_URL` — same HTTPS origin as your deployed Next app (e.g. https://www.circeetvenus.com)
+ * - `EXPO_PUBLIC_API_PORT` (optional dev-only) — port for local API when running on a physical device (default: 3000)
  * - `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` — same Supabase project as the site
  */
 async function resolveAccessToken(): Promise<string | null> {
@@ -18,11 +21,25 @@ async function resolveAccessToken(): Promise<string | null> {
   return data.session.access_token
 }
 
+function resolveDevApiBase(): string | null {
+  if (!__DEV__ || Platform.OS === 'web') return null
+  const explicitPort = (process.env.EXPO_PUBLIC_API_PORT ?? '').trim()
+  const port = explicitPort || '3000'
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    (Constants as unknown as { manifest2?: { extra?: { expoGo?: { debuggerHost?: string } } } })
+      .manifest2?.extra?.expoGo?.debuggerHost
+  const host = hostUri?.split(':')[0]
+  if (!host) return null
+  return `http://${host}:${port}`
+}
+
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const base = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+  const configuredBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+  const base = configuredBase || resolveDevApiBase() || ''
   if (!base) {
     const msg =
-      'EXPO_PUBLIC_API_URL is not set. Add it to apps/mobile/.env (or EAS env) — the HTTPS origin of your Creatix deployment.'
+      'EXPO_PUBLIC_API_URL is not set. Add it to apps/mobile/.env (or EAS env) — the HTTPS origin of your Creatix deployment. In local native dev, the app can also auto-use your Expo LAN host.'
     if (__DEV__) console.error(msg)
     return Promise.reject(new Error(msg))
   }

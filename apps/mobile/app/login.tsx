@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +12,7 @@ import {
 import { Redirect, useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/auth'
 import { theme } from '@/constants/theme'
+import { BrandLogo } from '@/components/brand-logo'
 
 export default function LoginScreen() {
   const router = useRouter()
@@ -44,11 +44,7 @@ export default function LoginScreen() {
       style={styles.container}
     >
       <View style={styles.brandRow}>
-        <Image
-          source={require('@/assets/images/icon.png')}
-          style={styles.brandIcon}
-          accessibilityLabel="Circe et Venus"
-        />
+        <BrandLogo size={72} />
         <Text style={styles.title}>Circe et Venus</Text>
       </View>
       <Text style={styles.subtitle}>Sign in with the same account as the web app</Text>
@@ -99,12 +95,6 @@ const styles = StyleSheet.create({
   brandRow: {
     alignItems: 'center',
     marginBottom: 8,
-  },
-  brandIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    marginBottom: 12,
   },
   title: {
     fontSize: 22,

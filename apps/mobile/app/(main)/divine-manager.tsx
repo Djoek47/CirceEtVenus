@@ -19,6 +19,7 @@ import { formatApiScreenError } from '@/lib/api-errors'
 import { apiFetch } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { useResponsive } from '@/hooks/use-responsive'
+import { DivineVoiceVisual } from '@/components/divine-voice-visual'
 import { useDivineVoiceSession } from '@/hooks/use-divine-voice-session'
 
 type DivineSettings = {
@@ -53,6 +54,7 @@ export default function DivineManagerScreen() {
   const [chatLoading, setChatLoading] = useState(false)
   const [pendingChatActions, setPendingChatActions] = useState<PendingAction[]>([])
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [dmPreviewLoading, setDmPreviewLoading] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -159,6 +161,61 @@ export default function DivineManagerScreen() {
     [dismissVoicePending],
   )
 
+  const loadDmPreview = useCallback(async () => {
+    setDmPreviewLoading(true)
+    try {
+      const res = await apiFetch('/api/divine/dm-conversations?limit=15')
+      const data = (await res.json()) as {
+        conversations?: Array<{
+          fanId: string
+          username: string
+          name: string | null
+          unreadCount: number
+          lastMessage: string | null
+        }>
+        message?: string
+        error?: string
+      }
+      if (!res.ok) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: formatApiScreenError(res.status, data.error, undefined),
+          },
+        ])
+        return
+      }
+      if (data.message?.trim()) {
+        setChatMessages((prev) => [...prev, { role: 'assistant', content: data.message! }])
+        return
+      }
+      const rows = data.conversations ?? []
+      if (rows.length === 0) {
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'No DM conversations returned (connect OnlyFans in Settings).' },
+        ])
+        return
+      }
+      const lines = rows.map(
+        (c) =>
+          `@${c.username}${c.name ? ` (${c.name})` : ''} · id ${c.fanId} · unread ${c.unreadCount}${c.lastMessage ? ` · last: ${c.lastMessage.slice(0, 80)}` : ''}`,
+      )
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: `Recent OnlyFans DMs (${rows.length}):\n${lines.join('\n')}` },
+      ])
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Could not load DM list. Check connection and EXPO_PUBLIC_API_URL.' },
+      ])
+    } finally {
+      setDmPreviewLoading(false)
+    }
+  }, [])
+
   const pad = r.scaleSpace(16)
 
   if (loading) {
@@ -223,6 +280,29 @@ export default function DivineManagerScreen() {
               ) : null}
 
               <View style={[styles.card, { padding: r.scaleSpace(16), marginBottom: r.scaleSpace(16) }]}>
+                <Text style={[styles.cardTitle, { fontSize: r.scaleFont(15) }]}>DM tools</Text>
+                <Text style={[styles.muted, { fontSize: r.scaleFont(12), marginBottom: r.scaleSpace(10) }]}>
+                  Same API as web Divine — pull a fresh conversation list into the chat below.
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    { alignSelf: 'flex-start' },
+                    pressed && styles.pressed,
+                    dmPreviewLoading && styles.btnDisabled,
+                  ]}
+                  disabled={dmPreviewLoading}
+                  onPress={() => void loadDmPreview()}
+                >
+                  {dmPreviewLoading ? (
+                    <ActivityIndicator color={theme.text} size="small" />
+                  ) : (
+                    <Text style={styles.secondaryBtnText}>Load recent DM list</Text>
+                  )}
+                </Pressable>
+              </View>
+
+              <View style={[styles.card, { padding: r.scaleSpace(16), marginBottom: r.scaleSpace(16) }]}>
                 <Text style={[styles.cardTitle, { fontSize: r.scaleFont(15) }]}>Voice (Realtime)</Text>
                 {voice.error ? (
                   <Text style={[styles.err, { fontSize: r.scaleFont(13), marginBottom: 8 }]}>{voice.error}</Text>
@@ -258,9 +338,13 @@ export default function DivineManagerScreen() {
                     <Text style={styles.secondaryBtnText}>End</Text>
                   </Pressable>
                 </View>
+                {voice.voiceAvailable &&
+                (voice.status === 'connecting' || voice.status === 'connected') ? (
+                  <DivineVoiceVisual surface={voice.voiceSurfaceState} />
+                ) : null}
                 <Text style={[styles.muted, { fontSize: r.scaleFont(12), marginTop: 8 }]}>
                   Status: {voice.status}
-                  {voice.status === 'connected' ? ' · mic active' : ''}
+                  {voice.status === 'connected' ? ` · ${voice.voiceSurfaceState} · mic` : ''}
                 </Text>
               </View>
 

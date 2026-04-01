@@ -83,6 +83,10 @@ export default function MainDrawerLayout() {
           options={{ title: 'Content', drawerLabel: 'Content', drawerIcon: drawerIcon('calendar') }}
         />
         <Drawer.Screen
+          name="calendar"
+          options={{ title: 'Calendar', drawerLabel: 'Calendar', drawerIcon: drawerIcon('calendar-o') }}
+        />
+        <Drawer.Screen
           name="social"
           options={{ title: 'Social', drawerLabel: 'Social', drawerIcon: drawerIcon('share-alt') }}
         />

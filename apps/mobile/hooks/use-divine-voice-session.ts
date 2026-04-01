@@ -12,9 +12,13 @@ export type FocusedFan = { id?: string; username?: string | null; name?: string 
 
 type VoiceDisconnectReason = 'idle_timeout' | 'user_hangup' | 'end_call' | 'error'
 
+export type VoiceSurfaceState = 'idle' | 'working' | 'speaking'
+
 export type DivineVoiceSession = {
   voiceAvailable: boolean
   status: 'idle' | 'connecting' | 'connected' | 'error'
+  /** Idle = not in live session; working = tool in flight; speaking = connected, assistant/mic path. */
+  voiceSurfaceState: VoiceSurfaceState
   error: string | null
   pendingConfirmations: Array<{ type: string; intent_id: string; summary?: string }>
   startVoiceCall: (focusedFan?: FocusedFan | null) => Promise<void>
@@ -94,11 +98,13 @@ export function useDivineVoiceSession(): DivineVoiceSession {
   const [pendingConfirmations, setPendingConfirmations] = useState<
     DivineVoiceSession['pendingConfirmations']
   >([])
+  const [toolInFlight, setToolInFlight] = useState(false)
 
   const pcRef = useRef<PeerConn | null>(null)
   const streamRef = useRef<MediaStreamInstance | null>(null)
   const oaiDataChannelRef = useRef<DataChannelInstance | null>(null)
   const toolInFlightRef = useRef(false)
+  const toolCallDepthRef = useRef(0)
   const lastPendingConfirmationsRef = useRef<DivineVoiceSession['pendingConfirmations']>([])
   const focusedFanRef = useRef<FocusedFan | null>(null)
   const endCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -121,6 +127,8 @@ export function useDivineVoiceSession(): DivineVoiceSession {
       endCallTimeoutRef.current = null
     }
     toolInFlightRef.current = false
+    toolCallDepthRef.current = 0
+    setToolInFlight(false)
     lastPendingConfirmationsRef.current = []
     setPendingConfirmations([])
     const pc = pcRef.current
@@ -260,6 +268,8 @@ export function useDivineVoiceSession(): DivineVoiceSession {
                 return 'Call ended.'
               }
               toolInFlightRef.current = true
+              toolCallDepthRef.current += 1
+              setToolInFlight(true)
               const abort = new AbortController()
               const abortTimer = setTimeout(() => abort.abort(), VOICE_TOOL_FETCH_TIMEOUT_MS)
               try {
@@ -320,7 +330,10 @@ export function useDivineVoiceSession(): DivineVoiceSession {
                 return `Error: Tool request failed (${msg}). Tell the creator and suggest Divine text chat if it persists.`
               } finally {
                 clearTimeout(abortTimer)
-                toolInFlightRef.current = false
+                toolCallDepthRef.current = Math.max(0, toolCallDepthRef.current - 1)
+                const depth = toolCallDepthRef.current
+                toolInFlightRef.current = depth > 0
+                setToolInFlight(depth > 0)
               }
             }
 
@@ -479,9 +492,17 @@ export function useDivineVoiceSession(): DivineVoiceSession {
     }
   }, [endVoiceCall])
 
+  let voiceSurfaceState: VoiceSurfaceState = 'idle'
+  if (status === 'connected') {
+    voiceSurfaceState = toolInFlight ? 'working' : 'speaking'
+  } else if (status === 'connecting') {
+    voiceSurfaceState = 'idle'
+  }
+
   return {
     voiceAvailable: Platform.OS !== 'web' && !isExpoGo,
     status,
+    voiceSurfaceState,
     error,
     pendingConfirmations,
     startVoiceCall,

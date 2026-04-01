@@ -1,14 +1,16 @@
 'use client'
 
 import { useVoiceSession } from '@/components/divine/voice-session-context'
+import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { DivineWorkingLogo } from '@/components/divine/divine-working-logo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Mic, PhoneOff } from 'lucide-react'
+import { Crown, Mic, PhoneOff } from 'lucide-react'
 import { DivineTranscriptStack } from '@/components/divine/divine-transcript-card'
 
 export function VoiceControlPopup() {
   const voice = useVoiceSession()
+  const divine = useDivinePanel()
   if (!voice) return null
 
   const {
@@ -31,16 +33,26 @@ export function VoiceControlPopup() {
         : status === 'connected'
           ? 'Listening'
           : 'Error'
+  const toggleDivine = () => {
+    if (!divine) return
+    if (divine.panelOpen && !divine.panelCollapsed) {
+      divine.setPanelOpen(false)
+      divine.setPanelCollapsed(true)
+      return
+    }
+    divine.setPanelCollapsed(false)
+    divine.setPanelOpen(true)
+  }
 
   return (
     <>
     <DivineTranscriptStack />
     <div
       className={cn(
-        'fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-all',
+        'fixed bottom-6 right-6 z-40 flex items-center rounded-full border border-border bg-card shadow-lg transition-all overflow-hidden',
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 px-3 py-2">
         <div
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-full',
@@ -72,9 +84,9 @@ export function VoiceControlPopup() {
         ref={voiceVizRef}
         width={80}
         height={28}
-        className="hidden sm:block rounded-md bg-muted"
+        className="hidden sm:block rounded-md bg-muted mr-2"
       />
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 pr-2">
         {!isActive ? (
           <Button
             size="sm"
@@ -117,6 +129,19 @@ export function VoiceControlPopup() {
           {error}
         </span>
       )}
+      <button
+        type="button"
+        onClick={toggleDivine}
+        className={cn(
+          'ml-2 flex h-12 items-center justify-center gap-1.5 border-l border-gold/40 bg-gold px-3 text-[#1a1200] transition',
+          'hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-0',
+        )}
+        aria-label={divine?.panelOpen && !divine?.panelCollapsed ? 'Close Divine panel' : 'Open Divine panel'}
+        title={divine?.panelOpen && !divine?.panelCollapsed ? 'Close Divine panel' : 'Open Divine panel'}
+      >
+        <Crown className="h-5 w-5" />
+        <span className="hidden pr-0.5 text-xs font-semibold sm:inline">Divine</span>
+      </button>
     </div>
     </>
   )

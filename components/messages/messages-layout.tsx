@@ -8,8 +8,18 @@ import { ChatWindow } from './chat-window'
 import { MassMessageDialog } from './mass-message-dialog'
 import { MessageEngagementInsights } from './message-engagement-insights'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Loader2, ArrowLeft, BarChart3, MessageSquare, Megaphone } from 'lucide-react'
+import {
+  RefreshCw,
+  Loader2,
+  ArrowLeft,
+  BarChart3,
+  MessageSquare,
+  Megaphone,
+  PanelLeft,
+  PanelLeftClose,
+} from 'lucide-react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
+import { cn } from '@/lib/utils'
 
 type MessagesView = 'conversations' | 'insights'
 
@@ -50,6 +60,7 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
   const [view, setView] = useState<MessagesView>('conversations')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [showConversationPane, setShowConversationPane] = useState(true)
   const selectedRef = useRef<Conversation | null>(null)
   selectedRef.current = selectedConversation
   const [loading, setLoading] = useState(true)
@@ -300,6 +311,22 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
               <Button
                 variant="outline"
                 size="icon"
+                className="hidden h-10 w-10 md:inline-flex"
+                onClick={() => setShowConversationPane((v) => !v)}
+                aria-label={
+                  showConversationPane ? 'Hide conversations panel' : 'Show conversations panel'
+                }
+                title={showConversationPane ? 'Hide conversations panel' : 'Show conversations panel'}
+              >
+                {showConversationPane ? (
+                  <PanelLeftClose className="h-4 w-4" />
+                ) : (
+                  <PanelLeft className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
                 className="h-10 w-10"
                 onClick={() => loadConversations(true)}
                 disabled={refreshing}
@@ -326,18 +353,29 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
         <>
           {/* Desktop: side-by-side list + chat */}
           <div className="hidden md:flex flex-1 gap-4 min-h-0">
-            <ConversationList
-              conversations={conversations}
-              selectedKey={
-                selectedConversation ? conversationRowKey(selectedConversation) : undefined
-              }
-              onSelect={(conv) => setSelectedConversation(conv)}
-            />
-            <ChatWindow
-              conversation={selectedConversation}
-              userId={userId}
-              onMessageSent={() => loadConversations(true)}
-            />
+            {showConversationPane && (
+              <div className="min-h-0 w-[30%] min-w-[260px] max-w-[420px]">
+                <ConversationList
+                  conversations={conversations}
+                  selectedKey={
+                    selectedConversation ? conversationRowKey(selectedConversation) : undefined
+                  }
+                  onSelect={(conv) => setSelectedConversation(conv)}
+                />
+              </div>
+            )}
+            <div
+              className={cn(
+                'min-h-0',
+                showConversationPane ? 'w-[70%] flex-1' : 'w-full flex-1',
+              )}
+            >
+              <ChatWindow
+                conversation={selectedConversation}
+                userId={userId}
+                onMessageSent={() => loadConversations(true)}
+              />
+            </div>
           </div>
 
           {/* Mobile: list or chat (full width) */}

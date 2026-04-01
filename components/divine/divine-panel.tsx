@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
+import { useVoiceSession } from '@/components/divine/voice-session-context'
 import { DivineWorkingLogo } from '@/components/divine/divine-working-logo'
 import { FanProfileModal } from '@/components/messages/fan-profile-modal'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,7 @@ function VoiceWaveIcon({ className }: { className?: string }) {
 
 export function DivinePanel() {
   const ctx = useDivinePanel()
+  const voice = useVoiceSession()
   const [profileOpen, setProfileOpen] = useState(false)
   if (!ctx) return null
 
@@ -79,6 +81,7 @@ export function DivinePanel() {
         onClick={toggle}
         className={cn(
           'fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary',
+          voice && 'pointer-events-none scale-0 opacity-0',
           panelOpen && !panelCollapsed && 'scale-0 opacity-0 pointer-events-none'
         )}
         aria-label={panelOpen ? 'Close Divine panel' : 'Open Divine'}

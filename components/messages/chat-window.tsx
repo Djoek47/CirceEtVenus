@@ -322,6 +322,7 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
   const composerTypeAbortRef = useRef<AbortController | null>(null)
   /** Collapsed on small screens so the thread stays visible; expanded on md+. */
   const [aiSectionOpen, setAiSectionOpen] = useState(true)
+  const isOnlyFansConversation = conversation?.platform === 'onlyfans'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -606,6 +607,11 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
       setError(null)
 
       try {
+        if (conversation.platform !== 'onlyfans') {
+          setMessages([])
+          setError('Fansly thread view is not available yet on web messages.')
+          return
+        }
         const res = await fetch(`/api/onlyfans/messages/${conversation.user.id}?limit=50`)
         let data: { error?: string; code?: string; messages?: OnlyFansMessage[] } = {}
         try {
@@ -766,6 +772,10 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
 
   const handleSendMessage = useCallback(async () => {
     if ((!message.trim() && attachedMediaIds.length === 0) || !conversation || sending) return
+    if (conversation.platform !== 'onlyfans') {
+      setError('Sending Fansly messages from this page is not available yet.')
+      return
+    }
 
     composerTypeAbortRef.current?.abort()
     composerTypeAbortRef.current = null
@@ -950,6 +960,10 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
               View Profile
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => {
+              if (conversation.platform !== 'onlyfans') {
+                setError('Fansly thread refresh is not available yet on web messages.')
+                return
+              }
               setLoading(true)
               fetch(`/api/onlyfans/messages/${conversation.user.id}`)
                 .then(res => res.json())
@@ -1016,6 +1030,10 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
               size="sm" 
               className="mt-2"
               onClick={() => {
+                if (conversation.platform !== 'onlyfans') {
+                  setError('Fansly thread view is not available yet on web messages.')
+                  return
+                }
                 setError(null)
                 setLoading(true)
                 fetch(`/api/onlyfans/messages/${conversation.user.id}`)
@@ -1315,10 +1333,10 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
                 variant="outline"
                 size="icon"
                 className="h-11 w-11"
-                disabled={conversation?.platform !== 'onlyfans' || uploadingMedia}
+                disabled={!isOnlyFansConversation || uploadingMedia}
                 onClick={() => chatFileInputRef.current?.click()}
                 title={
-                  conversation?.platform === 'onlyfans'
+                  isOnlyFansConversation
                     ? 'Attach photo or video (PPV)'
                     : 'Media only for OnlyFans'
                 }
@@ -1364,10 +1382,10 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
                 }}
                 rows={3}
                 className={cn(
-                  'min-h-[5.25rem] resize-y bg-input pr-10 text-base leading-relaxed sm:min-h-[3.5rem] sm:text-sm',
+                  'min-h-[8rem] resize-y bg-input pr-10 text-base leading-relaxed sm:min-h-[6.5rem] sm:text-base',
                   divineTyping && 'ring-2 ring-primary/45 ring-offset-0',
                 )}
-                disabled={sending}
+                disabled={sending || !isOnlyFansConversation}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
@@ -1394,7 +1412,7 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
             <Button
               size="icon"
               className="h-11 w-11 shrink-0"
-              disabled={(!message.trim() && attachedMediaIds.length === 0) || sending}
+              disabled={(!message.trim() && attachedMediaIds.length === 0) || sending || !isOnlyFansConversation}
               onClick={handleSendMessage}
             >
               {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useVoiceSession } from '@/components/divine/voice-session-context'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
 import { DivineWorkingLogo } from '@/components/divine/divine-working-logo'
@@ -12,6 +13,7 @@ import { DivineTranscriptStack } from '@/components/divine/divine-transcript-car
 export function VoiceControlPopup() {
   const voice = useVoiceSession()
   const divine = useDivinePanel()
+  const pathname = usePathname()
   if (!voice) return null
 
   const {
@@ -26,6 +28,7 @@ export function VoiceControlPopup() {
   } = voice
   const [expanded, setExpanded] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const messagesOnlyMode = pathname?.startsWith('/dashboard/messages') === true
 
   const isActive = status === 'connected' || status === 'connecting'
   const hasStartedCall = status !== 'idle'
@@ -72,7 +75,7 @@ export function VoiceControlPopup() {
     <>
       <DivineTranscriptStack />
       <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
-        {hasStartedCall && (
+        {hasStartedCall && !messagesOnlyMode && (
           <div className="relative">
             <button
               type="button"

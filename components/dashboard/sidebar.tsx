@@ -26,7 +26,7 @@ import {
   Lightbulb,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { Profile } from '@/lib/types'
 
@@ -143,6 +143,21 @@ function NavLink({
 export function DashboardSidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const isMessagesRoute = pathname === '/dashboard/messages' || pathname.startsWith('/dashboard/messages/')
+
+  useEffect(() => {
+    if (isMessagesRoute) setCollapsed(true)
+  }, [isMessagesRoute])
+
+  useEffect(() => {
+    const onOpenChatsMenu = () => {
+      if (isMessagesRoute) setCollapsed(true)
+    }
+    window.addEventListener('messages:open-chats-menu', onOpenChatsMenu as EventListener)
+    return () => {
+      window.removeEventListener('messages:open-chats-menu', onOpenChatsMenu as EventListener)
+    }
+  }, [isMessagesRoute])
 
   return (
     <aside
@@ -237,7 +252,13 @@ export function DashboardSidebar({ profile }: SidebarProps) {
         variant="ghost"
         size="icon"
         className="absolute -right-3 top-20 h-6 w-6 rounded-full border border-sidebar-border bg-sidebar"
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => {
+          const next = !collapsed
+          setCollapsed(next)
+          if (!next && isMessagesRoute) {
+            window.dispatchEvent(new CustomEvent('dashboard:left-sidebar-expanded'))
+          }
+        }}
       >
         {collapsed ? (
           <ChevronRight className="h-3 w-3" />

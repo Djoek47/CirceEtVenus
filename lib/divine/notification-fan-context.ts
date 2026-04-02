@@ -10,6 +10,7 @@ export type FanNotifySnapshot = {
   total_spent: number
   thread_excerpt: string | null
   profile_tone: string | null
+  notification_context: Record<string, unknown> | null
 }
 
 /**
@@ -31,7 +32,7 @@ export async function getFanNotifySnapshot(
 
   const { data: ins } = await supabase
     .from('fan_thread_insights')
-    .select('summary_excerpt, thread_snapshot_text, profile_json')
+    .select('summary_excerpt, thread_snapshot_text, profile_json, notification_context_json')
     .eq('user_id', userId)
     .eq('platform', platform)
     .eq('platform_fan_id', platformFanId)
@@ -41,6 +42,7 @@ export async function getFanNotifySnapshot(
     summary_excerpt?: string | null
     thread_snapshot_text?: string | null
     profile_json?: unknown
+    notification_context_json?: unknown
   } | null
 
   const excerptSource =
@@ -66,6 +68,10 @@ export async function getFanNotifySnapshot(
     total_spent: fan?.total_spent != null ? Number(fan.total_spent) : 0,
     thread_excerpt: excerptSource ? excerptSource.slice(0, 280) : null,
     profile_tone,
+    notification_context:
+      row?.notification_context_json && typeof row.notification_context_json === 'object'
+        ? (row.notification_context_json as Record<string, unknown>)
+        : null,
   }
 }
 
@@ -78,5 +84,6 @@ export function buildNotificationMetadataFromSnapshot(
   if (snap.thread_excerpt) meta.thread_excerpt = snap.thread_excerpt
   if (snap.profile_tone) meta.tone = snap.profile_tone
   if (snap.tier) meta.spend_tier = snap.tier
+  if (snap.notification_context) meta.thread_context = snap.notification_context
   return meta
 }

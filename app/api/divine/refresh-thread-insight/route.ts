@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       // Respect 90s debounce unless force — avoids a second getMessages right after ChatWindow loads (rate limits).
       skipDebounce: body.force === true,
       platform,
+      mode: body.force === true ? 'manual_scan' : 'thread_update',
     })
 
     if (!result.ok) {
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
       skipped: result.skipped,
       iteration: result.iteration,
       profileUpdated: result.profileUpdated,
+      insufficientData: result.insufficientData === true,
+      insufficientDataReason: result.insufficientDataReason ?? null,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Refresh failed'

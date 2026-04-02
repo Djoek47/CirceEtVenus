@@ -18,6 +18,11 @@ export type UnifiedFanProfilePayload = {
     profileJson: unknown
     threadSnapshotExcerpt: string | null
     lastThreadRefreshAt: string | null
+    lastScanAt: string | null
+    lastUpdateAt: string | null
+    lastScanKind: string | null
+    insufficientData: boolean
+    insufficientDataReason: string | null
   } | null
   aiSummary: {
     summaryJson: unknown
@@ -48,7 +53,7 @@ export async function buildUnifiedFanProfile(
     supabase
       .from('fan_thread_insights')
       .select(
-        'thread_snapshot_text, profile_json, updated_at, iteration, last_thread_refresh_at',
+        'thread_snapshot_text, profile_json, updated_at, iteration, last_thread_refresh_at, last_scan_at, last_update_at, last_scan_kind, insufficient_data, insufficient_data_reason',
       )
       .eq('user_id', userId)
       .eq('platform', platform)
@@ -77,6 +82,11 @@ export async function buildUnifiedFanProfile(
     updated_at?: string | null
     iteration?: number | null
     last_thread_refresh_at?: string | null
+    last_scan_at?: string | null
+    last_update_at?: string | null
+    last_scan_kind?: string | null
+    insufficient_data?: boolean | null
+    insufficient_data_reason?: string | null
   } | null
 
   const sumRow = sum as {
@@ -95,6 +105,11 @@ export async function buildUnifiedFanProfile(
           ? String(insRow.thread_snapshot_text).slice(0, 1200)
           : null,
         lastThreadRefreshAt: insRow.last_thread_refresh_at ?? null,
+        lastScanAt: insRow.last_scan_at ?? null,
+        lastUpdateAt: insRow.last_update_at ?? null,
+        lastScanKind: insRow.last_scan_kind ?? null,
+        insufficientData: insRow.insufficient_data === true,
+        insufficientDataReason: insRow.insufficient_data_reason ?? null,
       }
     : null
 
@@ -117,7 +132,11 @@ export async function buildUnifiedFanProfile(
     .filter(Boolean)
     .join('\n')
 
-  const creatorDetector = detectCreatorLikelyFromText(hay)
+  const storedCreatorSignal =
+    insRow?.profile_json && typeof insRow.profile_json === 'object'
+      ? ((insRow.profile_json as Record<string, unknown>).creator_detector as CreatorDetectorSignal | undefined)
+      : undefined
+  const creatorDetector = storedCreatorSignal ?? detectCreatorLikelyFromText(hay)
 
   const ccRaw = (fanCrm as { creator_classification?: string | null } | null)?.creator_classification
   const creatorClassification =

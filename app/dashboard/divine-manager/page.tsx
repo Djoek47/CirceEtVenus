@@ -89,7 +89,12 @@ export default function DivineManagerPage() {
       whale_tip_min_dollars: 100,
       dmca_draft_requires_confirmation: true,
     },
-    jobs: { vault_resale_enabled: false, mass_dm_batch_enabled: false },
+    jobs: {
+      vault_resale_enabled: false,
+      mass_dm_batch_enabled: false,
+      thread_auto_update_enabled: false,
+      thread_auto_update_whale_only: true,
+    },
   })
   const [selectedMode, setSelectedMode] = useState<DivineManagerMode>('suggest_only')
   const [managerArchetype, setManagerArchetype] = useState<string>('hermes')
@@ -431,7 +436,12 @@ export default function DivineManagerPage() {
           whale_tip_min_dollars: 100,
           dmca_draft_requires_confirmation: true,
         },
-        jobs: { vault_resale_enabled: false, mass_dm_batch_enabled: false },
+        jobs: {
+          vault_resale_enabled: false,
+          mass_dm_batch_enabled: false,
+          thread_auto_update_enabled: false,
+          thread_auto_update_whale_only: true,
+        },
       })
       setSelectedMode('suggest_only')
       setManagerArchetype('hermes')
@@ -643,6 +653,8 @@ export default function DivineManagerPage() {
         setLastToolResult(data)
         const rec = (data as { recommendation?: 'circe' | 'venus' | 'flirt' | null }).recommendation
         const recReason = (data as { recommendationReason?: string | null }).recommendationReason
+        const scanStatus = (data as { status?: 'ok' | 'insufficient_data' }).status
+        const insufficientReason = (data as { insufficientDataReason?: string | null }).insufficientDataReason
         const fan = (data as { fan?: { id: string; username?: string | null; name?: string | null } }).fan
         const circeSuggestions = (data as { circeSuggestions?: string[] }).circeSuggestions ?? []
         const venusSuggestions = (data as { venusSuggestions?: string[] }).venusSuggestions ?? []
@@ -672,7 +684,14 @@ export default function DivineManagerPage() {
             })
           }
         }
-        setLastAIToolResult(rec || 'Circe, Venus, and Flirt suggestions ready. Pick one below.')
+        if (scanStatus === 'insufficient_data') {
+          setLastAIToolResult(
+            insufficientReason ||
+              'Not enough fan history yet to build a reliable profile. Ask for more chat history and scan again.',
+          )
+        } else {
+          setLastAIToolResult(rec || 'Circe, Venus, and Flirt suggestions ready. Pick one below.')
+        }
         const suggestions = (data as { suggestions?: string[] }).suggestions ?? []
         const firstSuggestion =
           suggestions.length > 0 ? ` Suggestion: ${suggestions[0]}` : ''
@@ -1331,6 +1350,42 @@ export default function DivineManagerPage() {
                     jobs: { ...automationRules.jobs, mass_dm_batch_enabled: c },
                   })
                 }
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="font-medium">Auto-update thread context (every 10 min)</p>
+                <p className="text-xs text-muted-foreground">
+                  Runs in background cron, even when you are offline. Only updates chats with new fan
+                  messages.
+                </p>
+              </div>
+              <Switch
+                checked={!!automationRules.jobs?.thread_auto_update_enabled}
+                onCheckedChange={(c) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    jobs: { ...automationRules.jobs, thread_auto_update_enabled: c },
+                  })
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="font-medium">Whale-only auto updates</p>
+                <p className="text-xs text-muted-foreground">
+                  Limits background thread updates to whale-tier / high-value fans.
+                </p>
+              </div>
+              <Switch
+                checked={automationRules.jobs?.thread_auto_update_whale_only !== false}
+                onCheckedChange={(c) =>
+                  void persistAutomationRules({
+                    ...automationRules,
+                    jobs: { ...automationRules.jobs, thread_auto_update_whale_only: c },
+                  })
+                }
+                disabled={!automationRules.jobs?.thread_auto_update_enabled}
               />
             </div>
           </CardContent>

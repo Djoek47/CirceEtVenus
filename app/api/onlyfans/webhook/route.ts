@@ -377,9 +377,14 @@ async function handleNewMessage(supabase: SupabaseClient, data: {
 
   const uid = connection.user_id
   const fanId = String(data.message.fromUser.id)
+  const latestFanMessageAt = data.message.createdAt || new Date().toISOString()
   after(async () => {
     try {
-      await refreshFanThreadInsight(supabase, uid, fanId, { platform: 'onlyfans' })
+      await refreshFanThreadInsight(supabase, uid, fanId, {
+        platform: 'onlyfans',
+        mode: 'thread_update',
+        latestFanMessageAt,
+      })
     } catch (e) {
       console.warn('[fan_thread_insights webhook]', e)
     }

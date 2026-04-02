@@ -269,6 +269,31 @@ export function FanProfileModal({
                   Refreshed: {new Date(data.threadInsight.lastThreadRefreshAt).toLocaleString()}
                 </p>
               )}
+              {data.threadInsight.lastScanKind && (
+                <p className="text-xs text-muted-foreground">
+                  Last mode: {data.threadInsight.lastScanKind === 'thread_update' ? 'Thread update' : 'Manual scan'}
+                </p>
+              )}
+              {data.threadInsight.lastScanAt && (
+                <p className="text-xs text-muted-foreground">
+                  Last manual scan: {new Date(data.threadInsight.lastScanAt).toLocaleString()}
+                </p>
+              )}
+              {data.threadInsight.lastUpdateAt && (
+                <p className="text-xs text-muted-foreground">
+                  Last auto update: {new Date(data.threadInsight.lastUpdateAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
+          {data?.threadInsight?.insufficientData && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+              <p className="font-medium">Profile still forming for this fan</p>
+              <p className="mt-1 text-xs text-amber-100/90">
+                {data.threadInsight.insufficientDataReason ??
+                  'Not enough conversation yet. Ask the fan to chat more, then run Scan again.'}
+              </p>
             </div>
           )}
 

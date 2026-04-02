@@ -10,15 +10,27 @@ import {
   formatThreadTextForAi,
   normalizeSortedRawOfMessages,
 } from '@/lib/divine/of-thread-text'
+import { detectCreatorLikelyFromText } from '@/lib/divine/creator-detector'
 
 export type FanThreadInsightPlatform = 'onlyfans' | 'fansly'
+export type FanThreadRefreshMode = 'manual_scan' | 'thread_update'
 
 const DEBOUNCE_MS = 90_000
 const PROFILE_EVERY_N_ITERATIONS = 5
 const HISTORY_MAX = 5
+const MIN_PROFILE_THREAD_CHARS = 140
 
 export type RefreshFanThreadResult =
-  | { ok: true; skipped: boolean; iteration?: number; profileUpdated?: boolean }
+  | {
+      ok: true
+      skipped: boolean
+      iteration?: number
+      profileUpdated?: boolean
+      insufficientData?: boolean
+      insufficientDataReason?: string
+      mode?: FanThreadRefreshMode
+      lastSeenFanMessageAt?: string | null
+    }
   | { ok: false; error: string }
 
 async function fetchFanslyThreadSnapshotFromDb(
@@ -220,6 +232,10 @@ export async function upsertFanThreadInsightSnapshot(
     updated_at: now,
     last_thread_refresh_at: now,
     iteration: nextIteration,
+    last_scan_at: now,
+    last_scan_kind: 'manual_scan',
+    insufficient_data: false,
+    insufficient_data_reason: null,
   }
 
   const { error } = await supabase.from('fan_thread_insights').upsert(patch, {
@@ -235,13 +251,44 @@ export async function refreshFanThreadInsight(
   supabase: LooseSb,
   userId: string,
   fanId: string,
-  options?: { force?: boolean; skipDebounce?: boolean; platform?: FanThreadInsightPlatform },
+  options?: {
+    force?: boolean
+    skipDebounce?: boolean
+    platform?: FanThreadInsightPlatform
+    mode?: FanThreadRefreshMode
+    latestFanMessageAt?: string | null
+  },
 ): Promise<RefreshFanThreadResult> {
   const platform = options?.platform ?? 'onlyfans'
+  const mode = options?.mode ?? 'manual_scan'
   const force = options?.force === true
   const skipDebounce = options?.skipDebounce === true
+  const latestFanMessageAt =
+    typeof options?.latestFanMessageAt === 'string' && options.latestFanMessageAt.trim()
+      ? options.latestFanMessageAt
+      : null
 
-  if (!skipDebounce && !force) {
+  if (mode === 'thread_update' && !force && latestFanMessageAt) {
+    const { data: row } = await supabase
+      .from('fan_thread_insights')
+      .select('last_seen_fan_message_at')
+      .eq('user_id', userId)
+      .eq('platform', platform)
+      .eq('platform_fan_id', fanId)
+      .maybeSingle()
+    const lastSeen = (row as { last_seen_fan_message_at?: string | null } | null)?.last_seen_fan_message_at
+    if (lastSeen && new Date(lastSeen).getTime() >= new Date(latestFanMessageAt).getTime()) {
+      return {
+        ok: true,
+        skipped: true,
+        iteration: undefined,
+        profileUpdated: false,
+        insufficientData: false,
+        mode,
+        lastSeenFanMessageAt: lastSeen,
+      }
+    }
+  } else if (!skipDebounce && !force) {
     const { data: row } = await supabase
       .from('fan_thread_insights')
       .select('last_thread_refresh_at')
@@ -272,11 +319,26 @@ export async function refreshFanThreadInsight(
         thread_snapshot_text: '',
         updated_at: new Date().toISOString(),
         last_thread_refresh_at: new Date().toISOString(),
+        last_scan_kind: mode,
+        insufficient_data: mode === 'manual_scan',
+        insufficient_data_reason:
+          mode === 'manual_scan' ? 'No messages yet. Ask the fan to chat more, then scan again.' : null,
+        last_seen_fan_message_at: latestFanMessageAt,
       },
       { onConflict: 'user_id,platform,platform_fan_id' },
     )
     if (error) return { ok: false, error: error.message }
-    return { ok: true, skipped: false, iteration: 0, profileUpdated: false }
+    return {
+      ok: true,
+      skipped: false,
+      iteration: 0,
+      profileUpdated: false,
+      insufficientData: mode === 'manual_scan',
+      insufficientDataReason:
+        mode === 'manual_scan' ? 'No messages yet. Ask the fan to chat more, then scan again.' : undefined,
+      mode,
+      lastSeenFanMessageAt: latestFanMessageAt,
+    }
   }
 
   const up = await upsertFanThreadInsightSnapshot(supabase, userId, fanId, snap.text, {
@@ -295,11 +357,16 @@ export async function refreshFanThreadInsight(
 
   const iteration = (ins as { iteration?: number })?.iteration ?? 1
   let profileUpdated = false
+  const insufficientData =
+    mode === 'manual_scan' && snap.text.replace(/\s+/g, ' ').trim().length < MIN_PROFILE_THREAD_CHARS
+  const insufficientDataReason = insufficientData
+    ? 'Not enough fan history yet to establish a reliable profile. Wait for more messages, then run Scan again.'
+    : null
 
   const hadProfile = (ins as { profile_json?: unknown })?.profile_json != null
   const runProfile =
     force ||
-    !hadProfile ||
+    (!insufficientData && !hadProfile) ||
     iteration % PROFILE_EVERY_N_ITERATIONS === 0
   if (runProfile) {
     const { data: sumRow } =
@@ -320,15 +387,20 @@ export async function refreshFanThreadInsight(
 
     if (merged) {
       const nowIso = new Date().toISOString()
+      const creatorSignal = detectCreatorLikelyFromText(snap.text)
+      const mergedWithSignal = {
+        ...merged,
+        creator_detector: creatorSignal,
+      } as Record<string, unknown>
       const history = appendProfileHistory((ins as { profile_history?: unknown })?.profile_history, {
         iteration,
-        profile_json: merged,
+        profile_json: mergedWithSignal,
         at: nowIso,
       })
       await supabase
         .from('fan_thread_insights')
         .update({
-          profile_json: merged,
+          profile_json: mergedWithSignal,
           profile_history: history as unknown as Record<string, unknown>,
           updated_at: nowIso,
         })
@@ -336,8 +408,74 @@ export async function refreshFanThreadInsight(
         .eq('platform', platform)
         .eq('platform_fan_id', fanId)
       profileUpdated = true
+
+      // Keep a lightweight creator-signal memory for long-term profile tuning.
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('divine_voice_memory')
+          .eq('id', userId)
+          .maybeSingle()
+        const current = ((prof as { divine_voice_memory?: unknown } | null)?.divine_voice_memory ??
+          {}) as Record<string, unknown>
+        const nextMemory = {
+          ...current,
+          creator_profile_scan: {
+            ...(typeof current.creator_profile_scan === 'object' && current.creator_profile_scan
+              ? (current.creator_profile_scan as Record<string, unknown>)
+              : {}),
+            lastFanId: String(fanId),
+            lastPlatform: platform,
+            lastCreatorSignal: creatorSignal,
+            updatedAt: nowIso,
+          },
+        }
+        await supabase
+          .from('profiles')
+          .update({ divine_voice_memory: nextMemory, updated_at: nowIso })
+          .eq('id', userId)
+      } catch {
+        // best effort
+      }
     }
   }
 
-  return { ok: true, skipped: false, iteration, profileUpdated }
+  const nowIso = new Date().toISOString()
+  const creatorSignal = detectCreatorLikelyFromText(snap.text)
+  const notificationContext = {
+    mode,
+    fan_id: String(fanId),
+    platform,
+    updated_at: nowIso,
+    creator_detector: creatorSignal,
+    profile_updated: profileUpdated,
+    insufficient_data: insufficientData,
+    thread_excerpt: snap.text.slice(0, 280),
+  }
+  await supabase
+    .from('fan_thread_insights')
+    .update({
+      last_scan_kind: mode,
+      last_seen_fan_message_at: latestFanMessageAt,
+      last_scan_at: mode === 'manual_scan' ? nowIso : undefined,
+      last_update_at: mode === 'thread_update' ? nowIso : undefined,
+      insufficient_data: insufficientData,
+      insufficient_data_reason: insufficientData ? insufficientDataReason : null,
+      notification_context_json: notificationContext,
+      updated_at: nowIso,
+    })
+    .eq('user_id', userId)
+    .eq('platform', platform)
+    .eq('platform_fan_id', fanId)
+
+  return {
+    ok: true,
+    skipped: false,
+    iteration,
+    profileUpdated,
+    insufficientData,
+    insufficientDataReason: insufficientDataReason ?? undefined,
+    mode,
+    lastSeenFanMessageAt: latestFanMessageAt,
+  }
 }

@@ -13,7 +13,7 @@ import {
   formatThreadTextForAi,
   normalizeSortedRawOfMessages,
 } from '@/lib/divine/of-thread-text'
-import { upsertFanThreadInsightSnapshot } from '@/lib/divine/fan-thread-insight'
+import { refreshFanThreadInsight, upsertFanThreadInsightSnapshot } from '@/lib/divine/fan-thread-insight'
 
 type Mode = 'scan' | 'circe' | 'venus' | 'flirt'
 
@@ -51,6 +51,8 @@ export type DmReplyPackageResult =
       recommendationReason: string | null
       fan: { id: string; username: string; name: string | null }
       message?: string
+      status?: 'ok' | 'insufficient_data'
+      insufficientDataReason?: string | null
       threadPreview: string
     }
 
@@ -109,6 +111,8 @@ export async function fetchDmReplySuggestionsPackage(
       recommendationReason: null,
       fan: { id: String(fanId), username: fan.username, name: fan.name },
       message: 'No messages in thread.',
+      status: 'insufficient_data',
+      insufficientDataReason: 'No fan messages yet. Ask them to chat more, then run Scan again.',
       threadPreview: '',
     }
   }
@@ -260,6 +264,33 @@ Flirt reply sample: ${flirtSample || 'none'}`,
       platform: 'onlyfans',
     })
     if (err.error) console.warn('[fan_thread_insights]', err.error)
+    const latestFanMessageAt = (() => {
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const m = messages[i] as { from?: string; createdAt?: string | null }
+        if (m.from === 'fan' && m.createdAt) return m.createdAt
+      }
+      return null
+    })()
+    const refreshed = await refreshFanThreadInsight(supabase, userId, String(fanId), {
+      force: true,
+      skipDebounce: true,
+      platform: 'onlyfans',
+      mode: 'manual_scan',
+      latestFanMessageAt,
+    })
+    const insuff = refreshed.ok && refreshed.insufficientData === true
+    return {
+      scan,
+      circeSuggestions,
+      venusSuggestions,
+      flirtSuggestions,
+      recommendation,
+      recommendationReason,
+      fan: { id: String(fanId), username: fan.username, name: fan.name },
+      threadPreview,
+      status: insuff ? 'insufficient_data' : 'ok',
+      insufficientDataReason: insuff ? refreshed.insufficientDataReason ?? null : null,
+    }
   }
 
   return {
@@ -270,6 +301,8 @@ Flirt reply sample: ${flirtSample || 'none'}`,
     recommendation,
     recommendationReason,
     fan: { id: String(fanId), username: fan.username, name: fan.name },
+    status: 'ok',
+    insufficientDataReason: null,
     threadPreview,
   }
 }

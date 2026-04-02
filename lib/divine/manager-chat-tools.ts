@@ -880,6 +880,7 @@ export async function runContextTool(
         force,
         skipDebounce: true,
         platform: plat,
+        mode: 'manual_scan',
       })
       if (!r.ok) return r.error
       return r.skipped

@@ -57,6 +57,10 @@ export interface DivineManagerAutomationJobs {
   vault_resale_enabled?: boolean
   /** Future: batch mass DM segments (off by default). */
   mass_dm_batch_enabled?: boolean
+  /** Run periodic thread context updates every 10 minutes (opt-in; default false). */
+  thread_auto_update_enabled?: boolean
+  /** If true, periodic updates only run for whale-tier/high-spend fans. */
+  thread_auto_update_whale_only?: boolean
   [key: string]: unknown
 }
 

@@ -33,6 +33,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  PanelLeft,
 } from 'lucide-react'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
@@ -104,6 +105,7 @@ interface ChatWindowProps {
   conversation: OnlyFansConversation | null
   userId: string
   onMessageSent?: () => void
+  onOpenConversationMenu?: () => void
 }
 
 function buildMediaSrcChain(pres: ReturnType<typeof getProxiedMediaPresentation>): string[] {
@@ -275,7 +277,12 @@ function ChatPreviewImage({ rawUrl }: { rawUrl: string }) {
   )
 }
 
-export function ChatWindow({ conversation, userId: _userId, onMessageSent }: ChatWindowProps) {
+export function ChatWindow({
+  conversation,
+  userId: _userId,
+  onMessageSent,
+  onOpenConversationMenu,
+}: ChatWindowProps) {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<OnlyFansMessage[]>([])
   const [loading, setLoading] = useState(false)
@@ -881,6 +888,18 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
       {/* Chat Header */}
       <CardHeader className="flex flex-row items-center justify-between border-b border-border p-4">
         <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            disabled={!onOpenConversationMenu}
+            onClick={onOpenConversationMenu}
+            aria-label="Open conversations menu"
+            title="Open conversations menu"
+          >
+            <PanelLeft className="h-4 w-4" />
+          </Button>
           <Avatar className="h-10 w-10 border border-border">
             <AvatarImage
               src={proxyImageUrl(fan.avatar) || fan.avatar}
@@ -1067,7 +1086,7 @@ export function ChatWindow({ conversation, userId: _userId, onMessageSent }: Cha
                 >
                   <div
                     className={cn(
-                      'max-w-[70%] rounded-2xl px-4 py-2',
+                      'max-w-[82%] rounded-2xl px-4 py-2',
                       isDivineAssisted
                         ? 'border border-violet-400/50 bg-violet-950/35 text-violet-50'
                         : isCreator

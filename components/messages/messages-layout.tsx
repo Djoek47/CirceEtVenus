@@ -9,6 +9,13 @@ import { MassMessageDialog } from './mass-message-dialog'
 import { MessageEngagementInsights } from './message-engagement-insights'
 import { Button } from '@/components/ui/button'
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
   RefreshCw,
   Loader2,
   ArrowLeft,
@@ -16,10 +23,8 @@ import {
   MessageSquare,
   Megaphone,
   PanelLeft,
-  PanelLeftClose,
 } from 'lucide-react'
 import { useDivinePanel } from '@/components/divine/divine-panel-context'
-import { cn } from '@/lib/utils'
 
 type MessagesView = 'conversations' | 'insights'
 
@@ -60,7 +65,7 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
   const [view, setView] = useState<MessagesView>('conversations')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
-  const [showConversationPane, setShowConversationPane] = useState(true)
+  const [conversationMenuOpen, setConversationMenuOpen] = useState(false)
   const selectedRef = useRef<Conversation | null>(null)
   selectedRef.current = selectedConversation
   const [loading, setLoading] = useState(true)
@@ -270,10 +275,21 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
               variant="ghost"
               size="icon"
               className="md:hidden h-10 w-10 flex-shrink-0"
-              onClick={() => setSelectedConversation(null)}
+              onClick={() => setConversationMenuOpen(true)}
               aria-label="Back to conversations"
             >
               <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          {view === 'conversations' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 md:hidden"
+              onClick={() => setConversationMenuOpen(true)}
+            >
+              <PanelLeft className="h-3.5 w-3.5" />
+              Chats
             </Button>
           )}
           <div className="min-w-0">
@@ -310,19 +326,14 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
             <>
               <Button
                 variant="outline"
-                size="icon"
-                className="hidden h-10 w-10 md:inline-flex"
-                onClick={() => setShowConversationPane((v) => !v)}
-                aria-label={
-                  showConversationPane ? 'Hide conversations panel' : 'Show conversations panel'
-                }
-                title={showConversationPane ? 'Hide conversations panel' : 'Show conversations panel'}
+                size="sm"
+                className="hidden gap-1.5 md:inline-flex"
+                onClick={() => setConversationMenuOpen(true)}
+                aria-label="Open conversations menu"
+                title="Open conversations menu"
               >
-                {showConversationPane ? (
-                  <PanelLeftClose className="h-4 w-4" />
-                ) : (
-                  <PanelLeft className="h-4 w-4" />
-                )}
+                <PanelLeft className="h-4 w-4" />
+                Chats
               </Button>
               <Button
                 variant="outline"
@@ -350,53 +361,36 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
           <MessageEngagementInsights />
         </div>
       ) : (
-        <>
-          {/* Desktop: side-by-side list + chat */}
-          <div className="hidden md:flex flex-1 gap-4 min-h-0">
-            {showConversationPane && (
-              <div className="min-h-0 w-[30%] min-w-[260px] max-w-[420px]">
+        <div className="flex flex-1 min-h-0">
+          <ChatWindow
+            conversation={selectedConversation}
+            userId={userId}
+            onMessageSent={() => loadConversations(true)}
+            onOpenConversationMenu={() => setConversationMenuOpen(true)}
+          />
+          <Sheet open={conversationMenuOpen} onOpenChange={setConversationMenuOpen}>
+            <SheetContent side="left" className="w-full p-0 sm:max-w-md">
+              <SheetHeader className="border-b border-border">
+                <SheetTitle>Messages</SheetTitle>
+                <SheetDescription>
+                  Pick a fan conversation by avatar and name.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="h-[calc(100%-5rem)] p-3">
                 <ConversationList
                   conversations={conversations}
                   selectedKey={
                     selectedConversation ? conversationRowKey(selectedConversation) : undefined
                   }
-                  onSelect={(conv) => setSelectedConversation(conv)}
+                  onSelect={(conv) => {
+                    setSelectedConversation(conv)
+                    setConversationMenuOpen(false)
+                  }}
                 />
               </div>
-            )}
-            <div
-              className={cn(
-                'min-h-0',
-                showConversationPane ? 'w-[70%] flex-1' : 'w-full flex-1',
-              )}
-            >
-              <ChatWindow
-                conversation={selectedConversation}
-                userId={userId}
-                onMessageSent={() => loadConversations(true)}
-              />
-            </div>
-          </div>
-
-          {/* Mobile: list or chat (full width) */}
-          <div className="flex flex-1 flex-col min-h-0 md:hidden">
-            {selectedConversation ? (
-              <ChatWindow
-                conversation={selectedConversation}
-                userId={userId}
-                onMessageSent={() => loadConversations(true)}
-              />
-            ) : (
-              <ConversationList
-                conversations={conversations}
-                selectedKey={
-                  selectedConversation ? conversationRowKey(selectedConversation) : undefined
-                }
-                onSelect={(conv) => setSelectedConversation(conv)}
-              />
-            )}
-          </div>
-        </>
+            </SheetContent>
+          </Sheet>
+        </div>
       )}
     </div>
   )

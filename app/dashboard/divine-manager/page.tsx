@@ -189,6 +189,8 @@ export default function DivineManagerPage() {
             jobs: {
               vault_resale_enabled: false,
               mass_dm_batch_enabled: false,
+              thread_auto_update_enabled: false,
+              thread_auto_update_whale_only: true,
               ...merged.jobs,
             },
             voice_hangup_policy:

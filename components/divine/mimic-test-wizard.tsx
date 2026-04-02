@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, ChevronLeft, ChevronRight, Check, Sparkles, Wand2 } from 'lucide-react'
+import { useVoiceSession } from '@/components/divine/voice-session-context'
 import {
   type MimicProfileV1,
   DEFAULT_MIMIC_PROFILE,
@@ -26,6 +27,7 @@ function splitLines(s: string): string[] {
 }
 
 export function MimicTestWizard() {
+  const voiceSession = useVoiceSession()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [step, setStep] = useState(1)
@@ -288,6 +290,55 @@ export function MimicTestWizard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">Realtime Mimic interview</p>
+              <p className="text-xs text-muted-foreground">
+                Voice-to-voice interrogation that saves answers for DM mimic replies.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[10px]">
+              {voiceSession?.status ?? 'idle'}
+            </Badge>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!voiceSession || voiceSession.status === 'connecting'}
+              onClick={() =>
+                void voiceSession?.startVoiceCall({
+                  realtimePath: '/api/ai/mimic-test-realtime',
+                  toolPath: '/api/divine/voice-tool',
+                })
+              }
+            >
+              {voiceSession?.status === 'connecting' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              <span className="ml-1.5">
+                {voiceSession?.status === 'connected' ? 'Restart Mimic voice' : 'Start Mimic voice'}
+              </span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!voiceSession || voiceSession.status !== 'connected'}
+              onClick={() => voiceSession?.endVoiceCall()}
+            >
+              End voice
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            The interviewer introduces itself, asks one question at a time, and writes each answer to your Mimic session.
+          </p>
+        </div>
+
         <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>

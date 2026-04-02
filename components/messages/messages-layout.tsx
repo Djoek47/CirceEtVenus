@@ -294,10 +294,12 @@ function MessagesLayoutContent({ userId, initialFanId, initialPlatform }: Messag
           )}
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
-              {view === 'insights' ? 'Message insights' : selectedConversation ? (selectedConversation.user.name || selectedConversation.user.username || 'Chat') : 'Messages'}
+              {view === 'insights' ? 'Message insights' : 'Messages'}
             </h2>
             <p className="text-sm text-muted-foreground truncate">
-              {view === 'insights' ? 'Direct & mass message performance' : selectedConversation ? `@${selectedConversation.user.username}` : `${conversations.length} conversations · OnlyFans & Fansly`}
+              {view === 'insights'
+                ? 'Direct & mass message performance'
+                : `${conversations.length} conversations · OnlyFans & Fansly`}
             </p>
           </div>
         </div>

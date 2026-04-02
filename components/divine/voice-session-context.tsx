@@ -77,7 +77,10 @@ type VoiceSessionContextValue = {
   /** True while waiting to hang up after `end_call` (assistant audio + silence gate). */
   closingPending: boolean
   error: string | null
-  startVoiceCall: () => Promise<void>
+  startVoiceCall: (opts?: {
+    realtimePath?: string
+    toolPath?: string
+  }) => Promise<void>
   endVoiceCall: () => void
   /**
    * Inject a text "user message" into the live Realtime conversation, then request
@@ -118,6 +121,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [closingPending, setClosingPending] = useState(false)
   const [voiceHangupPolicy, setVoiceHangupPolicy] = useState<VoiceHangupPolicy>('always')
   const [userHangupAllowed, setUserHangupAllowed] = useState(false)
+  const realtimePathRef = useRef('/api/ai/divine-manager-realtime')
+  const toolPathRef = useRef('/api/divine/voice-tool')
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -321,8 +326,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     void refreshVoiceHangupPolicy()
   }, [refreshVoiceHangupPolicy])
 
-  const startVoiceCall = useCallback(async () => {
+  const startVoiceCall = useCallback(async (opts?: { realtimePath?: string; toolPath?: string }) => {
     if (status === 'connecting' || status === 'connected') return
+    realtimePathRef.current = opts?.realtimePath || '/api/ai/divine-manager-realtime'
+    toolPathRef.current = opts?.toolPath || '/api/divine/voice-tool'
     setError(null)
     setUserHangupAllowed(false)
     await refreshVoiceHangupPolicy()
@@ -477,7 +484,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             const abort = new AbortController()
             const abortTimer = setTimeout(() => abort.abort(), VOICE_TOOL_FETCH_TIMEOUT_MS)
             try {
-              const res = await fetch('/api/divine/voice-tool', {
+              const res = await fetch(toolPathRef.current, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -649,7 +656,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
 
-      const res = await fetch('/api/ai/divine-manager-realtime', {
+      const res = await fetch(realtimePathRef.current, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

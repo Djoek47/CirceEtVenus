@@ -41,3 +41,8 @@
 ## Maintenance
 
 When you add a **new public API** or change **auth requirements**, add one line under the right group (or add a group) and reference the PR.
+
+## Recent additions
+
+- `POST app/api/ai/mimic-test-realtime` — WebRTC SDP handshake for Realtime Mimic interrogatory voice sessions (intro + adaptive Q/A flow).
+- `POST app/api/divine/voice-tool` — now also supports Mimic voice tools: `mimic_record_answer` (live transcript persistence) and `mimic_finalize_interview` (profile refinement + persist to `divine_manager_settings.mimic_profile`).

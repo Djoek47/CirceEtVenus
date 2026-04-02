@@ -327,14 +327,9 @@ export function ChatWindow({
   const messageRef = useRef('')
   messageRef.current = message
   const composerTypeAbortRef = useRef<AbortController | null>(null)
-  /** Collapsed on small screens so the thread stays visible; expanded on md+. */
-  const [aiSectionOpen, setAiSectionOpen] = useState(true)
+  /** Keep scan tools collapsed by default so the thread remains readable. */
+  const [aiSectionOpen, setAiSectionOpen] = useState(false)
   const isOnlyFansConversation = conversation?.platform === 'onlyfans'
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    setAiSectionOpen(window.matchMedia('(min-width: 768px)').matches)
-  }, [])
 
   useEffect(() => {
     const hasAiContent =
@@ -886,7 +881,7 @@ export function ChatWindow({
   return (
     <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border-border bg-card">
       {/* Chat Header */}
-      <CardHeader className="flex flex-row items-center justify-between border-b border-border p-4">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
           <Button
             type="button"
@@ -1033,7 +1028,10 @@ export function ChatWindow({
       </CardHeader>
 
       {/* Messages Area — live thread with the fan */}
-      <CardContent ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+      <CardContent
+        ref={messagesContainerRef}
+        className="min-h-[36vh] flex-1 overflow-y-auto p-3 sm:min-h-[42vh] sm:p-4"
+      >
         <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:mb-3">
           Fan conversation
         </p>
@@ -1169,7 +1167,7 @@ export function ChatWindow({
             <span className="hidden shrink-0 text-[10px] text-muted-foreground md:inline">Not sent to fan</span>
           </div>
           <CollapsibleContent>
-            <div className="max-h-[min(40vh,280px)] space-y-3 overflow-y-auto border-b border-border/50 bg-muted/15 px-3 py-3 sm:max-h-[min(45vh,360px)] sm:px-4">
+            <div className="max-h-[min(28vh,180px)] space-y-2 overflow-y-auto border-b border-border/50 bg-muted/15 px-3 py-2 sm:max-h-[min(30vh,220px)] sm:px-4">
               {scanInsights && (
                 <div className="space-y-1 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs">
                   <div className="flex items-center justify-between gap-2">
@@ -1320,7 +1318,7 @@ export function ChatWindow({
           </div>
         )}
 
-        <div className="space-y-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-4">
+        <div className="space-y-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-3">
           <input
             ref={chatFileInputRef}
             type="file"
@@ -1399,9 +1397,9 @@ export function ChatWindow({
                   }
                   setMessage(e.target.value)
                 }}
-                rows={3}
+                rows={2}
                 className={cn(
-                  'min-h-[8rem] resize-y bg-input pr-10 text-base leading-relaxed sm:min-h-[6.5rem] sm:text-base',
+                  'min-h-[4.5rem] resize-y bg-input pr-10 text-sm leading-relaxed sm:min-h-[5rem] sm:text-sm',
                   divineTyping && 'ring-2 ring-primary/45 ring-offset-0',
                 )}
                 disabled={sending || !isOnlyFansConversation}
